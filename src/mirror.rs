@@ -84,26 +84,69 @@ impl WebApp for Mirror
         let context = &self.0;
         Route::new().nest("/v2", 
             Route::new()
-                .at("/", get(index))
-                .at("/:name/blobs/:digest", get(download_blob.data(context.clone())))
-                .at("/:name/blobs/uploads", post(blob.data(context.clone())))
-                .at("/:name/blobs/uploads/:reference", 
-                    patch(blob_upload_chunks.data(context.clone()))
-                    .put(blob_upload_chunks.data(context.clone()))
-                    )
-                .at("/:name/manifests/:reference", 
-                    get(resolve.data(context.clone()))
-                    .head(resolve.data(context.clone()))
-                    .put(resolve.data(context.clone()))
-                    .delete(resolve.data(context.clone())))
-                .at("/:name/tags/list", get(list_tags.data(context.clone())))
-        )
+            .at("/", get(index))
+            .at("/:name/blobs/:digest", get(download_blob.data(context.clone())))
+            .at("/:name/blobs/uploads", post(blob.data(context.clone())))
+            .at("/:name/blobs/uploads/:reference", 
+                patch(blob_upload_chunks.data(context.clone()))
+                .put(blob_upload_chunks.data(context.clone()))
+                )
+            .at("/:name/manifests/:reference", 
+                get(resolve.data(context.clone()))
+                .head(resolve.data(context.clone()))
+                .put(resolve.data(context.clone()))
+                .delete(resolve.data(context.clone())))
+            .at("/:name/tags/list", 
+                get(list_tags.data(context.clone())))
+            )
+                
     }
 }
 
+#[test] 
+fn test_mirror() {
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+        let app = Mirror::default().routes();
+        let cli =  poem::test::TestClient::new(app);
+        
+        let resp = cli.get("/v2/").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.get("/v2/test/manifests/test_ref").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.head("/v2/test/manifests/test_ref").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.put("/v2/test/manifests/test_ref").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.delete("/v2/test/manifests/test_ref").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.get("/v2/test/blobs/test_digest").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.post("/v2/test/blobs/uploads").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.patch("/v2/test/blobs/uploads/test").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.put("/v2/test/blobs/uploads/test").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.get("/v2/test/tags/list").send().await;
+        resp.assert_status_is_ok();
+    });
+}
+
+
 #[handler]
-async fn index() -> Response {
+async fn index(request: &Request) -> Response {
     event!(Level::TRACE, "Got /v2 request");
+    event!(Level::TRACE, "{:#?}", request);
+
     Response::builder()
         .finish()
 }
@@ -112,8 +155,7 @@ async fn index() -> Response {
 #[handler]
 async fn resolve(
     request: &Request,
-    Path(name): Path<String>, 
-    Path(reference): Path<String>, 
+    Path((name, reference)): Path<(String, String)>, 
     dispatcher: Data<&ThunkContext>) -> Response
 {
     // if let Some((task, _cancel)) = Resolve::call_with_context(&mut dispatcher.clone()) {
@@ -121,6 +163,7 @@ async fn resolve(
     // }
 
     event!(Level::TRACE, "Got resolve request, {name} {reference}");
+    event!(Level::TRACE, "{:#?}", request);
     Response::builder()
         .finish()
 }
@@ -136,6 +179,7 @@ async fn list_tags(
     // }
 
     event!(Level::TRACE, "Got list_tags request, {name}");
+    event!(Level::TRACE, "{:#?}", request);
     Response::builder()
         .finish()
 }
@@ -143,14 +187,14 @@ async fn list_tags(
 #[handler]
 async fn download_blob(
     request: &Request,
-    Path(name): Path<String>, 
-    Path(digest): Path<String>, 
+    Path((name, digest)): Path<(String, String)>, 
     dispatcher: Data<&ThunkContext>) -> Response 
 {        
     // if let Some((task, _cancel)) = DownloadBlob::call_with_context(&mut dispatcher.clone()) {
     //     let result = task.await;
     // }
     event!(Level::TRACE, "Got resolve request, {name} {digest}");
+    event!(Level::TRACE, "{:#?}", request);
 
     Response::builder()
         .finish()
@@ -165,8 +209,7 @@ struct UploadParameters {
 async fn blob_upload_chunks(
     request: &Request,
     method: Method,
-    Path(name): Path<String>, 
-    Path(reference): Path<String>, 
+    Path((name, reference)): Path<(String, String)>, 
     Query(UploadParameters { digest }): Query<UploadParameters>, 
     dispatcher: Data<&ThunkContext>) -> Response 
 {
@@ -174,7 +217,8 @@ async fn blob_upload_chunks(
     //     let result = task.await;
     // }
 
-    event!(Level::TRACE, "Got {method} blob_upload_chunks request, {name} {reference}");
+    event!(Level::TRACE, "Got {method} blob_upload_chunks request, {name} {reference}, {:?}", digest);
+    event!(Level::TRACE, "{:#?}", request);
     Response::builder()
         .finish()
 }
@@ -194,6 +238,7 @@ async fn blob(
 {
     if let (Some(mount), Some(from)) = (mount, from) {
         event!(Level::TRACE, "Got blob_import request, {name}, {mount}, {from}");
+        event!(Level::TRACE, "{:#?}", request);
 
         // let mut blob_import = dispatcher.clone();
         // blob_import.as_mut().with_text("repo", name).with_text("mount", mount).with_text("from", from);
@@ -203,6 +248,7 @@ async fn blob(
         // }
     } else if let Some(digest) = digest { 
         event!(Level::TRACE, "Got blob_upload_monolith request, {name}, {digest}");
+        event!(Level::TRACE, "{:#?}", request);
 
         // if let Some((task, _cancel)) = BlobUploadMonolith::call_with_context(&mut dispatcher.clone()) {
         //     match task.await {
@@ -212,6 +258,7 @@ async fn blob(
         // }
     } else if let None = digest { 
         event!(Level::TRACE, "Got blob_upload_session_id request, {name}");
+        event!(Level::TRACE, "{:#?}", request);
 
         // if let Some((task, _cancel)) = BlobUploadSessionId::call_with_context(&mut dispatcher.clone()) {
         //     match task.await {

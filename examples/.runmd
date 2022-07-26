@@ -1,13 +1,19 @@
 # Lifec Registry Plugin
 
-``` host call
-define host           mirror  .symbol example
+``` example call
+define host           app_host  .symbol example
 ```
 
 ``` example mirror
-add address         .text       localhost:5000
-add host_name       .text       docker.io
+define example call
 ```
+
+``` runmd
+``` example app_host
+add node_title                   .text  Host mirror app_host
+add address                      .text  localhost:5000
+```
+
 
 ``` runmd
 ``` required expect
