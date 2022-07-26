@@ -179,9 +179,17 @@ fn test_mirror() {
     });
 }
 
+/// Fails in a way that the runtime will fallback to the upstream server
 fn soft_fail() -> Response {
     Response::builder()
     .finish()
+}
+
+/// Fails in a way that stops the runtime from completing it's action
+fn blocking_fail() -> Response {
+    Response::builder()
+        .status(StatusCode::NOT_IMPLEMENTED)
+        .finish()
 }
 
 #[handler]
@@ -189,9 +197,7 @@ async fn index(request: &Request) -> Response {
     event!(Level::TRACE, "Got /v2 request");
     event!(Level::TRACE, "{:#?}", request);
 
-    Response::builder()
-        .status(StatusCode::NOT_IMPLEMENTED)
-        .finish()
+    soft_fail()
 }
 
 #[derive(Deserialize)]
@@ -205,7 +211,7 @@ async fn resolve(
     request: &Request,
     Path((name, reference)): Path<(String, String)>, 
     Query(ResolveParams { ns }): Query<ResolveParams>,
-    dispatcher: Data<&ThunkContext>) -> Response
+    _dispatcher: Data<&ThunkContext>) -> Response
 {
     let name = name.trim_end_matches("/manifests");
 
@@ -216,16 +222,14 @@ async fn resolve(
     //     let result = task.await;
     // }
 
-    Response::builder()
-        .status(StatusCode::NOT_IMPLEMENTED)
-        .finish()
+    soft_fail()
 }
 
 #[handler]
 async fn list_tags(
     request: &Request,
     Path(name): Path<String>,
-    dispatcher: Data<&ThunkContext>) -> Response 
+    _dispatcher: Data<&ThunkContext>) -> Response 
 {
     let name = name.trim_end_matches("/tags");
 
@@ -236,16 +240,14 @@ async fn list_tags(
     //     let result = task.await;
     // }
 
-    Response::builder()
-        .status(StatusCode::NOT_IMPLEMENTED)
-        .finish()
+    soft_fail()
 }
 
 #[handler]
 async fn download_blob(
     request: &Request,
     Path((name, digest)): Path<(String, String)>, 
-    dispatcher: Data<&ThunkContext>) -> Response 
+    _dispatcher: Data<&ThunkContext>) -> Response 
 {        
     let name = name.trim_end_matches("/blobs");
     event!(Level::TRACE, "Got download_blobs request, {name} {digest}");
@@ -255,9 +257,7 @@ async fn download_blob(
     //     let result = task.await;
     // }
 
-    Response::builder()
-        .status(StatusCode::NOT_IMPLEMENTED)
-        .finish()
+    soft_fail()
 }
 
 #[derive(Deserialize)]
@@ -271,7 +271,7 @@ async fn blob_upload_chunks(
     method: Method,
     Path((name, reference)): Path<(String, String)>, 
     Query(UploadParameters { digest }): Query<UploadParameters>, 
-    dispatcher: Data<&ThunkContext>) -> Response 
+   _dispatcher: Data<&ThunkContext>) -> Response 
 {
     let name = name.trim_end_matches("/blobs");
 
@@ -282,9 +282,7 @@ async fn blob_upload_chunks(
     //     let result = task.await;
     // }
 
-    Response::builder()
-        .status(StatusCode::NOT_IMPLEMENTED)
-        .finish()
+    soft_fail()
 }
 
 #[derive(Deserialize)]
@@ -298,7 +296,7 @@ async fn blob_upload(
     request: &Request,
     Path(name): Path<String>, 
     Query(ImportParameters { digest, mount, from }): Query<ImportParameters>, 
-    dispatcher: Data<&ThunkContext>) -> Response 
+    _dispatcher: Data<&ThunkContext>) -> Response 
 {
     let name = name.trim_end_matches("/blobs");
 
@@ -334,9 +332,7 @@ async fn blob_upload(
         // }
     }
 
-    Response::builder()
-        .status(StatusCode::NOT_IMPLEMENTED)
-        .finish()
+    soft_fail()
 }
 
 // Table of OCI Endpoints
