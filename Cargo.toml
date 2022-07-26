@@ -10,3 +10,4 @@ lifec = { git = "https://github.com/juliusl/lifec.git", branch = "main" }
 lifec_poem = { git = "https://github.com/juliusl/lifec_poem.git", branch = "main" }
 poem = { version = "1.3.32", features = ["server", "static-files", "rustls"] }
 serde = "1.0"
+tracing = "0.1.35"

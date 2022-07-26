@@ -3,6 +3,7 @@ use lifec::{plugins::{ThunkContext, Plugin, Project}, Component, HashMapStorage,
 use lifec_poem::WebApp;
 use poem::{Route, handler, web::{Path, Data, Query}, get, patch, post, http::{Method, self}, EndpointExt, Request, RequestBuilder, Response};
 use serde::Deserialize;
+use tracing::{instrument, event, Level};
 
 use crate::{Resolve, ListTags, DownloadBlob, BlobUploadChunks, BlobUploadMonolith, BlobImport, BlobUploadSessionId, Upstream, create_runtime};
 
@@ -42,7 +43,7 @@ Design of containerd registry mirror feature
 
     fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         context.clone().task(|cancel_source| {
-            let mut tc = context.clone();
+            let tc = context.clone();
             async move {
                 if let Some(project) = tc.as_ref().find_text("project_src").and_then(|src| Project::load_file(src)) {
                    let block_name = tc.block.block_name.to_string();
@@ -101,7 +102,10 @@ impl WebApp for Mirror
 }
 
 #[handler]
-async fn index() {
+async fn index() -> Response {
+    event!(Level::TRACE, "Got /v2 request");
+    Response::builder()
+        .finish()
 }
 
 /// Resolves an image
@@ -112,11 +116,13 @@ async fn resolve(
     Path(reference): Path<String>, 
     dispatcher: Data<&ThunkContext>) -> Response
 {
-    if let Some((task, _cancel)) = Resolve::call_with_context(&mut dispatcher.clone()) {
-        let result = task.await;
-    }
+    // if let Some((task, _cancel)) = Resolve::call_with_context(&mut dispatcher.clone()) {
+    //     let result = task.await;
+    // }
 
-    todo!()
+    event!(Level::TRACE, "Got resolve request, {name} {reference}");
+    Response::builder()
+        .finish()
 }
 
 #[handler]
@@ -125,11 +131,13 @@ async fn list_tags(
     Path(name): Path<String>,
     dispatcher: Data<&ThunkContext>) -> Response 
 {
-    if let Some((task, _cancel)) = ListTags::call_with_context(&mut dispatcher.clone()) {
-        let result = task.await;
-    }
+    // if let Some((task, _cancel)) = ListTags::call_with_context(&mut dispatcher.clone()) {
+    //     let result = task.await;
+    // }
 
-    todo!()
+    event!(Level::TRACE, "Got list_tags request, {name}");
+    Response::builder()
+        .finish()
 }
 
 #[handler]
@@ -138,13 +146,14 @@ async fn download_blob(
     Path(name): Path<String>, 
     Path(digest): Path<String>, 
     dispatcher: Data<&ThunkContext>) -> Response 
-{    
-    
-    if let Some((task, _cancel)) = DownloadBlob::call_with_context(&mut dispatcher.clone()) {
-        let result = task.await;
-    }
+{        
+    // if let Some((task, _cancel)) = DownloadBlob::call_with_context(&mut dispatcher.clone()) {
+    //     let result = task.await;
+    // }
+    event!(Level::TRACE, "Got resolve request, {name} {digest}");
 
-    todo!()
+    Response::builder()
+        .finish()
 }
 
 #[derive(Deserialize)]
@@ -161,11 +170,13 @@ async fn blob_upload_chunks(
     Query(UploadParameters { digest }): Query<UploadParameters>, 
     dispatcher: Data<&ThunkContext>) -> Response 
 {
-    if let Some((task, _cancel)) = BlobUploadChunks::call_with_context(&mut dispatcher.clone()) {
-        let result = task.await;
-    }
+    // if let Some((task, _cancel)) = BlobUploadChunks::call_with_context(&mut dispatcher.clone()) {
+    //     let result = task.await;
+    // }
 
-    todo!()
+    event!(Level::TRACE, "Got {method} blob_upload_chunks request, {name} {reference}");
+    Response::builder()
+        .finish()
 }
 
 #[derive(Deserialize)]
@@ -181,32 +192,37 @@ async fn blob(
     Query(ImportParameters { digest, mount, from }): Query<ImportParameters>, 
     dispatcher: Data<&ThunkContext>) -> Response 
 {
-
     if let (Some(mount), Some(from)) = (mount, from) {
-        let mut blob_import = dispatcher.clone();
-        blob_import.as_mut().with_text("repo", name).with_text("mount", mount).with_text("from", from);
+        event!(Level::TRACE, "Got blob_import request, {name}, {mount}, {from}");
 
-        if let Some((task, _cancel)) = BlobImport::call_with_context(&mut blob_import) {
-            let result = task.await;
-        }
+        // let mut blob_import = dispatcher.clone();
+        // blob_import.as_mut().with_text("repo", name).with_text("mount", mount).with_text("from", from);
+
+        // if let Some((task, _cancel)) = BlobImport::call_with_context(&mut blob_import) {
+        //     let result = task.await;
+        // }
     } else if let Some(digest) = digest { 
-        if let Some((task, _cancel)) = BlobUploadMonolith::call_with_context(&mut dispatcher.clone()) {
-            match task.await {
-                Ok(_) => todo!(),
-                Err(_) => todo!(),
-            }
-        }
+        event!(Level::TRACE, "Got blob_upload_monolith request, {name}, {digest}");
+
+        // if let Some((task, _cancel)) = BlobUploadMonolith::call_with_context(&mut dispatcher.clone()) {
+        //     match task.await {
+        //         Ok(_) => todo!(),
+        //         Err(_) => todo!(),
+        //     }
+        // }
     } else if let None = digest { 
-        if let Some((task, _cancel)) = BlobUploadSessionId::call_with_context(&mut dispatcher.clone()) {
-            match task.await {
-                Ok(_) => todo!(),
-                Err(_) => todo!(),
-            }
-        }
+        event!(Level::TRACE, "Got blob_upload_session_id request, {name}");
+
+        // if let Some((task, _cancel)) = BlobUploadSessionId::call_with_context(&mut dispatcher.clone()) {
+        //     match task.await {
+        //         Ok(_) => todo!(),
+        //         Err(_) => todo!(),
+        //     }
+        // }
     }
 
-
-    todo!()
+    Response::builder()
+        .finish()
 }
 
 // Endpoints

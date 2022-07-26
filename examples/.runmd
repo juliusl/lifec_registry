@@ -1,0 +1,21 @@
+# Lifec Registry Plugin
+
+``` host call
+define host           mirror  .symbol example
+```
+
+``` example mirror
+add address         .text       localhost:5000
+add host_name       .text       docker.io
+```
+
+``` runmd
+``` required expect
+define docker which                 .text docker
+add stop_on_error                   .disable
+add default_open                    .enable
+add always_show                     .enable
+add enable_connection               .enable
+add debug                           .disable
+add node_title                      .text Check docker is installed
+```
