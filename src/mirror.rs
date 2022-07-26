@@ -82,7 +82,9 @@ impl WebApp for Mirror
 
     fn routes(&mut self) -> Route {
         let context = &self.0;
-        Route::new().nest("/v2", 
+        Route::new()
+            .at("/", get(index).head(index))
+            .nest("/v2", 
             Route::new()
             .at("/", get(index).head(index))
             .at("/:name/blobs/:digest", get(download_blob.data(context.clone())))
@@ -108,7 +110,13 @@ fn test_mirror() {
     tokio::runtime::Runtime::new().unwrap().block_on(async {
         let app = Mirror::default().routes();
         let cli =  poem::test::TestClient::new(app);
-        
+           
+        let resp = cli.get("/").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.head("/").send().await;
+        resp.assert_status_is_ok();
+
         let resp = cli.get("/v2").send().await;
         resp.assert_status_is_ok();
 
