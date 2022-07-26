@@ -87,18 +87,18 @@ impl WebApp for Mirror
             .nest("/v2", 
             Route::new()
             .at("/", get(index).head(index))
-            .at("/:name/blobs/:digest", get(download_blob.data(context.clone())))
-            .at("/:name/blobs/uploads", post(blob.data(context.clone())))
-            .at("/:name/blobs/uploads/:reference", 
+            .at("/:name<[a-zA-Z0-9/]+(:?blobs)>/:digest", get(download_blob.data(context.clone())))
+            .at("/:name<[a-zA-Z0-9/]+(:?blobs)>/uploads", post(blob.data(context.clone())))
+            .at("/:name<[a-zA-Z0-9/]+(:?blobs)>/uploads/:reference", 
                 patch(blob_upload_chunks.data(context.clone()))
                 .put(blob_upload_chunks.data(context.clone()))
                 )
-            .at("/:name/manifests/:reference", 
+            .at(r#"/:name<[a-zA-Z0-9/]+(:?manifests)>/:reference"#, 
                 get(resolve.data(context.clone()))
                 .head(resolve.data(context.clone()))
                 .put(resolve.data(context.clone()))
                 .delete(resolve.data(context.clone())))
-            .at("/:name/tags/list", 
+            .at(":name<[a-zA-Z0-9/]+(:?tags)>/list", 
                 get(list_tags.data(context.clone())))
             )
                 
@@ -128,32 +128,32 @@ fn test_mirror() {
 
         let resp = cli.head("/v2/").send().await;
         resp.assert_status_is_ok();
-
-        let resp = cli.get("/v2/test/manifests/test_ref").send().await;
+        
+        let resp = cli.get("/v2/library/test/manifests/test_ref").send().await;
         resp.assert_status_is_ok();
 
-        let resp = cli.head("/v2/test/manifests/test_ref").send().await;
+        let resp = cli.head("/v2/library/test/manifests/test_ref").send().await;
         resp.assert_status_is_ok();
 
-        let resp = cli.put("/v2/test/manifests/test_ref").send().await;
+        let resp = cli.put("/v2/library/test/manifests/test_ref").send().await;
         resp.assert_status_is_ok();
 
-        let resp = cli.delete("/v2/test/manifests/test_ref").send().await;
+        let resp = cli.delete("/v2/library/test/manifests/test_ref").send().await;
         resp.assert_status_is_ok();
 
-        let resp = cli.get("/v2/test/blobs/test_digest").send().await;
+        let resp = cli.get("/v2/library/test/blobs/test_digest").send().await;
         resp.assert_status_is_ok();
 
-        let resp = cli.post("/v2/test/blobs/uploads").send().await;
+        let resp = cli.post("/v2/library/test/blobs/uploads").send().await;
         resp.assert_status_is_ok();
 
-        let resp = cli.patch("/v2/test/blobs/uploads/test").send().await;
+        let resp = cli.patch("/v2/library/test/blobs/uploads/test").send().await;
         resp.assert_status_is_ok();
 
-        let resp = cli.put("/v2/test/blobs/uploads/test").send().await;
+        let resp = cli.put("/v2/library/test/blobs/uploads/test").send().await;
         resp.assert_status_is_ok();
 
-        let resp = cli.get("/v2/test/tags/list").send().await;
+        let resp = cli.get("/v2/library/test/tags/list").send().await;
         resp.assert_status_is_ok();
     });
 }
@@ -178,6 +178,8 @@ async fn resolve(
     // if let Some((task, _cancel)) = Resolve::call_with_context(&mut dispatcher.clone()) {
     //     let result = task.await;
     // }
+    
+    let name = name.trim_end_matches("/manifests");
 
     event!(Level::TRACE, "Got resolve request, {name} {reference}");
     event!(Level::TRACE, "{:#?}", request);
@@ -195,6 +197,8 @@ async fn list_tags(
     //     let result = task.await;
     // }
 
+    let name = name.trim_end_matches("/tags");
+
     event!(Level::TRACE, "Got list_tags request, {name}");
     event!(Level::TRACE, "{:#?}", request);
     Response::builder()
@@ -210,7 +214,9 @@ async fn download_blob(
     // if let Some((task, _cancel)) = DownloadBlob::call_with_context(&mut dispatcher.clone()) {
     //     let result = task.await;
     // }
-    event!(Level::TRACE, "Got resolve request, {name} {digest}");
+
+    let name = name.trim_end_matches("/blobs");
+    event!(Level::TRACE, "Got download_blobs request, {name} {digest}");
     event!(Level::TRACE, "{:#?}", request);
 
     Response::builder()
@@ -234,6 +240,8 @@ async fn blob_upload_chunks(
     //     let result = task.await;
     // }
 
+    let name = name.trim_end_matches("/blobs");
+
     event!(Level::TRACE, "Got {method} blob_upload_chunks request, {name} {reference}, {:?}", digest);
     event!(Level::TRACE, "{:#?}", request);
     Response::builder()
@@ -253,6 +261,8 @@ async fn blob(
     Query(ImportParameters { digest, mount, from }): Query<ImportParameters>, 
     dispatcher: Data<&ThunkContext>) -> Response 
 {
+    let name = name.trim_end_matches("/blobs");
+
     if let (Some(mount), Some(from)) = (mount, from) {
         event!(Level::TRACE, "Got blob_import request, {name}, {mount}, {from}");
         event!(Level::TRACE, "{:#?}", request);
