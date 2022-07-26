@@ -11,6 +11,27 @@ use crate::{Resolve, ListTags, DownloadBlob, BlobUploadChunks, BlobUploadMonolit
 /// Designed to be used w/ containerd's registry config described here: 
 /// https://github.com/containerd/containerd/blob/main/docs/hosts.md
 /// 
+/// To enable this feature, it consists of writing a hosts.toml under /etc/containerd/certs.d/{host_name}
+/// 
+/// Here is an example to run a simple test w/ this mirror:
+/// ```toml
+/// server = "https://registry-1.docker.io"
+/// 
+/// [host."http://localhost:5000"]
+/// capabilities = [ "resolve", "pull" ]
+/// skip_verify = true
+/// ```
+/// 
+/// And, then to test, you can use ctr:
+/// ```sh
+/// sudo ctr images pull --hosts-dir "/etc/containerd/certs.d" docker.io/library/python:latest  
+/// ```
+/// 
+/// To setup the runtime, you can enable this setting in /etc/containerd/config.toml
+/// 
+/// ```toml
+/// config_path = "/etc/containerd/certs.d"
+/// ```
 /// 
 #[derive(Component, Clone, Default)]
 #[storage(HashMapStorage)]
@@ -175,14 +196,15 @@ async fn resolve(
     Path((name, reference)): Path<(String, String)>, 
     dispatcher: Data<&ThunkContext>) -> Response
 {
-    // if let Some((task, _cancel)) = Resolve::call_with_context(&mut dispatcher.clone()) {
-    //     let result = task.await;
-    // }
-    
     let name = name.trim_end_matches("/manifests");
 
     event!(Level::TRACE, "Got resolve request, {name} {reference}");
     event!(Level::TRACE, "{:#?}", request);
+
+    // if let Some((task, _cancel)) = Resolve::call_with_context(&mut dispatcher.clone()) {
+    //     let result = task.await;
+    // }
+
     Response::builder()
         .finish()
 }
@@ -193,14 +215,15 @@ async fn list_tags(
     Path(name): Path<String>,
     dispatcher: Data<&ThunkContext>) -> Response 
 {
-    // if let Some((task, _cancel)) = ListTags::call_with_context(&mut dispatcher.clone()) {
-    //     let result = task.await;
-    // }
-
     let name = name.trim_end_matches("/tags");
 
     event!(Level::TRACE, "Got list_tags request, {name}");
     event!(Level::TRACE, "{:#?}", request);
+
+    // if let Some((task, _cancel)) = ListTags::call_with_context(&mut dispatcher.clone()) {
+    //     let result = task.await;
+    // }
+
     Response::builder()
         .finish()
 }
@@ -211,13 +234,13 @@ async fn download_blob(
     Path((name, digest)): Path<(String, String)>, 
     dispatcher: Data<&ThunkContext>) -> Response 
 {        
-    // if let Some((task, _cancel)) = DownloadBlob::call_with_context(&mut dispatcher.clone()) {
-    //     let result = task.await;
-    // }
-
     let name = name.trim_end_matches("/blobs");
     event!(Level::TRACE, "Got download_blobs request, {name} {digest}");
     event!(Level::TRACE, "{:#?}", request);
+    
+    // if let Some((task, _cancel)) = DownloadBlob::call_with_context(&mut dispatcher.clone()) {
+    //     let result = task.await;
+    // }
 
     Response::builder()
         .finish()
@@ -236,14 +259,15 @@ async fn blob_upload_chunks(
     Query(UploadParameters { digest }): Query<UploadParameters>, 
     dispatcher: Data<&ThunkContext>) -> Response 
 {
-    // if let Some((task, _cancel)) = BlobUploadChunks::call_with_context(&mut dispatcher.clone()) {
-    //     let result = task.await;
-    // }
-
     let name = name.trim_end_matches("/blobs");
 
     event!(Level::TRACE, "Got {method} blob_upload_chunks request, {name} {reference}, {:?}", digest);
     event!(Level::TRACE, "{:#?}", request);
+
+    // if let Some((task, _cancel)) = DownloadBlob::call_with_context(&mut dispatcher.clone()) {
+    //     let result = task.await;
+    // }
+
     Response::builder()
         .finish()
 }
@@ -299,7 +323,7 @@ async fn blob(
         .finish()
 }
 
-// Endpoints
+// Table of OCI Endpoints
 
 // ID	Method	API Endpoint	Success	Failure
 // end-1	GET	/v2/	                                                                            200	404/401

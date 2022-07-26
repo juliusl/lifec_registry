@@ -75,7 +75,7 @@ impl Extension for Upstream {
                     .with_text("host_name", "azurecr.io")
                     .with_text("thunk_symbol", "mirror");
             }));
-            if let Some(engine) = self.runtime_editor.runtime().schedule_with_engine::<Call, AppHost<Mirror>>(app_world, "test") {
+            if let Some(_) = self.runtime_editor.runtime().schedule_with_engine::<Call, AppHost<Mirror>>(app_world, "test") {
 
             }
         }
