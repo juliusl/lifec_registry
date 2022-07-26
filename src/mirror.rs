@@ -108,18 +108,18 @@ impl WebApp for Mirror
             .nest("/v2", 
             Route::new()
             .at("/", get(index).head(index))
-            .at("/:name<[a-zA-Z0-9/-_]+(:?blobs)>/:digest", get(download_blob.data(context.clone())))
-            .at("/:name<[a-zA-Z0-9/-_]+(:?blobs)>/uploads", post(blob_upload.data(context.clone())))
-            .at("/:name<[a-zA-Z0-9/-_]+(:?blobs)>/uploads/:reference", 
+            .at("/:name<[a-zA-Z0-9/_-]+(:?blobs)>/:digest", get(download_blob.data(context.clone())))
+            .at("/:name<[a-zA-Z0-9/_-]+(:?blobs)>/uploads", post(blob_upload.data(context.clone())))
+            .at("/:name<[a-zA-Z0-9/_-]+(:?blobs)>/uploads/:reference", 
                 patch(blob_upload_chunks.data(context.clone()))
                 .put(blob_upload_chunks.data(context.clone()))
                 )
-            .at(r#"/:name<[a-zA-Z0-9/-_]+(:?manifests)>/:reference"#, 
+            .at(r#"/:name<[a-zA-Z0-9/_-]+(:?manifests)>/:reference"#, 
                 get(resolve.data(context.clone()))
                 .head(resolve.data(context.clone()))
                 .put(resolve.data(context.clone()))
                 .delete(resolve.data(context.clone())))
-            .at(":name<[a-zA-Z0-9/-_]+(:?tags)>/list", 
+            .at(":name<[a-zA-Z0-9/_-]+(:?tags)>/list", 
                 get(list_tags.data(context.clone())))
             )
                 
