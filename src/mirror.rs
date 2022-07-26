@@ -182,7 +182,7 @@ fn test_mirror() {
 /// Fails in a way that the runtime will fallback to the upstream server
 fn soft_fail() -> Response {
     Response::builder()
-    .status(StatusCode::BAD_REQUEST)
+    .status(StatusCode::SERVICE_UNAVAILABLE)
     .finish()
 }
 
