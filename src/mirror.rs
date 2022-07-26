@@ -179,6 +179,10 @@ fn test_mirror() {
     });
 }
 
+fn soft_fail() -> Response {
+    Response::builder()
+    .finish()
+}
 
 #[handler]
 async fn index(request: &Request) -> Response {
@@ -190,16 +194,22 @@ async fn index(request: &Request) -> Response {
         .finish()
 }
 
+#[derive(Deserialize)]
+struct ResolveParams {
+    ns: String,
+}
+
 /// Resolves an image
 #[handler]
 async fn resolve(
     request: &Request,
     Path((name, reference)): Path<(String, String)>, 
+    Query(ResolveParams { ns }): Query<ResolveParams>,
     dispatcher: Data<&ThunkContext>) -> Response
 {
     let name = name.trim_end_matches("/manifests");
 
-    event!(Level::TRACE, "Got resolve request, {name} {reference}");
+    event!(Level::TRACE, "Got resolve request, {name} {reference} {ns}");
     event!(Level::TRACE, "{:#?}", request);
 
     // if let Some((task, _cancel)) = Resolve::call_with_context(&mut dispatcher.clone()) {
