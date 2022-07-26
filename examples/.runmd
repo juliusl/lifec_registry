@@ -2,10 +2,10 @@
 
 ``` runmd
 ``` example call
-define host           app_host  .symbol example
-``` app_host
-add node_title                   .text  Host mirror app_host
-add address                      .text  localhost:5000
+define host           mirror_host   .symbol example
+``` mirror_host
+add node_title                      .text  Host registry mirror
+add address                         .text  localhost:5000
 ```
 
 ``` runmd

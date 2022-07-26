@@ -1,9 +1,10 @@
-
+use lifec::{Runtime, editor::{Call, RuntimeEditor, Fix}, Extension, plugins::{Project, Expect, Missing, Config}};
 
 mod mirror;
-use lifec::{Runtime, editor::{Call, RuntimeEditor, Fix}, Extension, plugins::{Project, Expect, Missing, Config}};
-use lifec_poem::AppHost;
 pub use mirror::Mirror;
+pub use mirror::MirrorEvent;
+pub use mirror::MirrorHost;
+pub use mirror::MirrorAction;
 
 mod blob_import;
 pub use blob_import::BlobImport;
@@ -26,7 +27,11 @@ pub use list_tags::ListTags;
 mod resolve;
 pub use resolve::Resolve;
 
-pub fn create_runtime(project: Project) -> Runtime {
+/// Returns a runtime w/ plugins installed for use w/ lifec_registry
+pub fn create_runtime<Event>(project: Project) -> Runtime 
+where
+    Event: MirrorEvent + Default + Send + Sync + 'static
+{
     let mut runtime = Runtime::new(project);
     runtime.install::<Call, BlobImport>();
     runtime.install::<Call, BlobUploadChunks>();
@@ -36,26 +41,35 @@ pub fn create_runtime(project: Project) -> Runtime {
     runtime.install::<Call, ListTags>();
     runtime.install::<Call, Resolve>();
     runtime.install::<Call, Expect>();
-    runtime.install::<Call, Mirror>();
-    runtime.install::<Call, AppHost<Mirror>>();
+    runtime.install::<Call, MirrorHost::<Event>>();
     runtime.install::<Fix, Missing>();
     runtime
 }
 
 /// Represents the upstream registry that is being extended
 #[derive(Default)]
-pub struct Upstream {
+pub struct Upstream<Event> 
+where
+    Event: MirrorEvent + Default + Send + Sync + 'static
+{
     runtime_editor: RuntimeEditor,
     host_name: String,
+    event: Event,
 }
 
-impl From<RuntimeEditor> for Upstream {
+impl<Event> From<RuntimeEditor> for Upstream<Event>
+where
+    Event: MirrorEvent + Default + Send + Sync + 'static
+{
     fn from(runtime_editor: RuntimeEditor) -> Self {
-        Self { runtime_editor, host_name: String::default() }
+        Self { runtime_editor, ..Default::default() }
     }
 }
 
-impl Extension for Upstream {
+impl<Event> Extension for Upstream<Event>
+where
+    Event: MirrorEvent + Default + Send + Sync + 'static
+{
     fn configure_app_world(world: &mut lifec::World) {
         RuntimeEditor::configure_app_world(world);
     }
@@ -75,14 +89,18 @@ impl Extension for Upstream {
                     .with_text("host_name", "azurecr.io")
                     .with_text("thunk_symbol", "mirror");
             }));
-            if let Some(_) = self.runtime_editor.runtime().schedule_with_engine::<Call, AppHost<Mirror>>(app_world, "test") {
+            if let Some(_) = self.runtime_editor.runtime()
+                .schedule_with_engine::<Call, MirrorHost<Event>>(app_world, "test") {
 
             }
         }
     }
 }
 
-impl AsRef<Runtime> for Upstream {
+impl<Event> AsRef<Runtime> for Upstream<Event>
+where
+    Event: MirrorEvent + Default + Send + Sync + 'static
+{
     fn as_ref(&self) -> &Runtime {
         self.runtime_editor.runtime()
     }

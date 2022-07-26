@@ -1,7 +1,7 @@
 use std::env::args;
 
-use lifec::{Runtime, editor::{RuntimeEditor, Call}, open, combine, combine_default, plugins::Project, App, System, start};
-use lifec_registry::{Upstream, Mirror, create_runtime};
+use lifec::{editor::{RuntimeEditor}, open, plugins::{Project, ThunkContext, Plugin}, App, System, start};
+use lifec_registry::{Upstream, create_runtime, MirrorEvent};
 use tracing_subscriber::EnvFilter;
 
 /// Example w/ local registry
@@ -12,24 +12,44 @@ fn main() {
         .init();
 
     if let Some(project) = Project::runmd() {
-        let runtime = RuntimeEditor::new(create_runtime(project));
+        let runtime = RuntimeEditor::new(create_runtime::<Empty>(project));
 
         let args = args().collect::<Vec<_>>();
 
         if let Some(_) = args.iter().find(|a| a.starts_with("--mirror")) {
-            start(Upstream::from(runtime), &[ "example" ]);
+            start(Upstream::<Empty>::from(runtime), &[ "example" ]);
         } else {
             open(
                 "example",
                 Empty{},
-                Upstream::from(runtime),
+                Upstream::<Empty>::from(runtime),
             )
         }
     }
 }
 
-
+#[derive(Default)]
 struct Empty; 
+
+impl MirrorEvent for Empty {
+    fn resolve_response(_tc: &lifec::plugins::ThunkContext) -> poem::Response {
+        todo!()
+    }
+
+    fn resolve_error(_err: String, _tc: &lifec::plugins::ThunkContext) -> poem::Response {
+        todo!()
+    }
+}
+
+impl Plugin<ThunkContext> for Empty {
+    fn symbol() -> &'static str {
+        todo!()
+    }
+
+    fn call_with_context(_context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+        todo!()
+    }
+}
 
 impl App for Empty {
     fn name() -> &'static str {
