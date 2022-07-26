@@ -182,13 +182,13 @@ fn test_mirror() {
 /// Fails in a way that the runtime will fallback to the upstream server
 fn soft_fail() -> Response {
     Response::builder()
+    .status(StatusCode::BAD_REQUEST)
     .finish()
 }
 
 /// Fails in a way that stops the runtime from completing it's action
 fn blocking_fail() -> Response {
     Response::builder()
-        .status(StatusCode::NOT_IMPLEMENTED)
         .finish()
 }
 
