@@ -84,7 +84,7 @@ impl WebApp for Mirror
         let context = &self.0;
         Route::new().nest("/v2", 
             Route::new()
-            .at("/", get(index))
+            .at("/", get(index).head(index))
             .at("/:name/blobs/:digest", get(download_blob.data(context.clone())))
             .at("/:name/blobs/uploads", post(blob.data(context.clone())))
             .at("/:name/blobs/uploads/:reference", 
@@ -109,7 +109,16 @@ fn test_mirror() {
         let app = Mirror::default().routes();
         let cli =  poem::test::TestClient::new(app);
         
+        let resp = cli.get("/v2").send().await;
+        resp.assert_status_is_ok();
+
         let resp = cli.get("/v2/").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.head("/v2").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.head("/v2/").send().await;
         resp.assert_status_is_ok();
 
         let resp = cli.get("/v2/test/manifests/test_ref").send().await;
