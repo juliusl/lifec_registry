@@ -1,7 +1,7 @@
 
 use lifec::{plugins::{ThunkContext, Plugin, Project}, Component, HashMapStorage, Runtime, editor::RuntimeEditor};
 use lifec_poem::WebApp;
-use poem::{Route, handler, web::{Path, Data, Query}, get, patch, post, http::{Method, self}, EndpointExt, Request, RequestBuilder, Response};
+use poem::{Route, handler, web::{Path, Data, Query}, get, patch, post, http::{Method, StatusCode}, EndpointExt, Request, Response};
 use serde::Deserialize;
 use tracing::{instrument, event, Level};
 
@@ -109,7 +109,7 @@ impl WebApp for Mirror
             Route::new()
             .at("/", get(index).head(index))
             .at("/:name<[a-zA-Z0-9/]+(:?blobs)>/:digest", get(download_blob.data(context.clone())))
-            .at("/:name<[a-zA-Z0-9/]+(:?blobs)>/uploads", post(blob.data(context.clone())))
+            .at("/:name<[a-zA-Z0-9/]+(:?blobs)>/uploads", post(blob_upload.data(context.clone())))
             .at("/:name<[a-zA-Z0-9/]+(:?blobs)>/uploads/:reference", 
                 patch(blob_upload_chunks.data(context.clone()))
                 .put(blob_upload_chunks.data(context.clone()))
@@ -186,6 +186,7 @@ async fn index(request: &Request) -> Response {
     event!(Level::TRACE, "{:#?}", request);
 
     Response::builder()
+        .status(StatusCode::NOT_IMPLEMENTED)
         .finish()
 }
 
@@ -206,6 +207,7 @@ async fn resolve(
     // }
 
     Response::builder()
+        .status(StatusCode::NOT_IMPLEMENTED)
         .finish()
 }
 
@@ -225,6 +227,7 @@ async fn list_tags(
     // }
 
     Response::builder()
+        .status(StatusCode::NOT_IMPLEMENTED)
         .finish()
 }
 
@@ -243,6 +246,7 @@ async fn download_blob(
     // }
 
     Response::builder()
+        .status(StatusCode::NOT_IMPLEMENTED)
         .finish()
 }
 
@@ -269,6 +273,7 @@ async fn blob_upload_chunks(
     // }
 
     Response::builder()
+        .status(StatusCode::NOT_IMPLEMENTED)
         .finish()
 }
 
@@ -279,7 +284,7 @@ struct ImportParameters {
     from: Option<String>,
 }
 #[handler]
-async fn blob(
+async fn blob_upload(
     request: &Request,
     Path(name): Path<String>, 
     Query(ImportParameters { digest, mount, from }): Query<ImportParameters>, 
@@ -320,6 +325,7 @@ async fn blob(
     }
 
     Response::builder()
+        .status(StatusCode::NOT_IMPLEMENTED)
         .finish()
 }
 
