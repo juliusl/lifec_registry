@@ -1,0 +1,41 @@
+# ACR - Mirror example
+- This example is a mirror setup for ACR, 
+- It will demonstrate a pass_through registry that will handle sign-in w/ az-cli
+- Usually in this scenario, to use `ctr` you would need to pass credentials event if you did `az acr login`
+- This engine will show a mirror capable of logging in for you as you pull images
+ 
+``` runmd
+``` default call
+-define a_login           process       .symbol acr_login
+define b_start           mirror_host   .symbol example
+``` 
+
+``` runmd
+``` example mirror_host
+add node_title                      .text  Host registry mirror
+add description                     .text  Example mirror host for ACR
+add address                         .text  localhost:5000
+add project_src                     .text  examples/acr/.runmd
+```
+
+# Example of mirroring resolve
+- If artifact_type is set, resolve will attach the artifacts to the thunk_context, before resolve is called
+
+``` runmd
+``` example resolve
+add artifact_type   .text       dadi-manifest
+add override        .enabled 
+```
+
+``` runmd
+``` required expect
+define docker   which               .text docker
+define az       which               .text az
+define mkcert   which               .text mkcert
+add stop_on_error                   .disable
+add default_open                    .enable
+add always_show                     .enable
+add enable_connection               .enable
+add debug                           .disable
+add node_title                      .text Check docker is installed
+```

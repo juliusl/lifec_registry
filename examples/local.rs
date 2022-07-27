@@ -11,7 +11,7 @@ fn main() {
         .compact()
         .init();
 
-    if let Some(project) = Project::runmd() {
+    if let Some(project) = Project::load_file("examples/local/.runmd") {
         let runtime = RuntimeEditor::new(create_runtime::<Empty>(project));
 
         let args = args().collect::<Vec<_>>();

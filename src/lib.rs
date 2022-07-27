@@ -6,6 +6,12 @@ pub use mirror::MirrorEvent;
 pub use mirror::MirrorHost;
 pub use mirror::MirrorAction;
 
+mod authenticate;
+pub use authenticate::Authenticate;
+
+mod login;
+pub use login::Login;
+
 mod blob_import;
 pub use blob_import::BlobImport;
 
@@ -79,6 +85,8 @@ where
     }
 
     fn on_ui(&'_ mut self, app_world: &lifec::World, ui: &'_ imgui::Ui<'_>) {
+        self.runtime_editor.on_ui(app_world, ui);
+
         if ui.button("test") {
             self.runtime_editor.runtime_mut().add_config(Config("test", |a| {
                 a.block.block_name = a.label("test").as_ref().to_string();
@@ -94,6 +102,14 @@ where
 
             }
         }
+    }
+
+    fn on_window_event(&'_ mut self, app_world: &lifec::World, event: &'_ lifec::editor::WindowEvent<'_>) {
+        self.runtime_editor.on_window_event(app_world, event)
+    }
+
+    fn on_run(&'_ mut self, app_world: &lifec::World) {
+        self.runtime_editor.on_run(app_world);
     }
 }
 

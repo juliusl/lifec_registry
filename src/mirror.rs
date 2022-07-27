@@ -16,7 +16,7 @@ use tracing::{event, Level};
 
 use crate::{
     create_runtime, BlobImport, BlobUploadChunks, BlobUploadMonolith, BlobUploadSessionId,
-    DownloadBlob, ListTags, Resolve, Upstream,
+    DownloadBlob, ListTags, Resolve, Upstream, Authenticate, Login,
 };
 
 /// Designed to be used w/ containerd's registry config described here:
@@ -119,7 +119,7 @@ impl MirrorAction {
     }
 }
 
-/// Fails in a way that the runtime will fallback to& the upstream server
+/// Fails in a way that the runtime will fallback to the upstream server
 fn soft_fail() -> Response {
     Response::builder()
         .status(StatusCode::SERVICE_UNAVAILABLE)
@@ -137,6 +137,13 @@ where
 {
     fn symbol() -> &'static str {
         "mirror_host"
+    }
+
+    fn description() -> &'static str {
+r#"
+Hosts the mirror server locally, using lifec_poem's app_host plugin.
+TLS Settings will be used if present.
+"#
     }
 
     fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
@@ -387,14 +394,19 @@ async fn resolve(
         Level::DEBUG,
         "Got resolve request, repo: {name} ref: {reference} host: {ns}"
     );
-    event!(Level::TRACE, "{:#?}", request);
+    event!(
+        Level::TRACE, 
+        "{:#?}", request
+    );
 
     let mut input = dispatcher.clone();
-    input.as_mut().with_text("name", name);
-    input.as_mut().with_text("reference", reference);
-    input.as_mut().with_text("host_name", ns);
+    input.as_mut()
+        .with_text("repo", name)
+        .with_text("reference", reference)
+        .with_text("ns", ns)
+        .add_text_attr("accept", request.header("accept").unwrap_or_default());
 
-    mirror_action.handle::<Resolve>(&mut dispatcher.clone()).await
+    mirror_action.handle::<((Login, Authenticate), Resolve)>(&mut dispatcher.clone()).await
 }
 
 #[handler]

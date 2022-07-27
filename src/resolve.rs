@@ -1,4 +1,6 @@
 use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component};
+use poem::{Request, web::headers::Authorization};
+use tracing::{event, Level};
 
 /// BlobImport handler based on OCI spec endpoints: 
 /// 
@@ -21,29 +23,61 @@ impl Plugin<ThunkContext> for Resolve {
 
     fn description() -> &'static str {
 r#"
-Mirrors a manifest fetch call,
-
-Expected block input:
-``` {block_name}  resolve
-- Headers
-define accept      header .text
-define user-agent  header .text
-define host        header .text
-define ns          query  .text
-
-- Params
-add method    .text
-add repo      .text
-add reference .text
-```
-
+Mirrors manifest resolution
 "#
     }
 
     fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         context.clone().task(|_| {
-            async {
+            let mut tc = context.clone();
+            async move {
+                if let (Some(ns), Some(repo), Some(reference), Some(accept), Some(access_token)) = 
+                (   tc.as_ref().find_text("ns"), 
+                    tc.as_ref().find_text("repo"),
+                    tc.as_ref().find_text("reference"),
+                    tc.as_ref().find_text("accept"),
+                    tc.as_ref().find_text("access_token")
+                ) { 
+                let manifest_api = format!("https://{ns}/v2/{repo}/manifests/{reference}");
+                match Authorization::bearer(&access_token) {
+                    Ok(auth_header) => {
+                        let req = Request::builder()
+                            .uri_str(manifest_api.as_str())
+                            .typed_header(auth_header.clone())
+                            .header("accept", accept)
+                            .finish();
+                        let client = tc.client().expect("async should be enabled"); 
+                        match client.request(req.into()).await {
+                            Ok(response) => {
+                                if let Some(digest) = response.headers().get("Docker-Content-Digest") {
+                                    tc.as_mut().add_text_attr("digest", digest.to_str().unwrap_or_default());
+                                }
+                                match hyper::body::to_bytes(response.into_body()).await {
+                                    Ok(data) => tc.as_mut().add_binary_attr("manifest", data),
+                                    Err(err) =>  event!(Level::ERROR, "{err}")
+                                }
+                            },
+                            Err(err) => event!(Level::ERROR, "{err}")
+                        }
+                        
+                        if let Some(artifacts_type) = tc.as_ref().find_text("artifacts_type") {
+                            let referrers_api = format!("https://{ns}/v2/{repo}/_oras/artifacts/referrers?artifactsType={artifacts_type}");
+                            let req = Request::builder()
+                                .uri_str(referrers_api.as_str())
+                                .typed_header(auth_header)
+                                .finish();
 
+                            match client.request(req.into()).await {
+                                Ok(response) => match hyper::body::to_bytes(response.into_body()).await {
+                                    Ok(data) => tc.as_mut().add_binary_attr("referrers", data),
+                                    Err(err) =>  event!(Level::ERROR, "{err}")
+                                }
+                                Err(err) => event!(Level::ERROR, "{err}")
+                            }
+                        }
+                    }
+                    Err(err) => event!(Level::ERROR, "{err}")
+                }}
                 None 
             }
         })
