@@ -9,6 +9,9 @@ pub use mirror::MirrorAction;
 mod authenticate;
 pub use authenticate::Authenticate;
 
+mod index;
+pub use index::Index;
+
 mod login;
 pub use login::Login;
 

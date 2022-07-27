@@ -16,7 +16,7 @@ use tracing::{event, Level};
 
 use crate::{
     create_runtime, BlobImport, BlobUploadChunks, BlobUploadMonolith, BlobUploadSessionId,
-    DownloadBlob, ListTags, Resolve, Upstream, Authenticate, Login,
+    DownloadBlob, ListTags, Resolve, Upstream, Authenticate, Login, Index,
 };
 
 /// Designed to be used w/ containerd's registry config described here:
@@ -229,10 +229,17 @@ where
 
     fn routes(&mut self) -> Route {
         let context = &self.0;
-        Route::new().at("/", get(index).head(index)).nest(
+        Route::new().nest(
             "/v2",
             Route::new()
-                .at("/", get(index).head(index))
+                .at("/", 
+                    get(index
+                        .data(context.clone())
+                        .data(MirrorAction::from::<Event>()))
+                    .head(index
+                        .data(context.clone())
+                        .data(MirrorAction::from::<Event>()))
+                )
                 .at(
                     "/:name<[a-zA-Z0-9/_-]+(:?blobs)>/:digest",
                     get(download_blob
@@ -284,94 +291,14 @@ where
     }
 }
 
-#[derive(Default)]
-struct TestMirrorEvent;
-
-impl Plugin<ThunkContext> for TestMirrorEvent {
-    fn symbol() -> &'static str {
-        "test_mirror_event"
-    }
-
-    fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
-        todo!()
-    }
-}
-
-impl MirrorEvent for TestMirrorEvent {
-    fn resolve_response(tc: &ThunkContext) -> Response {
-        todo!()
-    }
-
-    fn resolve_error(err: String, tc: &ThunkContext) -> Response {
-        todo!()
-    }
-}
-
-#[test]
-fn test_mirror() {
-    tokio::runtime::Runtime::new().unwrap().block_on(async {
-        let app = Mirror::<TestMirrorEvent>::default().routes();
-        let cli = poem::test::TestClient::new(app);
-
-        let resp = cli.get("/").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.head("/").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.get("/v2").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.get("/v2/").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.head("/v2").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.head("/v2/").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.get("/v2/library/test/manifests/test_ref").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.head("/v2/library/test/manifests/test_ref").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.put("/v2/library/test/manifests/test_ref").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli
-            .delete("/v2/library/test/manifests/test_ref")
-            .send()
-            .await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.get("/v2/library/test/blobs/test_digest").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.post("/v2/library/test/blobs/uploads").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli
-            .patch("/v2/library/test/blobs/uploads/test")
-            .send()
-            .await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.put("/v2/library/test/blobs/uploads/test").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.get("/v2/library/test/tags/list").send().await;
-        resp.assert_status_is_ok();
-    });
-}
-
 #[handler]
-async fn index(request: &Request) -> Response {
+async fn index(request: &Request,
+    dispatcher: Data<&ThunkContext>,
+    mirror_action: Data<&MirrorAction>) -> Response {
     event!(Level::DEBUG, "Got /v2 request");
     event!(Level::TRACE, "{:#?}", request);
 
-    soft_fail()
+    mirror_action.handle::<Index>(&mut dispatcher.clone()).await
 }
 
 #[derive(Deserialize)]
@@ -557,3 +484,85 @@ async fn blob_upload(
 // end-3	GET / HEAD	/v2/<name>/manifests/<reference>	                                        200	404
 // end-7	PUT	        /v2/<name>/manifests/<reference>	                                        201	404
 // end-9	DELETE	    /v2/<name>/manifests/<reference>	                                        202	404/400/405
+
+#[derive(Default)]
+struct TestMirrorEvent;
+
+impl Plugin<ThunkContext> for TestMirrorEvent {
+    fn symbol() -> &'static str {
+        "test_mirror_event"
+    }
+
+    fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+        todo!()
+    }
+}
+
+impl MirrorEvent for TestMirrorEvent {
+    fn resolve_response(tc: &ThunkContext) -> Response {
+        todo!()
+    }
+
+    fn resolve_error(err: String, tc: &ThunkContext) -> Response {
+        todo!()
+    }
+}
+
+#[test]
+fn test_mirror() {
+    tokio::runtime::Runtime::new().unwrap().block_on(async {
+        let app = Mirror::<TestMirrorEvent>::default().routes();
+        let cli = poem::test::TestClient::new(app);
+
+        let resp = cli.get("/").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.head("/").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.get("/v2").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.get("/v2/").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.head("/v2").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.head("/v2/").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.get("/v2/library/test/manifests/test_ref").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.head("/v2/library/test/manifests/test_ref").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.put("/v2/library/test/manifests/test_ref").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli
+            .delete("/v2/library/test/manifests/test_ref")
+            .send()
+            .await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.get("/v2/library/test/blobs/test_digest").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.post("/v2/library/test/blobs/uploads").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli
+            .patch("/v2/library/test/blobs/uploads/test")
+            .send()
+            .await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.put("/v2/library/test/blobs/uploads/test").send().await;
+        resp.assert_status_is_ok();
+
+        let resp = cli.get("/v2/library/test/tags/list").send().await;
+        resp.assert_status_is_ok();
+    });
+}
