@@ -71,8 +71,6 @@ where
 /// Can be implemented on a per-feature basis to extend the registry on the client side
 ///
 pub trait MirrorEvent
-where
-    Self: Plugin<ThunkContext>,
 {
     /// Called after the plugin finishes, and if the plugin returned the next thunk_context
     /// 
