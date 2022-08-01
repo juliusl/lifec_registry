@@ -1,5 +1,5 @@
 use lifec::{
-    editor::RuntimeEditor,
+    editor::{RuntimeEditor, Call},
     plugins::{Plugin, Project, ThunkContext, combine, Println},
     Component, DenseVecStorage, HashMapStorage, Runtime,
 };
@@ -202,9 +202,9 @@ Design of containerd registry mirror feature
                         // tc.as_mut().add_bool_attr("proxy_dispatcher", true);
 
                         let mut extension = Upstream::<Event>::from(runtime_editor);
-                        Runtime::start_with(
+                        Runtime::start_with::<Upstream<Event>, Call>(
                             &mut extension,
-                            Mirror::<Event>::symbol(),
+                            Mirror::<Event>::symbol().to_string(),
                             &tc,
                             cancel_source,
                         );
