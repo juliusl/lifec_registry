@@ -16,9 +16,7 @@ pub struct Authenticate;
 
 #[derive(Deserialize, Serialize)]
 pub struct Credentials {
-    #[serde(rename = "accessToken")]
     access_token: Option<String>,
-    #[serde(rename = "refreshToken")]
     refresh_token: Option<String>,
 }
 
