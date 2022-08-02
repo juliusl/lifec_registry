@@ -329,7 +329,7 @@ async fn resolve(
         .with_text("repo", name)
         .with_text("reference", reference)
         .with_text("ns", &ns)
-        .with_text("api", format!("https://{ns}/{}", request.uri().path()))
+        .with_text("api", format!("https://{ns}/v2{}", request.uri().path()))
         .add_text_attr("accept", request.header("accept").unwrap_or_default());
 
     mirror_action.handle::<((Login, Authenticate), Resolve)>(&mut input.clone()).await
