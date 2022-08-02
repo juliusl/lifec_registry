@@ -332,7 +332,7 @@ async fn resolve(
         .with_text("api", format!("{ns}/{}", request.uri().path()))
         .add_text_attr("accept", request.header("accept").unwrap_or_default());
 
-    mirror_action.handle::<((Login, Authenticate), Resolve)>(&mut dispatcher.clone()).await
+    mirror_action.handle::<((Login, Authenticate), Resolve)>(&mut input.clone()).await
 }
 
 #[handler]

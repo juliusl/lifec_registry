@@ -44,7 +44,7 @@ impl Authenticate {
             }
         } 
 
-        event!(Level::WARN, "missing secure client, exiting authn");
+        event!(Level::WARN, "did not authn request, exiting");
         None 
     }
 
