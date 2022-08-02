@@ -1,4 +1,4 @@
-use hyper::{http, Uri};
+use hyper::{http, Uri, Method};
 use lifec::{
     plugins::{Plugin, ThunkContext},
     Component, DenseVecStorage,
@@ -78,13 +78,17 @@ impl Authenticate {
                 (tc.as_ref().find_text("ns"), tc.as_ref().find_text("token"))
             {
                 event!(Level::DEBUG, "Begining authn for {challenge_uri}");
+                
+                // curl -v -X POST -H "Content-Type: application/x-www-form-urlencoded" -d \
+                // "grant_type=refresh_token&service=$registry&scope=$scope&refresh_token=$acr_refresh_token" \
+                // https://$registry/oauth2/token
+                
+                let challenge_uri = format!("{}&grant_type=refresh_token&refresh_token={}", challenge_uri.to_string(), token).parse::<Uri>().expect("should be valid");
 
                 let req = Request::builder()
                     .uri(challenge_uri)
-                    .typed_header(Authorization::basic(
-                        "00000000-0000-0000-0000-000000000000",
-                        token.as_ref(),
-                    ))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .method(Method::POST)
                     .finish();
 
                 let client = tc
