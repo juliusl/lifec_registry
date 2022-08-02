@@ -98,6 +98,8 @@ impl Authenticate {
                         event!(Level::TRACE, "{:#?}", response);
                         match hyper::body::to_bytes(response.into_body()).await {
                             Ok(bytes) => {
+                                event!(Level::TRACE, "{:#?}", bytes);
+
                                 return serde_json::de::from_slice::<Credentials>(bytes.as_ref()).ok()
                             }
                             Err(err) => {
