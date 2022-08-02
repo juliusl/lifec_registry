@@ -90,6 +90,8 @@ impl Authenticate {
                 let client = tc
                     .client()
                     .expect("async is enabled, so this should be set");
+                
+                event!(Level::TRACE, "{:#?}", req);
                 match client.request(req.into()).await {
                     Ok(response) => {
                         event!(Level::TRACE, "{:#?}", response);
