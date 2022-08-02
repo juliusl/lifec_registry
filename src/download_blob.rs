@@ -32,7 +32,7 @@ impl Plugin<ThunkContext> for DownloadBlob {
                     tc.as_ref().find_text("access_token")
                 ) { 
 
-                let download_api = format!("https://{ns}/v2/{name}/blob/{digest}");
+                let download_api = format!("https://{ns}/v2/{name}/blobs/{digest}");
                 event!(Level::DEBUG, "Starting blob download, {download_api}");
                 match Authorization::bearer(&access_token) {
                     Ok(auth_header) => {
