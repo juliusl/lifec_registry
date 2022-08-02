@@ -2,7 +2,7 @@ use std::str::FromStr;
 use hyper::{Uri, http};
 use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component};
 use poem::{web::headers::Authorization, Request};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tracing::{event, Level};
 
 /// Plugin for authenticating w/ a registry
@@ -11,9 +11,11 @@ use tracing::{event, Level};
 #[storage(DenseVecStorage)]
 pub struct Authenticate;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct Credentials {
+    #[serde(rename = "accessToken")]
     access_token: Option<String>,
+    #[serde(rename = "refreshToken")]
     refresh_token: Option<String>,
 }
 
