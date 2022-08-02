@@ -42,10 +42,11 @@ impl Plugin<ThunkContext> for Resolve {
                 match Authorization::bearer(&access_token) {
                     Ok(auth_header) => {
                         event!(Level::DEBUG, "accept header is: {}", &accept);
+                        let manifest_accept = tc.as_ref().find_text("manifest_accept").unwrap_or("application/vnd.docker.distribution.manifest.list.v2+json".to_string());
                         let req = Request::builder()
                             .uri_str(manifest_api.as_str())
                             .typed_header(auth_header.clone())
-                            .header("accept", accept)
+                            .header("accept", manifest_accept)
                             .finish();
                         let client = tc.client().expect("async should be enabled"); 
                         match client.request(req.into()).await {
