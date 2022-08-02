@@ -80,9 +80,7 @@ impl Plugin<ThunkContext> for Authenticate {
     }
 
     fn description() -> &'static str {
-r#"
-Authenticates to a registry and and adds a token text attribute.
-"#
+        "Authenticates to a registry and and adds a token text attribute."
     }
 
     fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
@@ -106,5 +104,5 @@ Authenticates to a registry and and adds a token text attribute.
 #[test]
 fn test_resolve_challenge() {
     let url = Authenticate::parse_challenge_header(r#"Bearer realm="https://host.io/oauth2/token",service="host.io",scope="repository:hello-world:pull""#);
-    eprintln!("{url}");
+    assert_eq!(url, "https://host.io/oauth2/token?service=host.io&scope=repository:hello-world:pull")
 }
