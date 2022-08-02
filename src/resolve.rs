@@ -82,6 +82,7 @@ impl Plugin<ThunkContext> for Resolve {
                                     tc.as_ref().find_text("artifact_type"), 
                                     tc.as_ref().find_text("digest")
                                 ) {
+                                    event!(Level::DEBUG, "Making referrers call for {artifact_type}");
                                     let referrers_api = format!("https://{ns}/v2/{repo}/_oras/artifacts/referrers?digest={digest}&artifactType={artifact_type}");
                                     let req = Request::builder()
                                         .uri_str(referrers_api.as_str())
