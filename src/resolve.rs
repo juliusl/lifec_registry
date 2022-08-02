@@ -90,9 +90,12 @@ impl Plugin<ThunkContext> for Resolve {
                                         .finish();
         
                                     match client.request(req.into()).await {
-                                        Ok(response) => match hyper::body::to_bytes(response.into_body()).await {
-                                            Ok(data) => tc.as_mut().add_binary_attr("referrers", data),
-                                            Err(err) =>  event!(Level::ERROR, "{err}")
+                                        Ok(response) => { 
+                                            event!(Level::TRACE, "{:#?}", response);
+                                            match hyper::body::to_bytes(response.into_body()).await {
+                                                Ok(data) => tc.as_mut().add_binary_attr("referrers", data),
+                                                Err(err) =>  event!(Level::ERROR, "{err}")
+                                            }
                                         }
                                         Err(err) => event!(Level::ERROR, "{err}")
                                     }
