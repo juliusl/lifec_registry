@@ -55,9 +55,19 @@ impl Plugin<ThunkContext> for Resolve {
 
                                 if let Some(digest) = response.headers().get("Docker-Content-Digest") {                                
                                     event!(Level::DEBUG, "Resolved digest is {:?}", &digest.to_str());
-
-                                    tc.as_mut().add_text_attr("digest", digest.to_str().unwrap_or_default());
+                                    tc.as_mut().add_text_attr(
+                                        "digest", 
+                                        digest.to_str().unwrap_or_default()
+                                    );
                                 }
+
+                                if let Some(content_type) = response.headers().get("content-type") {
+                                    tc.as_mut().add_text_attr(
+                                        "content-type", 
+                                        content_type.to_str().unwrap_or_default()
+                                    );
+                                }
+
                                 match hyper::body::to_bytes(response.into_body()).await {
                                     Ok(data) => {
                                         event!(Level::DEBUG, "Resolved manifest, len: {}", data.len());
