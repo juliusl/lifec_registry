@@ -22,9 +22,7 @@ impl Plugin<ThunkContext> for Resolve {
     }
 
     fn description() -> &'static str {
-r#"
-Mirrors manifest resolution
-"#
+        "Resolves an image manifest from the registry. If an artifact_type text attribute exists, will query the referrers api and attach the result"
     }
 
     fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
@@ -60,8 +58,8 @@ Mirrors manifest resolution
                             Err(err) => event!(Level::ERROR, "{err}")
                         }
                         
-                        if let Some(artifacts_type) = tc.as_ref().find_text("artifacts_type") {
-                            let referrers_api = format!("https://{ns}/v2/{repo}/_oras/artifacts/referrers?artifactsType={artifacts_type}");
+                        if let Some(artifact_type) = tc.as_ref().find_text("artifact_type") {
+                            let referrers_api = format!("https://{ns}/v2/{repo}/_oras/artifacts/referrers?artifactType={artifact_type}");
                             let req = Request::builder()
                                 .uri_str(referrers_api.as_str())
                                 .typed_header(auth_header)
