@@ -62,6 +62,12 @@ impl Plugin<ThunkContext> for DownloadBlob {
                                     );
                                 }
 
+                                let response = if let Some(location) = response.headers().get("Location") {
+                                    client.get(location.to_str().unwrap_or_default().parse().unwrap()).await.unwrap()
+                                } else {
+                                    response 
+                                };
+
                                 match hyper::body::to_bytes(response.into_body()).await {
                                     Ok(data) => {
                                         event!(Level::DEBUG, "Resolved blob, len: {}", data.len());
