@@ -34,7 +34,7 @@ impl Plugin for Login {
                             event!(Level::DEBUG, "Writing credentials to context");
                             tc.as_mut()
                                 .with_text("user", user)
-                                .add_text_attr("token", token);
+                                .add_text_attr("token", token.trim());
                         }
                         Err(err) => {
                             event!(Level::ERROR, "{err}");
