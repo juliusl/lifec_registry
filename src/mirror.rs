@@ -376,7 +376,7 @@ async fn download_blob(
         input.as_mut().add_text_attr("accept", accept)
     }
 
-    mirror_action.handle::<((Login, Authenticate), Resolve)>(&mut input).await
+    mirror_action.handle::<((Login, Authenticate), DownloadBlob)>(&mut input).await
 }
 
 #[derive(Deserialize)]
