@@ -97,12 +97,14 @@ impl Plugin<ThunkContext> for Authenticate {
             let mut tc = context.clone();
             async move {
                 if let Some(credentials) = Self::authenticate(&tc).await {
+                    event!(Level::DEBUG, "Received credentials for registry");
                     tc.as_mut()
                         .with_text("refresh_token", credentials.refresh_token.unwrap_or_default())
                         .add_text_attr("access_token", credentials.access_token.unwrap_or_default());
                     
                     Some(tc)
                 } else {
+                    event!(Level::ERROR, "Could not authn w/ registry");
                     None 
                 }
             }
