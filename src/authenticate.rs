@@ -83,15 +83,12 @@ impl Authenticate {
                 // "grant_type=refresh_token&service=$registry&scope=$scope&refresh_token=$acr_refresh_token" \
                 // https://$registry/oauth2/token
                 
-                let challenge_uri = format!("{}&grant_type=refresh_token&refresh_token={}", challenge_uri.to_string(), token);
-                event!(Level::TRACE, "{:#?}", challenge_uri);
-                
-                let challenge_uri = Uri::from_str(&challenge_uri).expect("should be valid uri");
+                let body = format!("{}&grant_type=refresh_token&refresh_token={}", challenge_uri.query().unwrap(), token);
                 let req = Request::builder()
                     .uri(challenge_uri)
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .method(Method::POST)
-                    .finish();
+                    .body(body);
 
                 let client = tc
                     .client()
