@@ -61,10 +61,10 @@ impl Plugin<ThunkContext> for Resolve {
                                     );
                                 }
 
-                                if let Some(content_type) = response.headers().get("content-type") {
+                                if let Some(content_type) = response.headers().get("Content-Type") {
                                     tc.as_mut().add_text_attr(
                                         "content-type", 
-                                        content_type.to_str().unwrap_or_default()
+                                        content_type.to_str().unwrap_or("application/vnd.docker.distribution.manifest.list.v2+json")
                                     );
                                 }
 
