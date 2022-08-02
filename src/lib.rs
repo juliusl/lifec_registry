@@ -50,6 +50,8 @@ where
     runtime.install::<Call, ListTags>();
     runtime.install::<Call, Resolve>();
     runtime.install::<Call, Expect>();
+    runtime.install::<Call, Login>();
+    runtime.install::<Call, Authenticate>();
     runtime.install::<Call, MirrorHost::<Event>>();
     runtime.install::<Fix, Missing>();
     runtime
