@@ -99,8 +99,8 @@ impl Plugin<ThunkContext> for Authenticate {
                 if let Some(credentials) = Self::authenticate(&tc).await {
                     event!(Level::DEBUG, "Received credentials for registry");
                     tc.as_mut()
-                        .with_text("refresh_token", credentials.refresh_token.unwrap_or_default())
-                        .add_text_attr("access_token", credentials.access_token.unwrap_or_default());
+                        .with_text("refresh_token", credentials.refresh_token.expect("received some refresh token"))
+                        .add_text_attr("access_token", credentials.access_token.expect("received some access token"));
                     
                     Some(tc)
                 } else {
