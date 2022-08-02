@@ -357,6 +357,7 @@ async fn list_tags(
 async fn download_blob(
     request: &Request,
     Path((name, digest)): Path<(String, String)>,
+    Query(ResolveParams { ns }): Query<ResolveParams>,
     dispatcher: Data<&ThunkContext>,
     mirror_action: Data<&MirrorAction>,
 ) -> Response {
@@ -365,10 +366,17 @@ async fn download_blob(
     event!(Level::TRACE, "{:#?}", request);
 
     let mut input = dispatcher.clone();
-    input.as_mut().with_text("name", name);
-    input.as_mut().with_text("digest", digest);
+    input.as_mut()
+        .with_text("name", name)
+        .with_text("ns", &ns)
+        .with_text("api", format!("https://{ns}/v2{}", request.uri().path()))
+        .with_text("digest", digest);
+    
+    if let Some(accept) = request.header("accept") {
+        input.as_mut().add_text_attr("accept", accept)
+    }
 
-    mirror_action.handle::<DownloadBlob>(&mut input).await
+    mirror_action.handle::<(Authenticate, Resolve)>(&mut input).await
 }
 
 #[derive(Deserialize)]

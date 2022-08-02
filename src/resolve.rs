@@ -73,7 +73,7 @@ impl Plugin<ThunkContext> for Resolve {
                                         event!(Level::DEBUG, "Resolved manifest, len: {}", data.len());
                                         event!(Level::TRACE, "{:#?}", data);
 
-                                        tc.as_mut().add_binary_attr("manifest", data);
+                                        tc.as_mut().add_binary_attr("body", data);
                                     },
                                     Err(err) =>  event!(Level::ERROR, "{err}")
                                 }
