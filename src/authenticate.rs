@@ -32,6 +32,7 @@ impl Authenticate {
                 if let Some(response) =  client.get(api.clone()).await.ok() {
                     if response.status().is_client_error() {
                         event!(Level::DEBUG, "client error detected, starting auth challenge");
+                        event!(Level::TRACE, "{:#?}", response);
                         let challenge = response.headers().get(http::header::WWW_AUTHENTICATE).expect("401 should've been returned w/ a challenge header");
                         let challenge =  challenge.to_str().expect("challenge header should be a string");
                         let challenge = Self::parse_challenge_header(challenge);
