@@ -41,6 +41,7 @@ impl Plugin<ThunkContext> for Resolve {
                 event!(Level::DEBUG, "Starting image resolution, {manifest_api}");
                 match Authorization::bearer(&access_token) {
                     Ok(auth_header) => {
+                        event!(Level::DEBUG, "accept header is: {}", &accept);
                         let req = Request::builder()
                             .uri_str(manifest_api.as_str())
                             .typed_header(auth_header.clone())
