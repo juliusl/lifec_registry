@@ -25,7 +25,8 @@ impl Authenticate {
             let api = tc.as_ref()
                 .find_text("api")
                 .and_then(|a| Uri::from_str(a.as_str()).ok());
-
+            
+            event!(Level::TRACE, "{:?}", api);
             if let Some(api) = api {
                 event!(Level::DEBUG, "calling {api} to initiate authn");
                 if let Some(response) =  client.get(api.clone()).await.ok() {
@@ -41,8 +42,9 @@ impl Authenticate {
                     }
                 }
             }
-        }
+        } 
 
+        event!(Level::WARN, "missing secure client, exiting authn");
         None 
     }
 
