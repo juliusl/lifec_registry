@@ -2,7 +2,7 @@ use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component};
 use poem::{Request, web::headers::Authorization};
 use tracing::{event, Level};
 
-/// BlobImport handler based on OCI spec endpoints: 
+/// Plugin that mirrors image resolution api's, based on OCI spec endpoints -
 /// 
 /// ```markdown
 /// | ID     | Method         | API Endpoint                                                 | Success     | Failure           |
@@ -54,29 +54,35 @@ impl Plugin<ThunkContext> for Resolve {
                                     Ok(data) => tc.as_mut().add_binary_attr("manifest", data),
                                     Err(err) =>  event!(Level::ERROR, "{err}")
                                 }
+
+                                if let (Some(artifact_type), Some(digest)) = (
+                                    tc.as_ref().find_text("artifact_type"), 
+                                    tc.as_ref().find_text("digest")
+                                ) {
+                                    let referrers_api = format!("https://{ns}/v2/{repo}/_oras/artifacts/referrers?digest={digest}&artifactType={artifact_type}");
+                                    let req = Request::builder()
+                                        .uri_str(referrers_api.as_str())
+                                        .typed_header(auth_header)
+                                        .finish();
+        
+                                    match client.request(req.into()).await {
+                                        Ok(response) => match hyper::body::to_bytes(response.into_body()).await {
+                                            Ok(data) => tc.as_mut().add_binary_attr("referrers", data),
+                                            Err(err) =>  event!(Level::ERROR, "{err}")
+                                        }
+                                        Err(err) => event!(Level::ERROR, "{err}")
+                                    }
+                                }
+
+                                return Some(tc);
                             },
                             Err(err) => event!(Level::ERROR, "{err}")
-                        }
-                        
-                        if let Some(artifact_type) = tc.as_ref().find_text("artifact_type") {
-                            let referrers_api = format!("https://{ns}/v2/{repo}/_oras/artifacts/referrers?artifactType={artifact_type}");
-                            let req = Request::builder()
-                                .uri_str(referrers_api.as_str())
-                                .typed_header(auth_header)
-                                .finish();
-
-                            match client.request(req.into()).await {
-                                Ok(response) => match hyper::body::to_bytes(response.into_body()).await {
-                                    Ok(data) => tc.as_mut().add_binary_attr("referrers", data),
-                                    Err(err) =>  event!(Level::ERROR, "{err}")
-                                }
-                                Err(err) => event!(Level::ERROR, "{err}")
-                            }
                         }
                     }
                     Err(err) => event!(Level::ERROR, "{err}")
                 }}
-                None 
+
+                None
             }
         })
     }
