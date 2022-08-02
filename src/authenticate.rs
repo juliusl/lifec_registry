@@ -98,8 +98,6 @@ impl Authenticate {
                         event!(Level::TRACE, "{:#?}", response);
                         match hyper::body::to_bytes(response.into_body()).await {
                             Ok(bytes) => {
-                                event!(Level::TRACE, "{:#?}", bytes);
-
                                 return serde_json::de::from_slice::<Credentials>(bytes.as_ref()).ok()
                             }
                             Err(err) => {
@@ -141,12 +139,6 @@ impl Plugin<ThunkContext> for Authenticate {
                 if let Some(credentials) = Self::authenticate(&tc).await {
                     event!(Level::DEBUG, "Received credentials for registry");
                     tc.as_mut()
-                        .with_text(
-                            "refresh_token",
-                            credentials
-                                .refresh_token
-                                .expect("received some refresh token"),
-                        )
                         .add_text_attr(
                             "access_token",
                             credentials
