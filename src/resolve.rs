@@ -36,7 +36,9 @@ impl Plugin<ThunkContext> for Resolve {
                     tc.as_ref().find_text("accept"),
                     tc.as_ref().find_text("access_token")
                 ) { 
+
                 let manifest_api = format!("https://{ns}/v2/{repo}/manifests/{reference}");
+                event!(Level::DEBUG, "Starting image resolution, {manifest_api}");
                 match Authorization::bearer(&access_token) {
                     Ok(auth_header) => {
                         let req = Request::builder()
@@ -46,12 +48,21 @@ impl Plugin<ThunkContext> for Resolve {
                             .finish();
                         let client = tc.client().expect("async should be enabled"); 
                         match client.request(req.into()).await {
-                            Ok(response) => {
-                                if let Some(digest) = response.headers().get("Docker-Content-Digest") {
+                            Ok(response) => {                
+                                event!(Level::TRACE, "Received response for manifest call, {:#?}", response);
+
+                                if let Some(digest) = response.headers().get("Docker-Content-Digest") {                                
+                                    event!(Level::DEBUG, "Resolved digest is {:?}", &digest.to_str());
+
                                     tc.as_mut().add_text_attr("digest", digest.to_str().unwrap_or_default());
                                 }
                                 match hyper::body::to_bytes(response.into_body()).await {
-                                    Ok(data) => tc.as_mut().add_binary_attr("manifest", data),
+                                    Ok(data) => {
+                                        event!(Level::DEBUG, "Resolved manifest, len: {}", data.len());
+                                        event!(Level::TRACE, "{:#?}", data);
+
+                                        tc.as_mut().add_binary_attr("manifest", data);
+                                    },
                                     Err(err) =>  event!(Level::ERROR, "{err}")
                                 }
 
