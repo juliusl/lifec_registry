@@ -27,11 +27,15 @@ impl Authenticate {
                 .and_then(|a| Uri::from_str(a.as_str()).ok());
 
             if let Some(api) = api {
+                event!(Level::DEBUG, "calling {api} to initiate authn");
                 if let Some(response) =  client.get(api.clone()).await.ok() {
                     if response.status().is_client_error() {
+                        event!(Level::DEBUG, "client error detected, starting auth challenge");
                         let challenge = response.headers().get(http::header::WWW_AUTHENTICATE).expect("401 should've been returned w/ a challenge header");
                         let challenge =  challenge.to_str().expect("challenge header should be a string");
                         let challenge = Self::parse_challenge_header(challenge);
+
+                        event!(Level::DEBUG, "received challange {challenge}");
     
                         return Some(Uri::from_str(&challenge).expect("challenge should be a valid uri"));
                     }
@@ -47,6 +51,8 @@ impl Authenticate {
     async fn authenticate(tc: &ThunkContext) -> Option<Credentials> {
         if let Some(challenge_uri) = Self::start_challenge(tc).await {
             if let (Some(ns), Some(token)) = (tc.as_ref().find_text("ns"), tc.as_ref().find_text("token")) {
+                event!(Level::DEBUG, "Begining authn for {challenge_uri}");
+
                 let req = Request::builder()
                     .uri(challenge_uri)
                     .typed_header(Authorization::basic("00000000-0000-0000-0000-000000000000", token.as_ref()))
