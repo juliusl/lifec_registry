@@ -350,7 +350,7 @@ async fn list_tags(
     let mut input = dispatcher.clone();
     input.as_mut().with_text("name", name);
 
-    mirror_action.handle::<ListTags>(&mut input).await
+    mirror_action.handle::<((Login, Authenticate), ListTags)>(&mut input).await
 }
 
 #[handler]
@@ -407,7 +407,7 @@ async fn blob_upload_chunks(
     input.as_mut().with_text("reference", reference);
     input.as_mut().with_text("digest", digest.unwrap_or_default());
 
-    mirror_action.handle::<BlobUploadChunks>(&mut input).await
+    mirror_action.handle::<((Login, Authenticate), BlobUploadChunks)>(&mut input).await
 }
 
 #[derive(Deserialize)]
@@ -443,7 +443,7 @@ async fn blob_upload(
         input.as_mut().with_text("mount", mount);
         input.as_mut().with_text("from", from);
 
-        mirror_action.handle::<BlobImport>(&mut input).await
+        mirror_action.handle::<((Login, Authenticate), BlobImport)>(&mut input).await
     } else if let Some(digest) = digest {
         event!(
             Level::DEBUG,
@@ -455,7 +455,7 @@ async fn blob_upload(
         input.as_mut().with_text("name", name);
         input.as_mut().with_text("digest", digest);
 
-        mirror_action.handle::<BlobUploadMonolith>(&mut input).await
+        mirror_action.handle::<((Login, Authenticate), BlobUploadMonolith)>(&mut input).await
 
     } else if let None = digest {
         event!(Level::DEBUG, "Got blob_upload_session_id request, {name}");
@@ -464,7 +464,7 @@ async fn blob_upload(
         let mut input = dispatcher.clone();
         input.as_mut().with_text("name", name);
 
-        mirror_action.handle::<BlobUploadSessionId>(&mut input).await
+        mirror_action.handle::<((Login, Authenticate), BlobUploadSessionId)>(&mut input).await
     } else {
         soft_fail()
     }
@@ -500,17 +500,17 @@ impl Plugin<ThunkContext> for TestMirrorEvent {
         "test_mirror_event"
     }
 
-    fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+    fn call_with_context(_context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         todo!()
     }
 }
 
 impl MirrorEvent for TestMirrorEvent {
-    fn resolve_response(tc: &ThunkContext) -> Response {
+    fn resolve_response(_tc: &ThunkContext) -> Response {
         todo!()
     }
 
-    fn resolve_error(err: String, tc: &ThunkContext) -> Response {
+    fn resolve_error(_err: String, _tc: &ThunkContext) -> Response {
         todo!()
     }
 }
