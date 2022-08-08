@@ -195,7 +195,7 @@ Design of containerd registry mirror feature
                         let log = format!("Starting registry mirror on {link}");
 
                         tc.update_status_only(&log).await;
-                        eprintln!("{log}");
+                        event!(Level::INFO, "{log}");
 
                         let runtime = create_runtime::<Event>(project);
                         let runtime_editor = RuntimeEditor::new(runtime);
@@ -208,7 +208,11 @@ Design of containerd registry mirror feature
                             &tc,
                             cancel_source,
                         );
+                    } else {
+                        event!(Level::ERROR, "An `address` text attribute must exist for this server to start");
                     }
+                } else {
+                    event!(Level::ERROR, "A `project_src` text attribute must exist for this server to start");
                 }
 
                 Some(tc)
