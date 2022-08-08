@@ -49,11 +49,10 @@ impl Plugin<ThunkContext> for Resolve {
                             .finish();
                         let client = tc.client().expect("async should be enabled"); 
                         match client.request(req.into()).await {
-                            Ok(response) => {                
-                                event!(Level::TRACE, "Received response for manifest call, {:#?}", response);
-
-                                if let Some(digest) = response.headers().get("Docker-Content-Digest") {                                
-                                    event!(Level::DEBUG, "Resolved digest is {:?}", &digest.to_str());
+                            Ok(response) => {
+                                if let Some(digest) = response.headers().get("Docker-Content-Digest") {
+                                    debug_assert!(!digest.is_sensitive(), "docker-content-digest should not be a sensitive header");
+                                    event!(Level::DEBUG, "Resolved digest is {:?}", digest);
                                     tc.as_mut().add_text_attr(
                                         "digest", 
                                         digest.to_str().unwrap_or_default()
@@ -61,9 +60,11 @@ impl Plugin<ThunkContext> for Resolve {
                                 }
 
                                 if let Some(content_type) = response.headers().get("Content-Type") {
+                                    debug_assert!(!content_type.is_sensitive(), "content-type should not be a sensitive header");
+                                    event!(Level::DEBUG, "Resolved content-type is {:?}", content_type);
                                     tc.as_mut().add_text_attr(
                                         "content-type", 
-                                        content_type.to_str().unwrap_or("application/vnd.docker.distribution.manifest.list.v2+json")
+                                        content_type.to_str().expect("Content-Type must be a valid string")
                                     );
                                 }
 
@@ -74,9 +75,16 @@ impl Plugin<ThunkContext> for Resolve {
 
                                         tc.as_mut().add_binary_attr("body", data);
                                     },
-                                    Err(err) =>  event!(Level::ERROR, "{err}")
+                                    Err(err) =>  event!(Level::ERROR, "Could not read response body, {err}")
                                 }
 
+                                // In order to call the referrer's api, we must have an artifact_type and digest to filter the
+                                // the response
+                                // TODO: It would be nice to support multiple artifact_types such as
+                                // define obd      artifact_type dadi.v1
+                                // define teleport artifact_type teleport.v1
+                                // And then the transient value is the response from the referrer's api
+                                // 
                                 if let (Some(artifact_type), Some(digest)) = (
                                     tc.as_ref().find_text("artifact_type"), 
                                     tc.as_ref().find_text("digest")
@@ -93,21 +101,23 @@ impl Plugin<ThunkContext> for Resolve {
                                             event!(Level::TRACE, "{:#?}", response);
                                             match hyper::body::to_bytes(response.into_body()).await {
                                                 Ok(data) => tc.as_mut().add_binary_attr("referrers", data),
-                                                Err(err) =>  event!(Level::ERROR, "{err}")
+                                                Err(err) =>  event!(Level::ERROR, "Could not read referrers response body {err}")
                                             }
                                         }
-                                        Err(err) => event!(Level::ERROR, "{err}")
+                                        Err(err) => event!(Level::ERROR, "Could not send request for referrers api, {err}")
                                     }
                                 }
 
+                                event!(Level::INFO, "Mirrored resolve registry resolve api");
                                 return Some(tc);
                             },
-                            Err(err) => event!(Level::ERROR, "{err}")
+                            Err(err) => event!(Level::ERROR, "Could not resolve image manifest, {err}")
                         }
                     }
-                    Err(err) => event!(Level::ERROR, "{err}")
+                    Err(err) => event!(Level::ERROR, "Could not create auth bearer header, {err}")
                 }}
 
+                event!(Level::WARN, "Could not mirror resolve api");
                 None
             }
         })
