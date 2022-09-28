@@ -102,9 +102,16 @@ where
                 &path
             );
 
-            tokio::fs::copy(output_hosts_toml, path)
-                .await
-                .expect("Copied over hosts.toml that was generated for this mirror");
+            assert!(output_hosts_toml.exists(), "should have been created before this plugin runs");
+
+            match tokio::fs::copy(output_hosts_toml, &path).await {
+                Ok(_) => {
+                    event!(Level::INFO, "Copied hosts.toml tp {:?}", path);
+                },
+                Err(err) => {
+                    panic!("Could not copy hosts.toml, {err}");
+                },
+            }
         }
     }
 }
@@ -145,12 +152,7 @@ Design of containerd registry mirror feature
                     .find_symbol("mirror")
                     .expect("host name to mirror is required");
 
-                // Self::ensure_hosts_dir(host_name).await;
-                /*
-                TODO:
-                1) Check that the hosts.toml file exists
-                2) Update the hosts.toml file
-                */
+                Self::ensure_hosts_dir(host_name).await;
                 
                 match AppHost::<Self>::call(&tc) {
                     Some((task, _)) => match task.await {
