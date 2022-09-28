@@ -16,34 +16,35 @@ fn main() {
     ``` containerd
     + .engine
     : .event test
+    : .exit
     ```
     
     ``` test containerd
     : shutdown_timeout_ms .float 100
     + .runtime
+    - : .timer 1 ms
     : .mirror   azurecr.io
     : .server   https://test.azurecr.io
     : .host     localhost:5049, resolve
     : .host     localhost:3033, pull, push
     ```
     "#);
-    
+
     let mut dispatcher = {
         let dispatcher = Host::dispatcher_builder();
         dispatcher.build()
     };
-    
     dispatcher.setup(host.world_mut());
     
+    // TODO - Turn this into an api
     let event = host.world().entities().entity(3);
     if let Some(event) = host.world().write_component::<Event>().get_mut(event) {
         event.fire(ThunkContext::default());
     }
     host.world_mut().maintain();
-    
-    dispatcher.dispatch(host.world());
 
-    loop {
+    while !host.should_exit() {
+        dispatcher.dispatch(host.world());
     }
 }
 
@@ -61,7 +62,7 @@ impl Project for Parse {
 
     fn runtime() -> lifec::Runtime {
         let mut runtime = default_runtime(); 
-        runtime.install_with_custom::<Mirror<Self>>("call");
+        runtime.install_with_custom::<Mirror<Self>>("");
         runtime
     }
 }
