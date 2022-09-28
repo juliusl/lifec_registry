@@ -1,4 +1,4 @@
-use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component};
+use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component, AttributeIndex};
 use poem::{web::headers::Authorization, Request};
 use tracing::{event, Level};
 
@@ -15,21 +15,21 @@ use tracing::{event, Level};
 #[storage(DenseVecStorage)]
 pub struct DownloadBlob;
 
-impl Plugin<ThunkContext> for DownloadBlob {
+impl Plugin for DownloadBlob {
     fn symbol() -> &'static str {
         "download_blob"
     }
 
-    fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         context.clone().task(|_| {
             let mut tc = context.clone();
             async move {
                 if let (Some(ns), Some(name), Some(digest), Some(accept), Some(access_token)) = 
-                (   tc.as_ref().find_text("ns"), 
-                    tc.as_ref().find_text("name"),
-                    tc.as_ref().find_text("digest"),
-                    tc.as_ref().find_text("accept"),
-                    tc.as_ref().find_text("access_token")
+                (   tc.state().find_symbol("ns"), 
+                    tc.state().find_symbol("name"),
+                    tc.state().find_symbol("digest"),
+                    tc.state().find_symbol("accept"),
+                    tc.state().find_symbol("access_token")
                 ) { 
 
                 let download_api = format!("https://{ns}/v2/{name}/blobs/{digest}");
@@ -49,14 +49,14 @@ impl Plugin<ThunkContext> for DownloadBlob {
 
                                 if let Some(digest) = response.headers().get("Docker-Content-Digest") {                                
                                     event!(Level::DEBUG, "Resolved digest is {:?}", &digest.to_str());
-                                    tc.as_mut().add_text_attr(
+                                    tc.state_mut().add_text_attr(
                                         "digest", 
                                         digest.to_str().unwrap_or_default()
                                     );
                                 }
 
                                 if let Some(content_type) = response.headers().get("Content-Type") {
-                                    tc.as_mut().add_text_attr(
+                                    tc.state_mut().add_text_attr(
                                         "content-type", 
                                         content_type.to_str().unwrap_or_default()
                                     );
@@ -73,7 +73,7 @@ impl Plugin<ThunkContext> for DownloadBlob {
                                         event!(Level::DEBUG, "Resolved blob, len: {}", data.len());
                                         event!(Level::TRACE, "{:#?}", data);
 
-                                        tc.as_mut().add_binary_attr("body", data);
+                                        tc.state_mut().add_binary_attr("body", data);
                                     },
                                     Err(err) =>  event!(Level::ERROR, "{err}")
                                 }

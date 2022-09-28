@@ -1,5 +1,5 @@
 use hyper::Method;
-use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component};
+use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component, AttributeIndex};
 use poem::{web::headers::Authorization, Request};
 use tracing::{event, Level};
 
@@ -17,19 +17,19 @@ use tracing::{event, Level};
 #[storage(DenseVecStorage)]
 pub struct BlobUploadSessionId; 
 
-impl Plugin<ThunkContext> for BlobUploadSessionId {
+impl Plugin for BlobUploadSessionId {
     fn symbol() -> &'static str {
         "blob_upload_session_id"
     }
 
-    fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         context.clone().task(|_| {
             let mut tc = context.clone();
             async move {
                 if let (Some(ns), Some(name), Some(access_token)) = 
-                (   tc.as_ref().find_text("ns"), 
-                    tc.as_ref().find_text("name"),
-                    tc.as_ref().find_text("access_token")
+                (   tc.state().find_symbol("ns"), 
+                    tc.state().find_symbol("name"),
+                    tc.state().find_symbol("access_token")
                 ) {
                     let upload_session_id = format!("https://{ns}/v2/{name}/blobs/uploads");
                     event!(Level::DEBUG, "Starting blob upload, {upload_session_id}");
@@ -47,7 +47,7 @@ impl Plugin<ThunkContext> for BlobUploadSessionId {
                                     if let Some(location) = resp.headers().get("Location") {
                                         match location.to_str() {
                                             Ok(location) => {
-                                                tc.as_mut().add_text_attr("location", location);
+                                                tc.state_mut().add_text_attr("location", location);
 
                                                 return Some(tc);
                                             },

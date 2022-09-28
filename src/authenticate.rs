@@ -1,9 +1,9 @@
-use hyper::{http, Uri, Method};
+use hyper::{http, Method, Uri};
 use lifec::{
     plugins::{Plugin, ThunkContext},
-    Component, DenseVecStorage,
+    AttributeIndex, BlockObject, BlockProperties, Component, DenseVecStorage,
 };
-use poem::{web::headers::Authorization, Request};
+use poem::Request;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tracing::{event, Level};
@@ -14,28 +14,130 @@ use tracing::{event, Level};
 #[storage(DenseVecStorage)]
 pub struct Authenticate;
 
+/// Struct for token response when authenticating
+/// 
 #[derive(Deserialize, Serialize)]
 pub struct Credentials {
     access_token: Option<String>,
     refresh_token: Option<String>,
 }
 
+impl Plugin for Authenticate {
+    fn symbol() -> &'static str {
+        "authenticate"
+    }
+
+    fn description() -> &'static str {
+        "Authenticates to a registry and and adds a token text attribute."
+    }
+
+    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+        context.clone().task(|_| {
+            let mut tc = context.clone();
+            async move {
+                if let Some(credentials) = Self::authenticate(&tc).await {
+                    event!(Level::DEBUG, "Received credentials for registry");
+                    tc.state_mut().add_symbol(
+                        "access_token",
+                        credentials
+                            .access_token
+                            .expect("received some access token"),
+                    );
+
+                    Some(tc)
+                } else {
+                    event!(Level::ERROR, "Could not authn w/ registry");
+                    None
+                }
+            }
+        })
+    }
+}
+
+impl BlockObject for Authenticate {
+    fn query(&self) -> lifec::BlockProperties {
+        BlockProperties::default()
+            .require("ns")
+            .require("api")
+            .require("token")
+    }
+
+    fn parser(&self) -> Option<lifec::CustomAttribute> {
+        None
+    }
+}
+
 impl Authenticate {
+    /// Authenticates the request to the registry and returns credentials
+    ///
+    /// Required Properties:
+    /// ns, symbol
+    /// token, symbol
+    ///
+    async fn authenticate(tc: &ThunkContext) -> Option<Credentials> {
+        if let Some(challenge_uri) = Self::start_challenge(tc).await {
+            if let (Some(ns), Some(token)) = (
+                tc.state().find_symbol("ns"),
+                tc.state().find_symbol("token"),
+            ) {
+                event!(Level::DEBUG, "Start authn for {challenge_uri}");
+
+                /*
+                # Example curl request:
+                curl -v -X POST -H "Content-Type: application/x-www-form-urlencoded" -d \
+                "grant_type=refresh_token&service=$registry&scope=$scope&refresh_token=$acr_refresh_token" \
+                https://$registry/oauth2/token
+                */
+
+                let body = format!(
+                    "{}&grant_type=refresh_token&refresh_token={}",
+                    challenge_uri.query().unwrap(),
+                    token
+                );
+                let req = Request::builder()
+                    .uri(challenge_uri)
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .method(Method::POST)
+                    .body(body);
+
+                let client = tc
+                    .client()
+                    .expect("async is enabled, so this should be set");
+
+                event!(Level::TRACE, "{:#?}", req);
+                match client.request(req.into()).await {
+                    Ok(response) => {
+                        event!(Level::TRACE, "{:#?}", response);
+                        match hyper::body::to_bytes(response.into_body()).await {
+                            Ok(bytes) => {
+                                return serde_json::de::from_slice::<Credentials>(bytes.as_ref())
+                                    .ok()
+                            }
+                            Err(err) => {
+                                event!(Level::ERROR, "Could not decode credentials, {ns} {err}")
+                            }
+                        }
+                    }
+                    Err(err) => event!(Level::ERROR, "Could not fetch credentials for, {ns} {err}"),
+                }
+            }
+        }
+
+        None
+    }
+
     /// Gets the challenge header from the registry
+    ///
+    /// Required Properties:
+    /// api: symbol
     ///
     async fn start_challenge(tc: &ThunkContext) -> Option<Uri> {
         if let Some(client) = tc.client() {
             let api = tc
-                .as_ref()
-                .find_text("api")
+                .state()
+                .find_symbol("api")
                 .and_then(|a| Uri::from_str(a.as_str()).ok());
 
-            event!(
-                Level::TRACE,
-                "{:?}, {:?}",
-                tc.as_ref().find_text("api"),
-                api
-            );
             if let Some(api) = api {
                 event!(Level::DEBUG, "calling {api} to initiate authn");
                 if let Some(response) = client.get(api.clone()).await.ok() {
@@ -64,52 +166,7 @@ impl Authenticate {
             }
         }
 
-        event!(Level::WARN, "did not authn request, exiting");
-        None
-    }
-
-    /// Authenticates the request to the registry and returns credentials
-    ///
-    async fn authenticate(tc: &ThunkContext) -> Option<Credentials> {
-        if let Some(challenge_uri) = Self::start_challenge(tc).await {
-            if let (Some(ns), Some(token)) =
-                (tc.as_ref().find_text("ns"), tc.as_ref().find_text("token"))
-            {
-                event!(Level::DEBUG, "Begining authn for {challenge_uri}");
-                
-                // curl -v -X POST -H "Content-Type: application/x-www-form-urlencoded" -d \
-                // "grant_type=refresh_token&service=$registry&scope=$scope&refresh_token=$acr_refresh_token" \
-                // https://$registry/oauth2/token
-                
-                let body = format!("{}&grant_type=refresh_token&refresh_token={}", challenge_uri.query().unwrap(), token);
-                let req = Request::builder()
-                    .uri(challenge_uri)
-                    .header("Content-Type", "application/x-www-form-urlencoded")
-                    .method(Method::POST)
-                    .body(body);
-
-                let client = tc
-                    .client()
-                    .expect("async is enabled, so this should be set");
-                
-                event!(Level::TRACE, "{:#?}", req);
-                match client.request(req.into()).await {
-                    Ok(response) => {
-                        event!(Level::TRACE, "{:#?}", response);
-                        match hyper::body::to_bytes(response.into_body()).await {
-                            Ok(bytes) => {
-                                return serde_json::de::from_slice::<Credentials>(bytes.as_ref()).ok()
-                            }
-                            Err(err) => {
-                                event!(Level::ERROR, "Could not decode credentials, {ns} {err}")
-                            }
-                        }
-                    },
-                    Err(err) => event!(Level::ERROR, "Could not fetch credentials for, {ns} {err}"),
-                }
-            }
-        }
-
+        event!(Level::WARN, "Did not authn request, exiting");
         None
     }
 
@@ -120,39 +177,6 @@ impl Authenticate {
             .replace(r#"",service="#, r#"?service="#)
             .replace(",", "&")
             .replace('"', "")
-    }
-}
-
-impl Plugin<ThunkContext> for Authenticate {
-    fn symbol() -> &'static str {
-        "authenticate"
-    }
-
-    fn description() -> &'static str {
-        "Authenticates to a registry and and adds a token text attribute."
-    }
-
-    fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
-        context.clone().task(|_| {
-            let mut tc = context.clone();
-            async move {
-                if let Some(credentials) = Self::authenticate(&tc).await {
-                    event!(Level::DEBUG, "Received credentials for registry");
-                    tc.as_mut()
-                        .add_text_attr(
-                            "access_token",
-                            credentials
-                                .access_token
-                                .expect("received some access token"),
-                        );
-
-                    Some(tc)
-                } else {
-                    event!(Level::ERROR, "Could not authn w/ registry");
-                    None
-                }
-            }
-        })
     }
 }
 

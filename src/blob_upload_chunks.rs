@@ -14,12 +14,12 @@ use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component};
 #[storage(DenseVecStorage)]
 pub struct BlobUploadChunks;
 
-impl Plugin<ThunkContext> for BlobUploadChunks {
+impl Plugin for BlobUploadChunks {
     fn symbol() -> &'static str {
         "blob_upload_chunks"
     }
 
-    fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         todo!()
     }
 }

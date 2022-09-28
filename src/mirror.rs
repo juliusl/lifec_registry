@@ -1,9 +1,13 @@
+use std::{path::PathBuf, str::FromStr};
+
+use hyper::Uri;
 use lifec::{
-    editor::{RuntimeEditor, Call},
-    plugins::{Plugin, Project, ThunkContext, combine, Println},
-    Component, DenseVecStorage, HashMapStorage, Runtime,
+    plugins::{Plugin, ThunkContext},
+    AttributeIndex, BlockObject, BlockProperties, Component, CustomAttribute, HashMapStorage,
+    Interpreter, Value,
 };
-use lifec_poem::{WebApp, AppHost};
+use lifec_poem::{AppHost, WebApp};
+use logos::Logos;
 use poem::{
     get, handler,
     http::{Method, StatusCode},
@@ -12,12 +16,22 @@ use poem::{
     EndpointExt, Request, Response, Route,
 };
 use serde::Deserialize;
+use toml::value::Map;
 use tracing::{event, Level};
 
 use crate::{
-    create_runtime, BlobImport, BlobUploadChunks, BlobUploadMonolith, BlobUploadSessionId,
-    DownloadBlob, ListTags, Resolve, Upstream, Authenticate, Login, Index,
+    mirror::mirror_action::soft_fail, Authenticate, BlobImport, BlobUploadChunks,
+    BlobUploadMonolith, BlobUploadSessionId, DownloadBlob, Index, ListTags, Login, Resolve,
 };
+
+mod mirror_action;
+use mirror_action::MirrorAction;
+
+mod mirror_proxy;
+pub use mirror_proxy::MirrorProxy;
+
+mod host_capabilities;
+use host_capabilities::HostCapability;
 
 /// Designed to be used w/ containerd's registry config described here:
 /// https://github.com/containerd/containerd/blob/main/docs/hosts.md
@@ -46,112 +60,58 @@ use crate::{
 ///
 #[derive(Component, Clone, Default)]
 #[storage(HashMapStorage)]
-pub struct Mirror<Event>(ThunkContext, Event)
+pub struct Mirror<M>(ThunkContext, M)
 where
-    Event: MirrorEvent + Default + Send + Sync + 'static;
+    M: MirrorProxy + Default + Send + Sync + 'static;
 
-/// Wrapper around mirror event actions
-/// 
-#[derive(Clone)]
-pub struct MirrorAction {
-    on_response: fn(tc: &ThunkContext) -> Response,
-    on_error: fn(err: String, tc: &ThunkContext) -> Response,
-}
-
-/// Plugin to host the mirror
-///
-#[derive(Component, Default, Clone)]
-#[storage(DenseVecStorage)]
-pub struct MirrorHost<Event>(Event)
+impl<M> Mirror<M>
 where
-    Event: MirrorEvent + Default + Send + Sync + 'static;
-
-/// Event handlers for after a mirror plugin completes
-/// 
-/// Can be implemented on a per-feature basis to extend the registry on the client side
-///
-pub trait MirrorEvent
+    M: MirrorProxy + Default + Send + Sync + 'static,
 {
-    /// Called after the plugin finishes, and if the plugin returned the next thunk_context
-    /// 
-    fn resolve_response(tc: &ThunkContext) -> Response;
+    /// Ensures the hosts dir exists
+    ///
+    async fn ensure_hosts_dir(host_name: impl AsRef<str>) {
+        let hosts_dir = format!("/etc/containerd/certs.d/{}/", host_name.as_ref());
 
-    /// Called after the plugin finishes, and if the plugin task returned an error
-    /// 
-    fn resolve_error(err: String, tc: &ThunkContext) -> Response;
-}
-
-impl MirrorAction {
-    fn from<Event>() -> Self
-    where
-        Event: MirrorEvent + Default + Send + Sync + 'static,
-    {
-        MirrorAction {
-            on_response: Event::resolve_response,
-            on_error: Event::resolve_error,
-        }
-    }
-
-    fn handle_response(&self, tc: &ThunkContext) -> Response {
-        (self.on_response)(tc)
-    }
-
-    fn handle_error(&self, err: String, tc: &ThunkContext) -> Response {
-        (self.on_error)(err, tc)
-    }
-
-    async fn handle<P>(&self, tc: &mut ThunkContext) -> Response
-    where
-        P: Plugin<ThunkContext>,
-    {
-        tc.as_mut().with_text("thunk_symbol", P::symbol());
-
-        if let Some((task, _cancel)) = P::call_with_context(tc) {
-            match task.await {
-                Ok(result) => self.handle_response(&result),
-                Err(err) => self.handle_error(format!("{}", err), &tc.clone()),
+        let path = PathBuf::from(hosts_dir);
+        if !path.exists() {
+            event!(
+                Level::DEBUG,
+                "hosts directory did not exist, creating {:?}",
+                &path
+            );
+            match tokio::fs::create_dir_all(&path).await {
+                Ok(_) => {
+                    event!(Level::DEBUG, "Created hosts directory");
+                }
+                Err(err) => {
+                    event!(Level::ERROR, "Could not create directories {err}");
+                }
             }
-        } else {
-            soft_fail()
+        }
+
+        let path = path.join("hosts.toml");
+        if !path.exists() {
+            let output_hosts_toml = PathBuf::from(format!(
+                ".out/etc/containerd/certs.d/{}/hosts.toml",
+                host_name.as_ref()
+            ));
+            event!(
+                Level::DEBUG,
+                "hosts.toml did not exist, creating {:?}",
+                &path
+            );
+
+            tokio::fs::copy(output_hosts_toml, path)
+                .await
+                .expect("Copied over hosts.toml that was generated for this mirror");
         }
     }
 }
 
-/// Fails in a way that the runtime will fallback to the upstream server
-fn soft_fail() -> Response {
-    Response::builder()
-        .status(StatusCode::SERVICE_UNAVAILABLE)
-        .finish()
-}
-
-/// Fails in a way that stops the runtime from completing it's action
-fn blocking_fail() -> Response {
-    Response::builder().finish()
-}
-
-impl<Event> Plugin<ThunkContext> for MirrorHost<Event>
+impl<M> Plugin for Mirror<M>
 where
-    Event: MirrorEvent + Default + Send + Sync + 'static,
-{
-    fn symbol() -> &'static str {
-        "mirror_host"
-    }
-
-    fn description() -> &'static str {
-r#"
-Hosts the mirror server locally, using lifec_poem's app_host plugin.
-TLS Settings will be used if present.
-"#
-    }
-
-    fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
-        combine::<AppHost<Mirror<Event>>, Println>()(context)
-    }
-}
-
-impl<Event> Plugin<ThunkContext> for Mirror<Event>
-where
-    Event: MirrorEvent + Default + Send + Sync + 'static,
+    M: MirrorProxy + Default + Send + Sync + 'static,
 {
     fn symbol() -> &'static str {
         "mirror"
@@ -176,54 +136,227 @@ Design of containerd registry mirror feature
 "#
     }
 
-    fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
-        context.clone().task(|cancel_source| {
+    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+        context.task(|_| {
             let tc = context.clone();
             async move {
-                if let Some(project) = tc
-                    .as_ref()
-                    .find_text("project_src")
-                    .and_then(|src| Project::load_file(src))
-                {
-                    let block_name = tc.block.block_name.to_string();
-                    if let Some(address) = tc.as_ref().find_text("address") {
-                        let project = project.with_block(&block_name, "app_host", |c| {
-                            c.add_text_attr("address", &address);
-                        });
+                let host_name = tc
+                    .state()
+                    .find_symbol("mirror")
+                    .expect("host name to mirror is required");
 
-                        let link = format!("https://{address}/v2");
-                        let log = format!("Starting registry mirror on {link}");
-
-                        tc.update_status_only(&log).await;
-                        event!(Level::INFO, "{log}");
-
-                        let runtime = create_runtime::<Event>(project);
-                        let runtime_editor = RuntimeEditor::new(runtime);
-                        // tc.as_mut().add_bool_attr("proxy_dispatcher", true);
-
-                        let mut extension = Upstream::<Event>::from(runtime_editor);
-                        Runtime::start_with::<Upstream<Event>, Call>(
-                            &mut extension,
-                            Mirror::<Event>::symbol().to_string(),
-                            &tc,
-                            cancel_source,
-                        );
-                    } else {
-                        event!(Level::ERROR, "An `address` text attribute must exist for this server to start");
-                    }
-                } else {
-                    event!(Level::ERROR, "A `project_src` text attribute must exist for this server to start");
+                // Self::ensure_hosts_dir(host_name).await;
+                /*
+                TODO:
+                1) Check that the hosts.toml file exists
+                2) Update the hosts.toml file
+                */
+                
+                match AppHost::<Self>::call(&tc) {
+                    Some((task, _)) => match task.await {
+                        Ok(tc) => {
+                            event!(Level::ERROR, "Exiting");
+                            Some(tc)
+                        },
+                        Err(err) => {
+                            event!(Level::ERROR, "Error from app_host {err}");
+                            None
+                        },
+                    },
+                    _ => None
                 }
-
-                Some(tc)
             }
         })
+    }
+
+    /// This will add some custom attributes to the parser for handling environment setup,
+    ///
+    /// # Usage Example
+    ///
+    /// ```runmd
+    /// ``` test containerd
+    /// + .runtime
+    /// : .mirror   azurecr.io
+    /// : .server   https://example.azurecr.io
+    /// : .host     localhost:5000, pull, resolve, push
+    /// : .https    hosts.crt
+    /// ```
+    ///
+    fn compile(parser: &mut lifec::AttributeParser) {
+        // This attribute handles setting the
+        parser.add_custom(CustomAttribute::new_with(
+            "server",
+            |p, content| match Uri::from_str(&content) {
+                Ok(upstream) => {
+                    let last = p.last_child_entity().expect("child required to edit");
+                    p.define_child(last, "server", Value::Symbol(upstream.to_string()));
+                }
+                Err(err) => {
+                    event!(Level::ERROR, "Could not parse uri {}, {err}", content);
+                }
+            },
+        ));
+
+        parser.add_custom(CustomAttribute::new_with("host", |p, content| {
+            let args = content.split_once(",");
+
+            if let Some((proxy_to, capabilities)) = args {
+                let last = p
+                    .last_child_entity()
+                    .expect("child entity required to edit");
+                p.define_child(last, "app_host", Value::Symbol(proxy_to.to_string()));
+
+                let mut lexer = HostCapability::lexer(capabilities);
+                let feature_name = format!("feature_{}", proxy_to);
+                while let Some(feature) = lexer.next() {
+                    match feature {
+                        HostCapability::Resolve => {
+                            p.define_child(
+                                last,
+                                &feature_name,
+                                Value::Symbol("resolve".to_string()),
+                            );
+                        }
+                        HostCapability::Push => {
+                            p.define_child(last, &feature_name, Value::Symbol("push".to_string()));
+                        }
+                        HostCapability::Pull => {
+                            p.define_child(last, &feature_name, Value::Symbol("pull".to_string()));
+                        }
+                        HostCapability::Error => continue,
+                    }
+                }
+            }
+        }));
+
+        parser.add_custom(CustomAttribute::new_with("https", |p, content| {
+            let path = PathBuf::from(content);
+            let path = path.canonicalize().expect("must exist");
+            let last = p.last_child_entity().expect("child entity required");
+            p.define_child(last, "https", Value::Symbol(format!("{:?}", path)));
+        }));
+    }
+}
+
+impl<M> Interpreter for Mirror<M>
+where
+    M: MirrorProxy + Default + Send + Sync + 'static,
+{
+    fn initialize(&self, _world: &mut lifec::World) {
+        // TODO
+    }
+
+    fn interpret(&self, _world: &lifec::World, block: &lifec::Block) {
+        // Only interpret blocks with containerd symbol
+        if block.symbol() == "containerd" && !block.name().is_empty() {
+            let output_dir = PathBuf::from(".out/etc/containerd/certs.d");
+            for i in block
+                .index()
+                .iter()
+                .filter(|i| i.root().name() == "runtime")
+            {
+                /*
+                Generate hosts.toml files for all mirrors found in state
+                Example hosts.toml -
+                ```toml
+                server = "https://registry-1.docker.io"
+
+                [host."http://192.168.31.250:5000"]
+                capabilities = ["pull", "resolve", "push"]
+                skip_verify = true
+                ```
+                */
+                for (_, properties) in i
+                    .iter_children()
+                    .filter(|c| c.1.property("mirror").is_some())
+                {
+                    let host_name = properties
+                        .property("mirror")
+                        .and_then(|p| p.symbol())
+                        .expect("host name is required");
+
+                    let mut hosts_config = Map::new();
+
+                    let app_hosts = properties
+                        .property("app_host")
+                        .and_then(|p| p.symbol_vec())
+                        .expect("app_host is required for mirror");
+
+                    for app_host in app_hosts {
+                        let feature_name = format!("feature_{}", app_host);
+                        let features = properties
+                            .property(feature_name)
+                            .and_then(|p| p.symbol_vec())
+                            .unwrap_or(vec![]);
+                        let mut host_settings = Map::new();
+                        let features = toml::Value::Array(
+                            features
+                                .iter()
+                                .map(|f| toml::Value::String(f.to_string()))
+                                .collect::<Vec<_>>(),
+                        );
+                        host_settings.insert("capabilities".to_string(), features);
+                        let https = properties.property("https").and_then(|p| p.symbol());
+                        if let Some(https) = https {
+                            let host_key = format!(r#"host."https://{}""#, app_host);
+                            host_settings
+                                .insert("ca".to_string(), toml::Value::String(https.to_string()));
+                            hosts_config.insert(host_key, toml::Value::Table(host_settings));
+                        } else {
+                            let host_key = format!(r#"host."http://{}""#, app_host);
+                            host_settings
+                                .insert("skip_verify".to_string(), toml::Value::Boolean(true));
+                            hosts_config.insert(host_key, toml::Value::Table(host_settings));
+                        }
+                    }
+
+                    let output_dir = output_dir.join(host_name);
+                    std::fs::create_dir_all(&output_dir).expect("should be able to create dirs");
+
+                    let mut content = toml::ser::to_string(&hosts_config)
+                        .expect("should serialize")
+                        .lines()
+                        .map(|l| {
+                            if l.trim().starts_with("[") {
+                                l.replace(r#"[""#, "[")
+                                    .replace(r#"\""#, r#"""#)
+                                    .replace(r#""]"#, "]")
+                            } else {
+                                l.to_string()
+                            }
+                        })
+                        .collect::<Vec<_>>();
+
+                    let server = properties.property("server").and_then(|p| p.symbol());
+                    if let Some(server) = server {
+                        content.insert(0, format!(r#"server = "{server}""#));
+                        content.insert(1, String::default());
+                    }
+
+                    std::fs::write(output_dir.join("hosts.toml"), content.join("\n"))
+                        .expect("should be able to write");
+                }
+            }
+        }
+    }
+}
+
+impl<Event> BlockObject for Mirror<Event>
+where
+    Event: MirrorProxy + Default + Send + Sync + 'static,
+{
+    fn query(&self) -> BlockProperties {
+        BlockProperties::default().require("mirror")
+    }
+
+    fn parser(&self) -> Option<lifec::CustomAttribute> {
+        Some(Self::as_custom_attr())
     }
 }
 
 impl<Event> WebApp for Mirror<Event>
 where
-    Event: MirrorEvent + Default + Send + Sync + 'static,
+    Event: MirrorProxy + Default + Send + Sync + 'static,
 {
     fn create(context: &mut ThunkContext) -> Self {
         Self(context.clone(), Event::default())
@@ -234,28 +367,33 @@ where
         Route::new().nest(
             "/v2",
             Route::new()
-                .at("/", 
+                .at(
+                    "/",
                     get(index
                         .data(context.clone())
                         .data(MirrorAction::from::<Event>()))
-                    .head(index
-                        .data(context.clone())
-                        .data(MirrorAction::from::<Event>()))
+                    .head(
+                        index
+                            .data(context.clone())
+                            .data(MirrorAction::from::<Event>()),
+                    ),
                 )
                 .at(
-                    "/:name<[a-zA-Z0-9/_-]+(:?blobs)>/:digest",
+                    "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/:digest",
                     get(download_blob
                         .data(context.clone())
                         .data(MirrorAction::from::<Event>())),
                 )
                 .at(
-                    "/:name<[a-zA-Z0-9/_-]+(:?blobs)>/uploads",
-                    post(blob_upload
-                        .data(context.clone()))
-                        .data(MirrorAction::from::<Event>()),
+                    "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads",
+                    post(
+                        blob_upload
+                            .data(context.clone())
+                            .data(MirrorAction::from::<Event>()),
+                    ),
                 )
                 .at(
-                    "/:name<[a-zA-Z0-9/_-]+(:?blobs)>/uploads/:reference",
+                    "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads/:reference",
                     patch(
                         blob_upload_chunks
                             .data(context.clone())
@@ -268,7 +406,7 @@ where
                     ),
                 )
                 .at(
-                    r#"/:name<[a-zA-Z0-9/_-]+(:?manifests)>/:reference"#,
+                    "/:name<[a-zA-Z0-9/_-]+(?:manifests)>/:reference",
                     get(resolve
                         .data(context.clone())
                         .data(MirrorAction::from::<Event>()))
@@ -282,32 +420,49 @@ where
                             .data(context.clone())
                             .data(MirrorAction::from::<Event>()),
                     )
-                    .delete(resolve.data(context.clone()))
-                    .data(MirrorAction::from::<Event>()),
+                    .delete(
+                        resolve
+                            .data(context.clone())
+                            .data(MirrorAction::from::<Event>()),
+                    ),
                 )
                 .at(
-                    ":name<[a-zA-Z0-9/_-]+(:?tags)>/list",
-                    get(list_tags.data(context.clone())).data(MirrorAction::from::<Event>()),
+                    "/:name<[a-zA-Z0-9/_-]+(?:tags)>/list",
+                    get(list_tags
+                        .data(context.clone())
+                        .data(MirrorAction::from::<Event>())),
                 ),
         )
     }
 }
 
+#[derive(Deserialize)]
+struct IndexParams {
+    ns: Option<String>,
+}
 #[handler]
-async fn index(request: &Request,
+async fn index(
+    request: &Request,
+    Query(IndexParams { ns }): Query<IndexParams>,
     dispatcher: Data<&ThunkContext>,
-    mirror_action: Data<&MirrorAction>) -> Response {
+    mirror_action: Data<&MirrorAction>,
+) -> Response {
     event!(Level::DEBUG, "Got /v2 request");
     event!(Level::TRACE, "{:#?}", request);
 
-    mirror_action.handle::<Index>(&mut dispatcher.clone()).await
+    let mut input = dispatcher.clone();
+
+    if let Some(ns) = ns {
+        input.state_mut().with_symbol("ns", &ns);
+    }
+
+    mirror_action.handle::<Index>(&mut input).await
 }
 
 #[derive(Deserialize)]
 struct ResolveParams {
     ns: String,
 }
-
 /// Resolves an image
 #[handler]
 async fn resolve(
@@ -323,26 +478,31 @@ async fn resolve(
         Level::DEBUG,
         "Got resolve request, repo: {name} ref: {reference} host: {ns}"
     );
-    event!(
-        Level::TRACE, 
-        "{:#?}", request
-    );
+    event!(Level::TRACE, "{:#?}", request);
 
     let mut input = dispatcher.clone();
-    input.as_mut()
-        .with_text("repo", name)
-        .with_text("reference", reference)
-        .with_text("ns", &ns)
-        .with_text("api", format!("https://{ns}/v2{}", request.uri().path()))
-        .add_text_attr("accept", request.header("accept").unwrap_or_default());
+    input
+        .state_mut()
+        .with_symbol("repo", name)
+        .with_symbol("reference", reference)
+        .with_symbol("ns", &ns)
+        .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
+        .add_symbol("accept", request.header("accept").unwrap_or_default());
 
-    mirror_action.handle::<((Login, Authenticate), Resolve)>(&mut input.clone()).await
+    mirror_action
+        .handle::<((Login, Authenticate), Resolve)>(&mut input.clone())
+        .await
 }
 
+#[derive(Deserialize)]
+struct ListTagsParams {
+    ns: String,
+}
 #[handler]
 async fn list_tags(
     request: &Request,
     Path(name): Path<String>,
+    Query(ListTagsParams { ns }): Query<ListTagsParams>,
     dispatcher: Data<&ThunkContext>,
     mirror_action: Data<&MirrorAction>,
 ) -> Response {
@@ -352,9 +512,14 @@ async fn list_tags(
     event!(Level::TRACE, "{:#?}", request);
 
     let mut input = dispatcher.clone();
-    input.as_mut().with_text("name", name);
+    input
+        .state_mut()
+        .with_symbol("ns", ns)
+        .with_symbol("name", name);
 
-    mirror_action.handle::<((Login, Authenticate), ListTags)>(&mut input).await
+    mirror_action
+        .handle::<((Login, Authenticate), ListTags)>(&mut input)
+        .await
 }
 
 #[handler]
@@ -370,30 +535,33 @@ async fn download_blob(
     event!(Level::TRACE, "{:#?}", request);
 
     let mut input = dispatcher.clone();
-    input.as_mut()
-        .with_text("name", name)
-        .with_text("ns", &ns)
-        .with_text("api", format!("https://{ns}/v2{}", request.uri().path()))
-        .with_text("digest", digest);
-    
+    input
+        .state_mut()
+        .with_symbol("name", name)
+        .with_symbol("ns", &ns)
+        .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
+        .with_symbol("digest", digest);
+
     if let Some(accept) = request.header("accept") {
-        input.as_mut().add_text_attr("accept", accept)
+        input.state_mut().add_text_attr("accept", accept)
     }
 
-    mirror_action.handle::<((Login, Authenticate), DownloadBlob)>(&mut input).await
+    mirror_action
+        .handle::<((Login, Authenticate), DownloadBlob)>(&mut input)
+        .await
 }
 
 #[derive(Deserialize)]
 struct UploadParameters {
     digest: Option<String>,
+    ns: String,
 }
-
 #[handler]
 async fn blob_upload_chunks(
     request: &Request,
     method: Method,
     Path((name, reference)): Path<(String, String)>,
-    Query(UploadParameters { digest }): Query<UploadParameters>,
+    Query(UploadParameters { digest, ns }): Query<UploadParameters>,
     dispatcher: Data<&ThunkContext>,
     mirror_action: Data<&MirrorAction>,
 ) -> Response {
@@ -407,11 +575,16 @@ async fn blob_upload_chunks(
     event!(Level::TRACE, "{:#?}", request);
 
     let mut input = dispatcher.clone();
-    input.as_mut().with_text("name", name);
-    input.as_mut().with_text("reference", reference);
-    input.as_mut().with_text("digest", digest.unwrap_or_default());
+    input
+        .state_mut()
+        .with_symbol("name", name)
+        .with_symbol("reference", reference)
+        .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
+        .with_symbol("digest", digest.unwrap_or_default());
 
-    mirror_action.handle::<((Login, Authenticate), BlobUploadChunks)>(&mut input).await
+    mirror_action
+        .handle::<((Login, Authenticate), BlobUploadChunks)>(&mut input)
+        .await
 }
 
 #[derive(Deserialize)]
@@ -419,6 +592,7 @@ struct ImportParameters {
     digest: Option<String>,
     mount: Option<String>,
     from: Option<String>,
+    ns: String,
 }
 #[handler]
 async fn blob_upload(
@@ -428,6 +602,7 @@ async fn blob_upload(
         digest,
         mount,
         from,
+        ns,
     }): Query<ImportParameters>,
     dispatcher: Data<&ThunkContext>,
     mirror_action: Data<&MirrorAction>,
@@ -441,13 +616,17 @@ async fn blob_upload(
         );
         event!(Level::TRACE, "{:#?}", request);
 
-
         let mut input = dispatcher.clone();
-        input.as_mut().with_text("name", name);
-        input.as_mut().with_text("mount", mount);
-        input.as_mut().with_text("from", from);
+        input
+            .state_mut()
+            .with_symbol("name", name)
+            .with_symbol("mount", mount)
+            .with_symbol("from", from)
+            .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
-        mirror_action.handle::<((Login, Authenticate), BlobImport)>(&mut input).await
+        mirror_action
+            .handle::<((Login, Authenticate), BlobImport)>(&mut input)
+            .await
     } else if let Some(digest) = digest {
         event!(
             Level::DEBUG,
@@ -456,80 +635,96 @@ async fn blob_upload(
         event!(Level::TRACE, "{:#?}", request);
 
         let mut input = dispatcher.clone();
-        input.as_mut().with_text("name", name);
-        input.as_mut().with_text("digest", digest);
+        input
+            .state_mut()
+            .with_symbol("name", name)
+            .with_symbol("digest", digest)
+            .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
-        mirror_action.handle::<((Login, Authenticate), BlobUploadMonolith)>(&mut input).await
-
+        mirror_action
+            .handle::<((Login, Authenticate), BlobUploadMonolith)>(&mut input)
+            .await
     } else if let None = digest {
         event!(Level::DEBUG, "Got blob_upload_session_id request, {name}");
         event!(Level::TRACE, "{:#?}", request);
 
         let mut input = dispatcher.clone();
-        input.as_mut().with_text("name", name);
+        input
+            .state_mut()
+            .with_symbol("name", name)
+            .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
-        mirror_action.handle::<((Login, Authenticate), BlobUploadSessionId)>(&mut input).await
+        mirror_action
+            .handle::<((Login, Authenticate), BlobUploadSessionId)>(&mut input)
+            .await
     } else {
         soft_fail()
     }
 }
 
-// Table of OCI Endpoints
+/*
+Table of OCI Endpoints
 
-// ID	Method	API Endpoint	Success	Failure
-// end-1	GET	/v2/	                                                                            200	404/401
+ID	Method	API Endpoint	Success	Failure
+end-1	GET	/v2/	                                                                            200	404/401
 
-// end-2	GET / HEAD	/v2/<name>/blobs/<digest>	                                                200	404
-// end-10	DELETE	    /v2/<name>/blobs/<digest>	                                                202	404/405
+end-2	GET / HEAD	/v2/<name>/blobs/<digest>	                                                200	404
+end-10	DELETE	    /v2/<name>/blobs/<digest>	                                                202	404/405
 
-// end-4a	POST	    /v2/<name>/blobs/uploads/	                                                202	404
-// end-4b	POST	    /v2/<name>/blobs/uploads/             ?digest=<digest>	                    201/202	404/400
-// end-11	POST	    /v2/<name>/blobs/uploads/             ?mount=<digest>&from=<other_name>	    201	404
+end-4a	POST	    /v2/<name>/blobs/uploads/	                                                202	404
+end-4b	POST	    /v2/<name>/blobs/uploads/             ?digest=<digest>	                    201/202	404/400
+end-11	POST	    /v2/<name>/blobs/uploads/             ?mount=<digest>&from=<other_name>	    201	404
 
-// end-5	PATCH	    /v2/<name>/blobs/uploads/<reference>	                                    202	404/416
-// end-6	PUT	        /v2/<name>/blobs/uploads/<reference>  ?digest=<digest>	                    201	404/400
+end-5	PATCH	    /v2/<name>/blobs/uploads/<reference>	                                    202	404/416
+end-6	PUT	        /v2/<name>/blobs/uploads/<reference>  ?digest=<digest>	                    201	404/400
 
-// end-8a	GET	        /v2/<name>/tags/list	                                                    200	404
-// end-8b	GET	        /v2/<name>/tags/list                  ?n=<integer>&last=<integer>	        200	404
+end-8a	GET	        /v2/<name>/tags/list	                                                    200	404
+end-8b	GET	        /v2/<name>/tags/list                  ?n=<integer>&last=<integer>	        200	404
 
-// end-3	GET / HEAD	/v2/<name>/manifests/<reference>	                                        200	404
-// end-7	PUT	        /v2/<name>/manifests/<reference>	                                        201	404
-// end-9	DELETE	    /v2/<name>/manifests/<reference>	                                        202	404/400/405
+end-3	GET / HEAD	/v2/<name>/manifests/<reference>	                                        200	404
+end-7	PUT	        /v2/<name>/manifests/<reference>	                                        201	404
+end-9	DELETE	    /v2/<name>/manifests/<reference>	                                        202	404/400/405
+*/
 
 #[derive(Default)]
 struct TestMirrorEvent;
 
-impl Plugin<ThunkContext> for TestMirrorEvent {
-    fn symbol() -> &'static str {
-        "test_mirror_event"
-    }
-
-    fn call_with_context(_context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
-        todo!()
-    }
-}
-
-impl MirrorEvent for TestMirrorEvent {
+impl MirrorProxy for TestMirrorEvent {
     fn resolve_response(_tc: &ThunkContext) -> Response {
-        todo!()
+        Response::builder().status(StatusCode::OK).finish()
     }
 
     fn resolve_error(_err: String, _tc: &ThunkContext) -> Response {
-        todo!()
+        Response::builder().status(StatusCode::OK).finish()
     }
 }
 
 #[test]
+#[tracing_test::traced_test]
 fn test_mirror() {
+    use hyper::Client;
+    use hyper_tls::HttpsConnector;
+    use lifec::WorldExt;
+
     tokio::runtime::Runtime::new().unwrap().block_on(async {
-        let app = Mirror::<TestMirrorEvent>::default().routes();
+        let world = lifec::World::new();
+        let entity = world.entities().create();
+        let https = HttpsConnector::new();
+        let client = Client::builder().build::<_, hyper::Body>(https);
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let handle = runtime.handle();
+        let mut tc = ThunkContext::default()
+            .enable_https_client(client)
+            .enable_async(entity, handle.clone());
+
+        let app = Mirror::<TestMirrorEvent>::create(&mut tc).routes();
         let cli = poem::test::TestClient::new(app);
 
         let resp = cli.get("/").send().await;
-        resp.assert_status_is_ok();
+        resp.assert_status(StatusCode::NOT_FOUND);
 
         let resp = cli.head("/").send().await;
-        resp.assert_status_is_ok();
+        resp.assert_status(StatusCode::NOT_FOUND);
 
         let resp = cli.get("/v2").send().await;
         resp.assert_status_is_ok();
@@ -543,37 +738,60 @@ fn test_mirror() {
         let resp = cli.head("/v2/").send().await;
         resp.assert_status_is_ok();
 
-        let resp = cli.get("/v2/library/test/manifests/test_ref").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.head("/v2/library/test/manifests/test_ref").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.put("/v2/library/test/manifests/test_ref").send().await;
-        resp.assert_status_is_ok();
-
         let resp = cli
-            .delete("/v2/library/test/manifests/test_ref")
+            .get("/v2/library/test/manifests/test_ref?ns=test.com")
             .send()
             .await;
         resp.assert_status_is_ok();
 
-        let resp = cli.get("/v2/library/test/blobs/test_digest").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.post("/v2/library/test/blobs/uploads").send().await;
-        resp.assert_status_is_ok();
-
         let resp = cli
-            .patch("/v2/library/test/blobs/uploads/test")
+            .head("/v2/library/test/manifests/test_ref?ns=test.com")
             .send()
             .await;
         resp.assert_status_is_ok();
 
-        let resp = cli.put("/v2/library/test/blobs/uploads/test").send().await;
+        let resp = cli
+            .put("/v2/library/test/manifests/test_ref?ns=test.com")
+            .send()
+            .await;
         resp.assert_status_is_ok();
 
-        let resp = cli.get("/v2/library/test/tags/list").send().await;
+        let resp = cli
+            .delete("/v2/library/test/manifests/test_ref?ns=test.com")
+            .send()
+            .await;
         resp.assert_status_is_ok();
+
+        // let resp = cli
+        //     .get("/v2/library/test/blobs/test_digest?ns=test.com")
+        //     .send()
+        //     .await;
+        // resp.assert_status_is_ok();
+
+        // let resp = cli
+        //     .post("/v2/library/test/blobs/uploads?ns=test.com")
+        //     .send()
+        //     .await;
+        // resp.assert_status_is_ok();
+
+        // let resp = cli
+        //     .patch("/v2/library/test/blobs/uploads/test?ns=test.com")
+        //     .send()
+        //     .await;
+        // resp.assert_status_is_ok();
+
+        // let resp = cli
+        //     .put("/v2/library/test/blobs/uploads/test?ns=test.com")
+        //     .send()
+        //     .await;
+        // resp.assert_status_is_ok();
+
+        // let resp = cli
+        //     .get("/v2/library/test/tags/list?ns=test.com")
+        //     .send()
+        //     .await;
+        // resp.assert_status_is_ok();
+
+        runtime.shutdown_background();
     });
 }

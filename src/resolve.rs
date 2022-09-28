@@ -1,4 +1,4 @@
-use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component};
+use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component, AttributeIndex, BlockObject, BlockProperties};
 use poem::{Request, web::headers::Authorization};
 use tracing::{event, Level};
 
@@ -16,7 +16,7 @@ use tracing::{event, Level};
 #[storage(DenseVecStorage)]
 pub struct Resolve;
 
-impl Plugin<ThunkContext> for Resolve {
+impl Plugin for Resolve {
     fn symbol() -> &'static str {
         "resolve"
     }
@@ -25,23 +25,29 @@ impl Plugin<ThunkContext> for Resolve {
         "Resolves an image manifest from the registry. If an artifact_type text attribute exists, will query the referrers api and attach the result"
     }
 
-    fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
-        context.clone().task(|_| {
+    fn caveats() -> &'static str {
+        "This makes the original call to resolve the image from the desired address, then it passes the response to the mirror proxy implementation"
+    }
+
+    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+        context.task(|_| {
             let mut tc = context.clone();
             async move {
                 if let (Some(ns), Some(repo), Some(reference), Some(accept), Some(access_token)) = 
-                (   tc.as_ref().find_text("ns"), 
-                    tc.as_ref().find_text("repo"),
-                    tc.as_ref().find_text("reference"),
-                    tc.as_ref().find_text("accept"),
-                    tc.as_ref().find_text("access_token")
+                (   tc.state().find_symbol("ns"), 
+                    tc.state().find_symbol("repo"),
+                    tc.state().find_symbol("reference"),
+                    tc.state().find_symbol("accept"),
+                    // Check previous state for access token
+                    tc.previous().and_then(|p| p.find_symbol("access_token"))
                 ) { 
 
                 let manifest_api = format!("https://{ns}/v2/{repo}/manifests/{reference}");
+                
                 event!(Level::DEBUG, "Starting image resolution, {manifest_api}");
                 match Authorization::bearer(&access_token) {
                     Ok(auth_header) => {
-                        event!(Level::DEBUG, "accept header is: {}", &accept);
+                        event!(Level::DEBUG, "Accept header is: {}", &accept);
                         let req = Request::builder()
                             .uri_str(manifest_api.as_str())
                             .typed_header(auth_header.clone())
@@ -53,7 +59,7 @@ impl Plugin<ThunkContext> for Resolve {
                                 if let Some(digest) = response.headers().get("Docker-Content-Digest") {
                                     debug_assert!(!digest.is_sensitive(), "docker-content-digest should not be a sensitive header");
                                     event!(Level::DEBUG, "Resolved digest is {:?}", digest);
-                                    tc.as_mut().add_text_attr(
+                                    tc.state_mut().add_text_attr(
                                         "digest", 
                                         digest.to_str().unwrap_or_default()
                                     );
@@ -62,7 +68,7 @@ impl Plugin<ThunkContext> for Resolve {
                                 if let Some(content_type) = response.headers().get("Content-Type") {
                                     debug_assert!(!content_type.is_sensitive(), "content-type should not be a sensitive header");
                                     event!(Level::DEBUG, "Resolved content-type is {:?}", content_type);
-                                    tc.as_mut().add_text_attr(
+                                    tc.state_mut().add_text_attr(
                                         "content-type", 
                                         content_type.to_str().expect("Content-Type must be a valid string")
                                     );
@@ -73,24 +79,32 @@ impl Plugin<ThunkContext> for Resolve {
                                         event!(Level::DEBUG, "Resolved manifest, len: {}", data.len());
                                         event!(Level::TRACE, "{:#?}", data);
 
-                                        tc.as_mut().add_binary_attr("body", data);
+                                        tc.state_mut().add_binary_attr("body", data);
                                     },
                                     Err(err) =>  event!(Level::ERROR, "Could not read response body, {err}")
                                 }
 
                                 // In order to call the referrer's api, we must have an artifact_type and digest to filter the
                                 // the response
-                                // TODO: It would be nice to support multiple artifact_types such as
                                 // define obd      artifact_type dadi.v1
                                 // define teleport artifact_type teleport.v1
                                 // And then the transient value is the response from the referrer's api
                                 // 
+                                // TODO: It would be nice to support multiple artifact_types such as
+
                                 if let (Some(artifact_type), Some(digest)) = (
-                                    tc.as_ref().find_text("artifact_type"), 
-                                    tc.as_ref().find_text("digest")
+                                    tc.state().find_symbol("artifact_type"), 
+                                    tc.state().find_symbol("digest"),
                                 ) {
+                                    let protocol = tc.state()
+                                        .find_symbol("protocol")
+                                        .unwrap_or("https".to_string());
+                                    let api = tc.state()
+                                        .find_symbol("referrers_api")
+                                        .unwrap_or("_oras/artifacts/referrers".to_string());
+
                                     event!(Level::DEBUG, "Making referrers call for {artifact_type}");
-                                    let referrers_api = format!("https://{ns}/v2/{repo}/_oras/artifacts/referrers?digest={digest}&artifactType={artifact_type}");
+                                    let referrers_api = format!("{protocol}://{ns}/v2/{repo}/{api}?digest={digest}&artifactType={artifact_type}");
                                     let req = Request::builder()
                                         .uri_str(referrers_api.as_str())
                                         .typed_header(auth_header)
@@ -100,7 +114,7 @@ impl Plugin<ThunkContext> for Resolve {
                                         Ok(response) => { 
                                             event!(Level::TRACE, "{:#?}", response);
                                             match hyper::body::to_bytes(response.into_body()).await {
-                                                Ok(data) => tc.as_mut().add_binary_attr("referrers", data),
+                                                Ok(data) => tc.state_mut().add_binary_attr("referrers", data),
                                                 Err(err) =>  event!(Level::ERROR, "Could not read referrers response body {err}")
                                             }
                                         }
@@ -121,5 +135,24 @@ impl Plugin<ThunkContext> for Resolve {
                 None
             }
         })
+    }
+}
+
+impl BlockObject for Resolve {
+    fn query(&self) -> lifec::BlockProperties {
+        BlockProperties::default()
+            .require("ns")
+            .require("repo")
+            .require("reference")
+            .require("accept")
+            .optional("access_token")
+            .optional("artifact_type")
+            .optional("digest")
+            .optional("protocol")
+            .optional("referrers_api")
+    }
+
+    fn parser(&self) -> Option<lifec::CustomAttribute> {
+        Some(Resolve::as_custom_attr())
     }
 }

@@ -13,12 +13,12 @@ use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component};
 #[storage(DenseVecStorage)]
 pub struct BlobImport;
 
-impl Plugin<ThunkContext> for BlobImport {
+impl Plugin for BlobImport {
     fn symbol() -> &'static str {
         "blob_import"
     }
 
-    fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         todo!()
     }
 }

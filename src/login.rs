@@ -1,9 +1,14 @@
 use lifec::{
     plugins::{Plugin, ThunkContext},
     Component, DenseVecStorage,
+    AttributeIndex, BlockObject, BlockProperties,
 };
 use tracing::{event, Level};
 
+/// Component to login to a registry, 
+/// 
+/// Reads token from file_src in the work directory,
+/// 
 #[derive(Component, Default)]
 #[storage(DenseVecStorage)]
 pub struct Login;
@@ -17,33 +22,46 @@ impl Plugin for Login {
         "Login to a registry, adds a `user` and `token` text attribute"
     }
 
-    fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         context.clone().task(|_| {
             let mut tc = context.clone();
             async {
-                // TODO: Check multiple sources
                 event!(Level::DEBUG, "Starting registry login");
-                if let Some(token_src) = tc.as_ref().find_text("file_src") {
+                if let Some(token_src) = tc.state().find_symbol("file_src") {
                     event!(Level::DEBUG, "Found file_src for token at {token_src}");
                     let user = tc
-                        .as_ref()
-                        .find_text("user")
+                        .state()
+                        .find_symbol("user")
                         .unwrap_or("00000000-0000-0000-0000-000000000000".to_string());
                     match tokio::fs::read_to_string(token_src).await {
                         Ok(token) => {
                             event!(Level::DEBUG, "Writing credentials to context");
-                            tc.as_mut()
+                            tc.state_mut()
                                 .with_text("user", user)
-                                .add_text_attr("token", token.trim());
+                                .with_text("token", token.trim());
                         }
                         Err(err) => {
                             event!(Level::ERROR, "{err}");
                         }
                     }
+                } else {
+                    event!(Level::WARN, "Missing file_src property");
                 }
 
                 Some(tc)
             }
         })
+    }
+}
+
+impl BlockObject for Login {
+    fn query(&self) -> lifec::BlockProperties {
+        BlockProperties::default()
+            .require("file_src")
+            .optional("user")
+    }
+
+    fn parser(&self) -> Option<lifec::CustomAttribute> {
+        Some(Login::as_custom_attr())
     }
 }

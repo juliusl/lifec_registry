@@ -14,12 +14,15 @@ use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component};
 pub struct ListTags;
 
 
-impl Plugin<ThunkContext> for ListTags {
+impl Plugin for ListTags {
     fn symbol() -> &'static str {
         "list_tags"
     }
 
-    fn call_with_context(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
-        todo!()
+    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+        let tc = context.clone();
+        context.task(|_| async {
+            Some(tc)
+        })
     }
 }
