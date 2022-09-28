@@ -22,7 +22,6 @@ fn main() {
     ``` test containerd
     : shutdown_timeout_ms .float 100
     + .runtime
-    - : .timer 1 ms
     : .mirror   azurecr.io
     : .server   https://test.azurecr.io
     : .host     localhost:5049, resolve
