@@ -20,16 +20,15 @@ fn main() {
     ```
     
     ``` test containerd
-
-    + .runtime
     :  src_dir  .symbol .
     :  work_dir .symbol .work/acr
 
+    + .runtime
     : .process  sh lib/login-acr.sh
     :  REGISTRY_NAME .env obddemo
 
     : .install  access_token
-    
+
     : .mirror   azurecr.io
     : .server   https://test.azurecr.io
     : .host     localhost:5049, resolve
