@@ -24,7 +24,7 @@ fn main() {
     :  work_dir .symbol .work/acr
 
     + .runtime
-    : .process  sh lib/login-acr.sh
+    : .process  sh lib/sh/login-acr.sh
     :  REGISTRY_NAME .env obddemo
 
     : .install  access_token
