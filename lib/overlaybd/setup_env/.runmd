@@ -62,14 +62,14 @@
 
 ``` clone-repo overlaybd
 + .runtime
-: .process      git clone https://github.com/containerd/overlaybd.git ~/overlaybd
+: .process      git clone https://github.com/containerd/overlaybd.git
 ```
 
 ## Setup overlaybd repo
 - Initialize submodules, make build output directory for cmake
 
 ``` setup-repo overlaybd
-: current_dir .symbol ~/overlaybd
+: current_dir .symbol overlaybd
 
 + .runtime 
 : .process git submodule update --init
@@ -79,7 +79,7 @@
 ## Build overlaybd w/ make 
 
 ``` build overlaybd
-: current_dir .symbol ~/overlaybd/build
+: current_dir .symbol overlaybd/build
 
 + .runtime
 : .process cmake ..
