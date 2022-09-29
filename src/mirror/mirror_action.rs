@@ -4,7 +4,6 @@ use poem::Response;
 
 use crate::MirrorProxy;
 
-
 /// Wrapper around mirror event functions
 ///
 #[derive(Clone)]

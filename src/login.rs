@@ -23,7 +23,7 @@ impl Plugin for Login {
     }
 
     fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
-        context.clone().task(|_| {
+        context.task(|_| {
             let mut tc = context.clone();
             async {
                 event!(Level::DEBUG, "Starting registry login");

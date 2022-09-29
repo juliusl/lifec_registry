@@ -42,7 +42,11 @@ impl Plugin for Resolve {
                     tc.previous().and_then(|p| p.find_symbol("access_token"))
                 ) { 
 
-                let manifest_api = format!("https://{ns}/v2/{repo}/manifests/{reference}");
+                let protocol = tc.state()
+                    .find_symbol("protocol")
+                    .unwrap_or("https".to_string());
+                
+                let manifest_api = format!("{protocol}://{ns}/v2/{repo}/manifests/{reference}");
                 
                 event!(Level::DEBUG, "Starting image resolution, {manifest_api}");
                 match Authorization::bearer(&access_token) {
@@ -96,9 +100,6 @@ impl Plugin for Resolve {
                                     tc.state().find_symbol("artifact_type"), 
                                     tc.state().find_symbol("digest"),
                                 ) {
-                                    let protocol = tc.state()
-                                        .find_symbol("protocol")
-                                        .unwrap_or("https".to_string());
                                     let api = tc.state()
                                         .find_symbol("referrers_api")
                                         .unwrap_or("_oras/artifacts/referrers".to_string());

@@ -28,7 +28,7 @@ impl Plugin for Authenticate {
     }
 
     fn description() -> &'static str {
-        "Authenticates to a registry and and adds a token text attribute."
+        "Authenticates to a registry and and adds an `access_token` to state"
     }
 
     fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
