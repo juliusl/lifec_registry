@@ -88,14 +88,6 @@ impl Plugin for Resolve {
                                     Err(err) =>  event!(Level::ERROR, "Could not read response body, {err}")
                                 }
 
-                                // In order to call the referrer's api, we must have an artifact_type and digest to filter the
-                                // the response
-                                // define obd      artifact_type dadi.v1
-                                // define teleport artifact_type teleport.v1
-                                // And then the transient value is the response from the referrer's api
-                                // 
-                                // TODO: It would be nice to support multiple artifact_types such as
-
                                 if let (Some(artifact_type), Some(digest)) = (
                                     tc.state().find_symbol("artifact_type"), 
                                     tc.state().find_text("digest"),
@@ -107,8 +99,6 @@ impl Plugin for Resolve {
                                     event!(Level::DEBUG, "Making referrers call for {artifact_type}");
                                     let referrers_api = format!("{protocol}://{ns}/v2/{repo}/{api}?digest={digest}&artifactType={artifact_type}");
                                     event!(Level::DEBUG, "Making referrers call for {artifact_type}\n{referrers_api}");
-                                    // 2022-09-29T18:39:22.687342Z DEBUG lifec_registry::resolve: Making referrers call for dadi.image.v1 
-                                    // https://obddemo.azurecr.io/v2/redis/_oras/artifacts/referrers?digest=sha256:4f170366d20a39ba515f1bc1295265fc87b4e862e331107591877aef9e8c3c03&artifactType=dadi.image.v1
                                     let req = Request::builder()
                                         .uri_str(referrers_api.as_str())
                                         .typed_header(auth_header)

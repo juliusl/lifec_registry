@@ -1,0 +1,122 @@
+# Setup Ubuntu for OverlayBD
+
+## Control Settings
+
+``` ubuntu
++ .engine
+: .event update-apt
+: .event install-packages
+: .exit
+```
+
+## Update apt-get
+
+``` update-apt ubuntu
++ .runtime
+: .process apt-get update
+: .process apt-get upgrade
+```
+
+## Install package dependencies for overlaybd
+
+``` install-packages ubuntu
++ .runtime
+: .process apt-get install
+: .arg jq
+: .arg git
+: .arg apt-transport-https
+: .arg libssl-dev
+: .arg pkg-config
+: .arg libgflags-dev
+: .arg libcurl4-openssl-dev
+: .arg libssl-dev
+: .arg libaio-dev
+: .arg libnl-3-dev
+: .arg libpci-dev
+: .arg make
+: .arg cmake
+: .arg g++
+: .arg gcc
+```
+
+## Enable Kernel Features
+
+``` enable-kernel ubuntu
++ .runtime
+: .process modprobe target_core_user
+```
+
+# OverlayBD Backend Service
+- This will setup the overlaybd backend
+
+## Control Settings
+
+``` overlaybd
++ .engine 
+: .event clone-repo
+: .event build
+: .event install
+```
+
+## Clone overlaybd repo
+
+``` clone-repo overlaybd
++ .runtime
+: .process      git clone https://github.com/containerd/overlaybd.git ~/overlaybd
+```
+
+## Setup overlaybd repo
+- Initialize submodules, make build output directory for cmake
+
+``` setup-repo overlaybd
+: current_dir .symbol ~/overlaybd
+
++ .runtime 
+: .process git submodule update --init
+: .process mkdir build
+```
+
+## Build overlaybd w/ make 
+
+``` build overlaybd
+: current_dir .symbol ~/overlaybd/build
+
++ .runtime
+: .process cmake ..
+: .process make -j
+: .process make install
+```
+
+## Install overlaybd as a service
+
+``` install overlaybd
++ .runtime
+: .process systemctl enable /opt/overlaybd/overlaybd-tcmu.service
+: .process systemctl start overlaybd-tcmu
+```
+
+# Overlaybd Snapshotter
+- The snapshotter code is from the github repo `containerd/accelerated-container-image.git`
+
+## Control Settings
+``` overlaybd-snapshotter
++ .engine
+: .event clone-repo
+: .event build-snapshotter
+```
+
+## Clone snapshotter repo
+
+``` clone-repo overlaybd-snapshotter
++ .runtime
+: .process git clone https://github.com/containerd/accelerated-container-image.git ~/accelerated-container-image
+```
+
+## Build the snapshotter
+``` build-snapshotter overlaybd-snapshotter
+: current_dir .symbol ~/accelerated-container-image
+
++ .runtime
+: .process make
+:   PATH .env $PATH:/usr/local/go/bin
+```
