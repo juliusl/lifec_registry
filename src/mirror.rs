@@ -152,7 +152,7 @@ Design of containerd registry mirror feature
                     .find_symbol("mirror")
                     .expect("host name to mirror is required");
 
-                Self::ensure_hosts_dir(host_name).await;
+                // Self::ensure_hosts_dir(host_name).await;
                 
                 match AppHost::<Self>::call(&tc) {
                     Some((task, _)) => match task.await {

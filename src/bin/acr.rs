@@ -1,7 +1,12 @@
+
+use std::str::from_utf8;
+
 use hyper::StatusCode;
-use lifec::{Project, Interpreter, Host, default_runtime, WorldExt, Event, ThunkContext};
+use lifec::{Project, Interpreter, Host, default_runtime, WorldExt, Event, ThunkContext, AttributeIndex};
 use lifec_registry::{Mirror, MirrorProxy};
 use poem::Response;
+use tracing::event;
+use tracing::Level;
 use tracing_subscriber::EnvFilter;
 
 /// Small example tool to convert .runmd to hosts.toml
@@ -20,8 +25,10 @@ fn main() {
     ```
     
     ``` test containerd
-    :  src_dir  .symbol .
-    :  work_dir .symbol .work/acr
+    : src_dir       .symbol .
+    : work_dir      .symbol .work/acr
+    : file_src      .symbol .work/acr/access_token
+    : artifact_type .symbol dadi.image.v1
 
     + .runtime
     : .process  sh lib/sh/login-acr.sh
@@ -30,9 +37,7 @@ fn main() {
     : .install  access_token
 
     : .mirror   azurecr.io
-    : .server   https://test.azurecr.io
     : .host     localhost:5049, resolve
-    : .host     localhost:3033, pull, push
     ```
     "#);
 
@@ -76,7 +81,19 @@ impl Project for Parse {
 /// Unused
 /// 
 impl MirrorProxy for Parse {
-    fn resolve_response(_: &lifec::ThunkContext) -> poem::Response {
+    fn resolve_response(tc: &lifec::ThunkContext) -> poem::Response {
+
+        if let Some(binary) = tc.state().find_binary("referrers") {
+            match from_utf8(binary.as_slice()) {
+                Ok(str) => {
+                    eprintln!("{}", str)
+                },
+                Err(err) => {
+                    event!(Level::ERROR, "Could not resolver referrers, {err}")
+                },
+            }
+        }
+
         Response::builder().status(StatusCode::OK).finish()
     }
 
