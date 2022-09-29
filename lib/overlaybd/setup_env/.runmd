@@ -54,6 +54,7 @@
 ``` overlaybd
 + .engine 
 : .event clone-repo
+: .event setup-repo
 : .event build
 : .event install
 ```
