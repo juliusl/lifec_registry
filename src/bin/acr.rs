@@ -1,6 +1,6 @@
 use clap::{Args, Parser, Subcommand};
 use hyper::StatusCode;
-use lifec::{default_runtime, AttributeIndex, InspectExtensions, Interpreter};
+use lifec::{default_runtime, AttributeIndex, Inspector, Interpreter};
 use lifec::{Host, Project};
 use lifec_registry::{Mirror, MirrorProxy};
 use poem::Response;
