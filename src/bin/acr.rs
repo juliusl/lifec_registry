@@ -18,21 +18,27 @@ use teleport::{TeleportSettings, MIRROR_TEMPLATE};
 ///
 #[tokio::main]
 async fn main() {
+    let cli = ACR::parse();
+
     tracing_subscriber::fmt::Subscriber::builder()
-        .with_env_filter(
+        .with_env_filter(if !cli.debug {
             EnvFilter::from_default_env()
                 .add_directive("acr=info".parse().expect("should be ok"))
-                .add_directive("lifec=info".parse().expect("should be ok")),
-        )
+                .add_directive("lifec=info".parse().expect("should be ok"))
+        } else {
+            EnvFilter::from_default_env()
+                .add_directive("acr=debug".parse().expect("should be ok"))
+                .add_directive("lifec=debug".parse().expect("should be ok"))
+        })
         .compact()
         .init();
 
-    let cli = ACR::parse();
     match cli {
         ACR {
             registry,
             registry_host,
             command: Some(command),
+            ..
         } => {
             let world_dir = PathBuf::from(".world").join(&registry_host).join(&registry);
             let mirror_runmd = world_dir.join("mirror.runmd");
@@ -43,6 +49,9 @@ async fn main() {
 
             match command {
                 Commands::Mirror(mut host) => {
+                    if !mirror_runmd.exists() {
+                        panic!("mirror_runmd not found, run `acr --registry {registry} init`")
+                    }
                     host.set_path(
                         mirror_runmd
                             .to_str()
@@ -118,6 +127,9 @@ struct ACR {
     /// Name of the registry to use
     #[clap(long)]
     registry: String,
+    /// Enable debug logging
+    #[clap(long, short, action)]
+    debug: bool,
     /// Registry host, for example azurecr.io, or azurecr-test.io
     #[clap(long, default_value_t=String::from("azurecr.io"))]
     registry_host: String,
