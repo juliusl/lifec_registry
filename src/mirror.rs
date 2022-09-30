@@ -60,9 +60,13 @@ use host_capabilities::HostCapability;
 ///
 #[derive(Component, Clone, Default)]
 #[storage(HashMapStorage)]
-pub struct Mirror<M>(ThunkContext, M)
+pub struct Mirror<M>
 where
-    M: MirrorProxy + Default + Send + Sync + 'static;
+    M: MirrorProxy + Default + Send + Sync + 'static
+{
+    proxy: M,
+    context: ThunkContext, 
+}
 
 impl<M> Mirror<M>
 where
@@ -249,8 +253,8 @@ where
     }
 
     fn interpret(&self, _world: &lifec::World, block: &lifec::Block) {
-        // Only interpret blocks with containerd symbol
-        if block.symbol() == "containerd" && !block.name().is_empty() {
+        // Only interpret blocks with mirror symbol
+        if block.symbol() == "mirror" && !block.name().is_empty() {
             let output_dir = PathBuf::from(".out/etc/containerd/certs.d");
             for i in block
                 .index()
@@ -356,16 +360,19 @@ where
     }
 }
 
-impl<Event> WebApp for Mirror<Event>
+impl<P> WebApp for Mirror<P>
 where
-    Event: MirrorProxy + Default + Send + Sync + 'static,
+    P: MirrorProxy + Default + Send + Sync + 'static,
 {
     fn create(context: &mut ThunkContext) -> Self {
-        Self(context.clone(), Event::default())
+        Self {
+            context: context.clone(), 
+            proxy: P::default(),
+        }
     }
 
     fn routes(&mut self) -> Route {
-        let context = &self.0;
+        let context = &self.context;
         Route::new().nest(
             "/v2",
             Route::new()
@@ -373,25 +380,25 @@ where
                     "/",
                     get(index
                         .data(context.clone())
-                        .data(MirrorAction::from::<Event>()))
+                        .data(MirrorAction::from::<P>()))
                     .head(
                         index
                             .data(context.clone())
-                            .data(MirrorAction::from::<Event>()),
+                            .data(MirrorAction::from::<P>()),
                     ),
                 )
                 .at(
                     "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/:digest",
                     get(download_blob
                         .data(context.clone())
-                        .data(MirrorAction::from::<Event>())),
+                        .data(MirrorAction::from::<P>())),
                 )
                 .at(
                     "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads",
                     post(
                         blob_upload
                             .data(context.clone())
-                            .data(MirrorAction::from::<Event>()),
+                            .data(MirrorAction::from::<P>()),
                     ),
                 )
                 .at(
@@ -399,40 +406,40 @@ where
                     patch(
                         blob_upload_chunks
                             .data(context.clone())
-                            .data(MirrorAction::from::<Event>()),
+                            .data(MirrorAction::from::<P>()),
                     )
                     .put(
                         blob_upload_chunks
                             .data(context.clone())
-                            .data(MirrorAction::from::<Event>()),
+                            .data(MirrorAction::from::<P>()),
                     ),
                 )
                 .at(
                     "/:name<[a-zA-Z0-9/_-]+(?:manifests)>/:reference",
                     get(resolve
                         .data(context.clone())
-                        .data(MirrorAction::from::<Event>()))
+                        .data(MirrorAction::from::<P>()))
                     .head(
                         resolve
                             .data(context.clone())
-                            .data(MirrorAction::from::<Event>()),
+                            .data(MirrorAction::from::<P>()),
                     )
                     .put(
                         resolve
                             .data(context.clone())
-                            .data(MirrorAction::from::<Event>()),
+                            .data(MirrorAction::from::<P>()),
                     )
                     .delete(
                         resolve
                             .data(context.clone())
-                            .data(MirrorAction::from::<Event>()),
+                            .data(MirrorAction::from::<P>()),
                     ),
                 )
                 .at(
                     "/:name<[a-zA-Z0-9/_-]+(?:tags)>/list",
                     get(list_tags
                         .data(context.clone())
-                        .data(MirrorAction::from::<Event>())),
+                        .data(MirrorAction::from::<P>())),
                 ),
         )
     }

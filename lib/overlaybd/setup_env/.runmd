@@ -6,7 +6,7 @@
 + .engine
 : .event update-apt
 : .event install-packages
-: .exit
+: .next overlaybd
 ```
 
 ## Update apt-get
@@ -57,6 +57,7 @@
 : .event setup-repo
 : .event build
 : .event install
+: .next overlaybd-snapshotter
 ```
 
 ## Clone overlaybd repo
