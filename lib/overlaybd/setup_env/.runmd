@@ -21,7 +21,7 @@
 
 ``` install-packages ubuntu
 + .runtime
-: .process apt-get install
+: .process apt-get install -y
 : .arg jq
 : .arg git
 : .arg apt-transport-https
