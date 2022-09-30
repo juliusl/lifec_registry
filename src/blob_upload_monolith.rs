@@ -19,7 +19,7 @@ impl Plugin for BlobUploadMonolith {
         "blob_upload_monolith"
     }
 
-    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+    fn call(_: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         todo!()
     }
 }

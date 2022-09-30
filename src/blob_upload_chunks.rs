@@ -19,7 +19,7 @@ impl Plugin for BlobUploadChunks {
         "blob_upload_chunks"
     }
 
-    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+    fn call(_: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         todo!()
     }
 }

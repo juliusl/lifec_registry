@@ -18,7 +18,7 @@ impl Plugin for BlobImport {
         "blob_import"
     }
 
-    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+    fn call(_: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         todo!()
     }
 }
