@@ -19,15 +19,18 @@ use teleport::{TeleportSettings, MIRROR_TEMPLATE};
 #[tokio::main]
 async fn main() {
     let cli = ACR::parse();
-
     tracing_subscriber::fmt::Subscriber::builder()
         .with_env_filter(if !cli.debug {
-            EnvFilter::from_default_env()
-                .add_directive("acr=info".parse().expect("should be ok"))
+            EnvFilter::builder()
+                .with_default_directive("acr=info".parse().expect("should parse"))
+                .from_env()
+                .expect("should work")
                 .add_directive("lifec=info".parse().expect("should be ok"))
         } else {
-            EnvFilter::from_default_env()
-                .add_directive("acr=debug".parse().expect("should be ok"))
+            EnvFilter::builder()
+                .with_default_directive("acr=debug".parse().expect("should parse"))
+                .from_env()
+                .expect("should work")
                 .add_directive("lifec=debug".parse().expect("should be ok"))
         })
         .compact()
@@ -47,11 +50,12 @@ async fn main() {
                 .await
                 .expect("Should be able to make directories");
 
+            if !mirror_runmd.exists() {
+                panic!("mirror_runmd not found, run `acr --registry {registry} init`")
+            }
+
             match command {
                 Commands::Mirror(mut host) => {
-                    if !mirror_runmd.exists() {
-                        panic!("mirror_runmd not found, run `acr --registry {registry} init`")
-                    }
                     host.set_path(
                         mirror_runmd
                             .to_str()
