@@ -76,9 +76,6 @@ impl Authenticate {
     ///
     async fn authenticate(tc: &ThunkContext) -> Option<Credentials> {
         if let Some(challenge_uri) = Self::start_challenge(tc).await {
-            eprintln!("{:#?}", tc.previous().unwrap().values());
-            eprintln!("{:#?}", tc.state().values());
-
             if let (Some(ns), Some(token)) = (
                 tc.previous().and_then(|p| p.find_symbol("ns")),
                 tc.previous().and_then(|p| p.find_text("token")),

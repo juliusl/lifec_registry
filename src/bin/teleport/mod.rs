@@ -36,7 +36,7 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 - If an error occurs, it should restart the server after going through the setup process once more 
 
 ``` start mirror
-: src_dir         .symbol lib
+: src_dir         .symbol .
 : work_dir        .symbol .work/acr
 : file_src        .symbol .work/acr/access_token
 : teleport_format .symbol {teleport_format}

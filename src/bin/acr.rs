@@ -1,6 +1,6 @@
 use clap::{Args, Parser, Subcommand};
 use hyper::StatusCode;
-use lifec::{default_runtime, InspectExtensions, Interpreter, AttributeIndex};
+use lifec::{default_runtime, AttributeIndex, InspectExtensions, Interpreter};
 use lifec::{Host, Project};
 use lifec_registry::{Mirror, MirrorProxy};
 use poem::Response;
@@ -19,7 +19,11 @@ use teleport::{TeleportSettings, MIRROR_TEMPLATE};
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt::Subscriber::builder()
-        .with_env_filter(EnvFilter::from_default_env())
+        .with_env_filter(
+            EnvFilter::from_default_env()
+                .add_directive("acr=info".parse().expect("should be ok"))
+                .add_directive("lifec=info".parse().expect("should be ok")),
+        )
         .compact()
         .init();
 
@@ -39,7 +43,11 @@ async fn main() {
 
             match command {
                 Commands::Mirror(mut host) => {
-                    host.set_path(mirror_runmd.to_str().expect("should be able to create string"));
+                    host.set_path(
+                        mirror_runmd
+                            .to_str()
+                            .expect("should be able to create string"),
+                    );
                     if let Some(mut host) = host.create_host::<ACR>().await.take() {
                         host.handle_start();
                     } else {
@@ -68,9 +76,21 @@ async fn main() {
                         .render("mirror", &mirror_settings)
                         .expect("Should be able to render template");
 
-                    tokio::fs::write(mirror_runmd, rendered)
+                    tokio::fs::write(&mirror_runmd, rendered)
                         .await
                         .expect("Should be able to write runmd to file");
+                    event!(
+                        Level::INFO,
+                        "Wrote runmd file, recommend tracking the .world dir with source control"
+                    );
+                    println!(
+                        "{}",
+                        mirror_runmd
+                            .canonicalize()
+                            .expect("should exist")
+                            .to_str()
+                            .expect("should be able to get str")
+                    );
                 }
                 Commands::Dump => {
                     let mut host = Host::open::<ACR>(mirror_runmd)
@@ -169,7 +189,7 @@ struct MirrorSettings {
     #[clap(skip)]
     registry_name: Option<String>,
     /// Artifact type to use,
-    /// 
+    ///
     #[clap(skip)]
     artifact_type: Option<String>,
 }
@@ -177,10 +197,12 @@ struct MirrorSettings {
 impl MirrorProxy for ACR {
     fn resolve_response(tc: &lifec::ThunkContext) -> poem::Response {
         if let Some(body) = tc.state().find_binary("body") {
-            let content_type = tc.state()
+            let content_type = tc
+                .state()
                 .find_text("content-type")
                 .expect("A content type should've been provided");
-            let digest = tc.state()
+            let digest = tc
+                .state()
                 .find_text("digest")
                 .expect("A digest should've been provided");
 
