@@ -8,9 +8,13 @@ pub trait MirrorProxy {
     /// but before the runtime has a chance to make the request to the upstream server. 
     /// 
     /// If a response is returned from this function, then the runtime will skip over
-    /// any actions and return the response. 
+    /// any actions and return the response.
     /// 
-    fn on_request(_tc: &ThunkContext, _request: &Request) -> Option<Response> {
+    /// In addition the thunk context can be modified before being handled. This allows
+    /// the implementation to override headers that will be used to make the request 
+    /// to the upstream server.
+    /// 
+    fn on_request(_tc: &mut ThunkContext, _request: &Request) -> Option<Response> {
         None
     }
 

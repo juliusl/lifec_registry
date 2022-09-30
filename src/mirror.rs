@@ -62,10 +62,10 @@ use host_capabilities::HostCapability;
 #[storage(HashMapStorage)]
 pub struct Mirror<M>
 where
-    M: MirrorProxy + Default + Send + Sync + 'static
+    M: MirrorProxy + Default + Send + Sync + 'static,
 {
-    proxy: M,
-    context: ThunkContext, 
+    _proxy: M,
+    context: ThunkContext,
 }
 
 impl<M> Mirror<M>
@@ -97,7 +97,7 @@ where
         let path = path.join("hosts.toml");
         if !path.exists() {
             let output_hosts_toml = PathBuf::from(format!(
-                ".out/etc/containerd/certs.d/{}/hosts.toml",
+                ".work/etc/containerd/certs.d/{}/hosts.toml",
                 host_name.as_ref()
             ));
             event!(
@@ -106,15 +106,18 @@ where
                 &path
             );
 
-            assert!(output_hosts_toml.exists(), "should have been created before this plugin runs");
+            assert!(
+                output_hosts_toml.exists(),
+                "should have been created before this plugin runs"
+            );
 
             match tokio::fs::copy(output_hosts_toml, &path).await {
                 Ok(_) => {
                     event!(Level::INFO, "Copied hosts.toml tp {:?}", path);
-                },
+                }
                 Err(err) => {
                     panic!("Could not copy hosts.toml, {err}");
-                },
+                }
             }
         }
     }
@@ -151,25 +154,27 @@ Design of containerd registry mirror feature
         context.task(|_| {
             let tc = context.clone();
             async move {
-                let host_name = tc
-                    .state()
-                    .find_symbol("mirror")
-                    .expect("host name to mirror is required");
+                if tc.is_enabled("skip_hosts_dir_check") {
+                    let host_name = tc
+                        .state()
+                        .find_symbol("mirror")
+                        .expect("host name to mirror is required");
 
-                // Self::ensure_hosts_dir(host_name).await;
-                
+                    Self::ensure_hosts_dir(host_name).await;
+                }
+
                 match AppHost::<Self>::call(&tc) {
                     Some((task, _)) => match task.await {
                         Ok(tc) => {
                             event!(Level::ERROR, "Exiting");
                             Some(tc)
-                        },
+                        }
                         Err(err) => {
                             event!(Level::ERROR, "Error from app_host {err}");
                             None
-                        },
+                        }
                     },
-                    _ => None
+                    _ => None,
                 }
             }
         })
@@ -255,7 +260,7 @@ where
     fn interpret(&self, _world: &lifec::World, block: &lifec::Block) {
         // Only interpret blocks with mirror symbol
         if block.symbol() == "mirror" && !block.name().is_empty() {
-            let output_dir = PathBuf::from(".out/etc/containerd/certs.d");
+            let output_dir = PathBuf::from(".work/etc/containerd/certs.d");
             for i in block
                 .index()
                 .iter()
@@ -366,8 +371,8 @@ where
 {
     fn create(context: &mut ThunkContext) -> Self {
         Self {
-            context: context.clone(), 
-            proxy: P::default(),
+            context: context.clone(),
+            _proxy: P::default(),
         }
     }
 
@@ -378,14 +383,8 @@ where
             Route::new()
                 .at(
                     "/",
-                    get(index
-                        .data(context.clone())
-                        .data(MirrorAction::from::<P>()))
-                    .head(
-                        index
-                            .data(context.clone())
-                            .data(MirrorAction::from::<P>()),
-                    ),
+                    get(index.data(context.clone()).data(MirrorAction::from::<P>()))
+                        .head(index.data(context.clone()).data(MirrorAction::from::<P>())),
                 )
                 .at(
                     "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/:digest",
@@ -465,7 +464,11 @@ async fn index(
         input.state_mut().with_symbol("ns", &ns);
     }
 
-    mirror_action.handle::<Index>(&mut input).await
+    if let Some(response) = mirror_action.proxy(&mut input, request) {
+        response
+    } else {
+        mirror_action.handle::<Index>(&mut input).await
+    }
 }
 
 #[derive(Deserialize)]
@@ -498,9 +501,13 @@ async fn resolve(
         .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
         .add_symbol("accept", request.header("accept").unwrap_or_default());
 
-    mirror_action
-        .handle::<((Login, Authenticate), Resolve)>(&mut input.clone())
-        .await
+    if let Some(response) = mirror_action.proxy(&mut input, request) {
+        response
+    } else {
+        mirror_action
+            .handle::<((Login, Authenticate), Resolve)>(&mut input.clone())
+            .await
+    }
 }
 
 #[derive(Deserialize)]
@@ -526,9 +533,13 @@ async fn list_tags(
         .with_symbol("ns", ns)
         .with_symbol("name", name);
 
-    mirror_action
-        .handle::<((Login, Authenticate), ListTags)>(&mut input)
-        .await
+    if let Some(response) = mirror_action.proxy(&mut input, request) {
+        response
+    } else {
+        mirror_action
+            .handle::<((Login, Authenticate), ListTags)>(&mut input)
+            .await
+    }
 }
 
 #[handler]
@@ -555,9 +566,13 @@ async fn download_blob(
         input.state_mut().add_text_attr("accept", accept)
     }
 
-    mirror_action
-        .handle::<((Login, Authenticate), DownloadBlob)>(&mut input)
-        .await
+    if let Some(response) = mirror_action.proxy(&mut input, request) {
+        response
+    } else {
+        mirror_action
+            .handle::<((Login, Authenticate), DownloadBlob)>(&mut input)
+            .await
+    }
 }
 
 #[derive(Deserialize)]
@@ -591,9 +606,13 @@ async fn blob_upload_chunks(
         .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
         .with_symbol("digest", digest.unwrap_or_default());
 
-    mirror_action
-        .handle::<((Login, Authenticate), BlobUploadChunks)>(&mut input)
-        .await
+    if let Some(response) = mirror_action.proxy(&mut input, request) {
+        response
+    } else {
+        mirror_action
+            .handle::<((Login, Authenticate), BlobUploadChunks)>(&mut input)
+            .await
+    }
 }
 
 #[derive(Deserialize)]
@@ -633,9 +652,13 @@ async fn blob_upload(
             .with_symbol("from", from)
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
-        mirror_action
-            .handle::<((Login, Authenticate), BlobImport)>(&mut input)
-            .await
+        if let Some(response) = mirror_action.proxy(&mut input, request) {
+            response
+        } else {
+            mirror_action
+                .handle::<((Login, Authenticate), BlobImport)>(&mut input)
+                .await
+        }
     } else if let Some(digest) = digest {
         event!(
             Level::DEBUG,
@@ -650,9 +673,13 @@ async fn blob_upload(
             .with_symbol("digest", digest)
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
-        mirror_action
-            .handle::<((Login, Authenticate), BlobUploadMonolith)>(&mut input)
-            .await
+        if let Some(response) = mirror_action.proxy(&mut input, request) {
+            response
+        } else {
+            mirror_action
+                .handle::<((Login, Authenticate), BlobUploadMonolith)>(&mut input)
+                .await
+        }
     } else if let None = digest {
         event!(Level::DEBUG, "Got blob_upload_session_id request, {name}");
         event!(Level::TRACE, "{:#?}", request);
@@ -663,9 +690,13 @@ async fn blob_upload(
             .with_symbol("name", name)
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
-        mirror_action
-            .handle::<((Login, Authenticate), BlobUploadSessionId)>(&mut input)
-            .await
+        if let Some(response) = mirror_action.proxy(&mut input, request) {
+            response
+        } else {
+            mirror_action
+                .handle::<((Login, Authenticate), BlobUploadSessionId)>(&mut input)
+                .await
+        }
     } else {
         soft_fail()
     }

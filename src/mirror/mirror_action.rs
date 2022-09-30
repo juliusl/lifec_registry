@@ -1,6 +1,6 @@
 use hyper::StatusCode;
-use lifec::{ThunkContext, Plugin, AttributeIndex};
-use poem::Response;
+use lifec::{ThunkContext, Plugin};
+use poem::{Response, Request};
 
 use crate::MirrorProxy;
 
@@ -8,6 +8,7 @@ use crate::MirrorProxy;
 ///
 #[derive(Clone)]
 pub struct MirrorAction {
+    on_request: fn (&mut ThunkContext, &Request) -> Option<Response>,
     on_response: fn(tc: &ThunkContext) -> Response,
     on_error: fn(err: String, tc: &ThunkContext) -> Response,
 }
@@ -18,9 +19,16 @@ impl MirrorAction {
         Event: MirrorProxy + Default + Send + Sync + 'static,
     {
         MirrorAction {
+            on_request: Event::on_request,
             on_response: Event::resolve_response,
             on_error: Event::resolve_error,
         }
+    }
+
+    ///  Receives request, if a response is returned then handle will not be called
+    /// 
+    pub fn proxy(&self, tc: &mut ThunkContext, request: &Request) -> Option<Response> {
+        (self.on_request)(tc, request)
     }
 
     fn handle_response(&self, tc: &ThunkContext) -> Response {
@@ -35,8 +43,6 @@ impl MirrorAction {
     where
         P: Plugin,
     {
-        tc.state_mut().with_text("plugin_symbol", P::symbol());
-
         if let Some((task, _cancel)) = P::call(tc) {
             match task.await {
                 Ok(result) => self.handle_response(&result),

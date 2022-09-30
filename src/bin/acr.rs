@@ -1,63 +1,18 @@
 use clap::{Args, Parser, Subcommand};
-use lifec::{InspectExtensions, default_runtime, Interpreter, ReadStorage, Sequence, Join};
+use hyper::StatusCode;
+use lifec::{default_runtime, InspectExtensions, Interpreter, AttributeIndex};
 use lifec::{Host, Project};
-use lifec_registry::{MirrorProxy, Mirror};
+use lifec_registry::{Mirror, MirrorProxy};
+use poem::Response;
 use serde::Serialize;
-use tracing_subscriber::EnvFilter;
 use std::path::PathBuf;
 use tinytemplate::TinyTemplate;
 use tracing::event;
 use tracing::Level;
+use tracing_subscriber::EnvFilter;
 
-/// Template user's runmd mirror file,
-///
-static MIRROR_TEMPLATE: &'static str = r#"
-# ACR Mirror 
-- This file is generated per registry host
-- It provides a mirror server that facilitates the teleport feature on the host machine
-- This file can be edited to customize settings
-
-## Control Settings 
-- Engine sequence when the mirror starts
-
-``` mirror
-+ .engine
-: .event install
-: .event start
-: .loop
-```
-## Install mirror components
-- The overlaybd snapshotter is the current teleport provider,
-- This section can be expanded, once new providers are available.
-
-``` install mirror
-+ .runtime
-: .process lifec 
-: .flag --runmd_path lib/overlaybd/setup_env
-: .arg start
-: .flag --engine_name {operating_system}
-```
-
-## Start the mirror server
-- When this event is called it will start a server that will operate indefinitely,
-- If an error occurs, it should restart the server after going through the setup process once more 
-
-``` start mirror
-: src_dir         .symbol lib
-: work_dir        .symbol .work/acr
-: file_src        .symbol .work/acr/access_token
-: teleport_format .symbol {teleport_format}
-
-+ .runtime
-: .process  sh {login_script}
-:  REGISTRY_NAME .env {registry_name}
-
-: .install  access_token
-
-: .mirror   {registry_host}
-: .host     {mirror_address}, resolve
-```
-"#;
+mod teleport;
+use teleport::{TeleportSettings, MIRROR_TEMPLATE};
 
 /// Small example tool to convert .runmd to hosts.toml
 ///
@@ -83,8 +38,13 @@ async fn main() {
                 .expect("Should be able to make directories");
 
             match command {
-                Commands::Mirror(_) => {
-                    todo!("mirror")
+                Commands::Mirror(mut host) => {
+                    host.set_path(mirror_runmd.to_str().expect("should be able to create string"));
+                    if let Some(mut host) = host.create_host::<ACR>().await.take() {
+                        host.handle_start();
+                    } else {
+                        panic!("Could not create/start host");
+                    }
                 }
                 Commands::Teleport(_) => {
                     todo!("teleport")
@@ -100,6 +60,10 @@ async fn main() {
 
                     mirror_settings.registry_name = Some(registry.to_string());
 
+                    if mirror_settings.teleport_format == "overlaybd" {
+                        mirror_settings.artifact_type = Some("dadi.image.v1".to_string());
+                    }
+
                     let rendered = tt
                         .render("mirror", &mirror_settings)
                         .expect("Should be able to render template");
@@ -112,7 +76,7 @@ async fn main() {
                     let mut host = Host::open::<ACR>(mirror_runmd)
                         .await
                         .expect("Should be able to open runmd file");
-         
+
                     host.print_engine_event_graph();
                     host.print_lifecycle_graph();
                 }
@@ -165,17 +129,6 @@ enum Commands {
     Dump,
 }
 
-#[derive(Args)]
-struct TeleportSettings {
-    /// Repository name,
-    ///
-    /// Note: ORAS artifacts w/ the referrers api doesn't currently support cross repo,
-    /// This setting must be the same for both src/dst repositories
-    ///
-    #[clap(long)]
-    repo: String,
-}
-
 /// Settings to use when initializing a .runmd template for the mirror engine
 ///
 #[derive(Args, Serialize)]
@@ -196,7 +149,7 @@ struct MirrorSettings {
     ///
     /// Currently, only signing in from az cli is implemented.
     ///
-    #[clap(long, default_value_t = String::from("lib/sh/azure-login.sh"))]
+    #[clap(long, default_value_t = String::from("lib/sh/login-acr.sh"))]
     login_script: String,
     /// Address that the mirror will be hosted on
     ///
@@ -215,11 +168,33 @@ struct MirrorSettings {
     ///
     #[clap(skip)]
     registry_name: Option<String>,
+    /// Artifact type to use,
+    /// 
+    #[clap(skip)]
+    artifact_type: Option<String>,
 }
 
 impl MirrorProxy for ACR {
-    fn resolve_response(_: &lifec::ThunkContext) -> poem::Response {
-        todo!()
+    fn resolve_response(tc: &lifec::ThunkContext) -> poem::Response {
+        if let Some(body) = tc.state().find_binary("body") {
+            let content_type = tc.state()
+                .find_text("content-type")
+                .expect("A content type should've been provided");
+            let digest = tc.state()
+                .find_text("digest")
+                .expect("A digest should've been provided");
+
+            Response::builder()
+                .status(StatusCode::OK)
+                .content_type(content_type)
+                .header("Docker-Content-Digest", digest)
+                .body(body)
+        } else {
+            // Fall-back response
+            Response::builder()
+                .status(StatusCode::SERVICE_UNAVAILABLE)
+                .finish()
+        }
     }
 
     fn resolve_error(_: String, _: &lifec::ThunkContext) -> poem::Response {
@@ -237,7 +212,7 @@ impl Project for ACR {
     }
 
     fn runtime() -> lifec::Runtime {
-        let mut runtime = default_runtime(); 
+        let mut runtime = default_runtime();
         runtime.install_with_custom::<Mirror<Self>>("");
         runtime
     }
