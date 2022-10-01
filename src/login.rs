@@ -31,6 +31,7 @@ impl Plugin for Login {
             async {
                 event!(Level::DEBUG, "Starting registry login");
                 if let Some(token_src) = tc.state().find_symbol("file_src") {
+                    let token_src = &token_src;
                     event!(Level::DEBUG, "Found file_src for token at {token_src}");
                     let user = tc
                         .state()
@@ -44,7 +45,7 @@ impl Plugin for Login {
                                 .with_text("token", token.trim());
                         }
                         Err(err) => {
-                            event!(Level::ERROR, "{err}");
+                            event!(Level::ERROR, "Issue reading {token_src} -- {err}");
                         }
                     }
                 } else {
