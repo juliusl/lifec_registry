@@ -74,8 +74,8 @@ where
 {
     /// Ensures the hosts dir exists
     ///
-    async fn ensure_hosts_dir(host_name: impl AsRef<str>) {
-        let hosts_dir = format!("/etc/containerd/certs.d/{}/", host_name.as_ref());
+    async fn ensure_hosts_dir(app_host: impl AsRef<str>) {
+        let hosts_dir = format!("/etc/containerd/certs.d/{}/", app_host.as_ref());
 
         let path = PathBuf::from(hosts_dir);
         if !path.exists() {
@@ -98,7 +98,7 @@ where
         if !path.exists() {
             let output_hosts_toml = PathBuf::from(format!(
                 ".work/etc/containerd/certs.d/{}/hosts.toml",
-                host_name.as_ref()
+                app_host.as_ref()
             ));
             event!(
                 Level::DEBUG,
@@ -155,12 +155,12 @@ Design of containerd registry mirror feature
             let tc = context.clone();
             async move {
                 if !tc.is_enabled("skip_hosts_dir_check") {
-                    let host_name = tc
+                    let app_host = tc
                         .state()
                         .find_symbol("mirror")
                         .expect("host name to mirror is required");
 
-                    Self::ensure_hosts_dir(host_name).await;
+                    Self::ensure_hosts_dir(app_host).await;
                 }
 
                 match AppHost::<Self>::call(&tc) {

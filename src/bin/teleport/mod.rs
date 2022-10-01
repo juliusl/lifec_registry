@@ -47,7 +47,7 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : artifact_type   .symbol {artifact_type}
 
 + .runtime
-: .login-acr {registry_name}
+: .login-acr {registry_name}.{registry_name}
 
 : .install  access_token
 
