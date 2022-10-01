@@ -62,7 +62,7 @@ async fn main() {
                             .expect("should be able to create string"),
                     );
                     if let Some(mut host) = host.create_host::<ACR>().await.take() {
-                        host.handle_start();
+                        host.handle_start::<ACR>();
                     } else {
                         panic!("Could not create/start host");
                     }

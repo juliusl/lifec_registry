@@ -2,6 +2,9 @@
 mod teleport_settings;
 pub use teleport_settings::TeleportSettings;
 
+mod overlaybd;
+pub use overlaybd::OverlayBD;
+
 /// Template user's runmd mirror file,
 ///
 pub static MIRROR_TEMPLATE: &'static str = r#"
@@ -19,6 +22,7 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : .event start
 : .loop
 ```
+
 ## Install mirror components
 - The overlaybd snapshotter is the current teleport provider,
 - This section can be expanded, once new providers are available.
@@ -26,9 +30,9 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 ``` install mirror
 + .runtime
 : .process lifec 
-: .flag --runmd_path lib/overlaybd/setup_env
+: .flag --runmd-path lib/overlaybd/setup_env
 : .arg start
-: .flag --engine_name {operating_system}
+: .flag --engine-name {operating_system}
 ```
 
 ## Start the mirror server
