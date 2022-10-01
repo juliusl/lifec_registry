@@ -10,6 +10,7 @@ pub use index::Index;
 
 mod login;
 pub use login::Login;
+pub use login::LoginACR;
 
 mod blob_import;
 pub use blob_import::BlobImport;

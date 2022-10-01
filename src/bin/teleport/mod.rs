@@ -41,14 +41,13 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 
 ``` start mirror
 : src_dir         .symbol .
-: work_dir        .symbol .work/acr
-: file_src        .symbol .work/acr/access_token
+: work_dir        .symbol .world/{registry_host}/{registry_name}
+: file_src        .symbol .world/{registry_host}/{registry_name}/access_token
 : teleport_format .symbol {teleport_format}
 : artifact_type   .symbol {artifact_type}
 
 + .runtime
-: .process  sh {login_script}
-:  REGISTRY_NAME .env {registry_name}
+: .login-acr {registry_name}
 
 : .install  access_token
 

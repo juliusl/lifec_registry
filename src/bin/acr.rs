@@ -2,7 +2,7 @@ use clap::{Args, Parser, Subcommand};
 use hyper::StatusCode;
 use lifec::{default_runtime, AttributeIndex, Inspector, Interpreter};
 use lifec::{Host, Project};
-use lifec_registry::{Mirror, MirrorProxy};
+use lifec_registry::{Mirror, MirrorProxy, LoginACR};
 use poem::Response;
 use serde::Serialize;
 use std::path::PathBuf;
@@ -153,9 +153,6 @@ struct ACR {
 enum Commands {
     /// Host a mirror server that can extend ACR features,
     ///
-    /// Note: This will generate a new .runmd file based on the current directory.
-    /// This file can be modified to extend the mirror.
-    ///
     Mirror(Host),
     /// Enable image streaming for an image in acr,
     ///
@@ -258,6 +255,7 @@ impl Project for ACR {
     fn runtime() -> lifec::Runtime {
         let mut runtime = default_runtime();
         runtime.install_with_custom::<Mirror<Self>>("");
+        runtime.install_with_custom::<LoginACR>("");
         runtime
     }
 }

@@ -5,6 +5,9 @@ use lifec::{
 };
 use tracing::{event, Level};
 
+mod acr;
+pub use acr::LoginACR;
+
 /// Component to login to a registry, 
 /// 
 /// Reads token from file_src in the work directory,
