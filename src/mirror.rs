@@ -154,7 +154,7 @@ Design of containerd registry mirror feature
         context.task(|_| {
             let tc = context.clone();
             async move {
-                if tc.is_enabled("skip_hosts_dir_check") {
+                if !tc.is_enabled("skip_hosts_dir_check") {
                     let host_name = tc
                         .state()
                         .find_symbol("mirror")

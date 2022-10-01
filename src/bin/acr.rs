@@ -50,8 +50,14 @@ async fn main() {
                 .await
                 .expect("Should be able to make directories");
 
-            if !mirror_runmd.exists() {
-                panic!("mirror_runmd not found, run `acr --registry {registry} init`")
+            // Is there a mirror.runmd file?
+            match command {
+                Commands::Init(_) => {}
+                _ => {
+                    if !mirror_runmd.exists() {
+                        panic!("mirror_runmd not found, run `acr --registry {registry} init`")
+                    }
+                }
             }
 
             match command {
