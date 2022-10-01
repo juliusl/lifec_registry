@@ -52,6 +52,6 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : .install  access_token
 
 : .mirror   {registry_name}.{registry_host}
-: .host     {mirror_address}, resolve
+: .host     {mirror_address}, resolve, pull
 ```
 "#;
