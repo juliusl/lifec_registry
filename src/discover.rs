@@ -8,6 +8,7 @@ use tracing::Level;
 
 /// Plugin for calling the referrer's api and adding the result to state,
 /// 
+#[derive(Default)]
 pub struct Discover;
 
 impl Plugin for Discover {

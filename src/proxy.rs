@@ -1,8 +1,8 @@
 use lifec::{
-    AttributeIndex, CustomAttribute, Host, Project, Runtime, SpecialAttribute, ThunkContext, Value,
+    default_parser, default_runtime, AttributeIndex, BlockIndex, CustomAttribute, Project,
+    Runtime, SpecialAttribute, ThunkContext, Value, AttributeGraph, World, WorldExt,
 };
 use lifec_poem::WebApp;
-use poem::Route;
 
 mod methods;
 use methods::Methods;
@@ -10,11 +10,45 @@ use methods::Methods;
 mod resources;
 use resources::Resources;
 
+use crate::{Authenticate, Discover, Login, Resolve};
+
 /// Struct for creating a customizable registry proxy,
 ///
 #[derive(Default)]
 pub struct Proxy {
     context: ThunkContext,
+}
+
+impl Proxy {
+    pub fn extract_routes(world: &World, index: &BlockIndex) {
+        let graph = AttributeGraph::new(index.clone());
+
+        if let Some(proxy_entity) = graph.find_int("proxy_entity") {
+            let original = graph.entity_id();
+            let proxy_entity = graph
+                .scope(world.entities().entity(proxy_entity as u32))
+                .expect("proxy entity should have been placed in the child properties");
+
+            for route in proxy_entity.find_values("route") {
+                match route {
+                    Value::Int(id) if id as u32 != original => {
+                        let graph = graph
+                            .scope(world.entities().entity(id as u32))
+                            .expect("should be a route");
+                        for (name, value) in graph.values() {
+                            eprintln!("{name}\n\t{:#?}", value);
+                        }
+                    }
+                    _ => continue,
+                }
+            }
+
+            let graph = graph.unscope();
+            for (name, value) in graph.values() {
+                eprintln!("{name}\n\t{:#?}", value);
+            }
+        }
+    }
 }
 
 impl SpecialAttribute for Proxy {
@@ -43,32 +77,24 @@ impl SpecialAttribute for Proxy {
 }
 
 impl Project for Proxy {
-    fn configure_engine(_: &mut lifec::Engine) {
-        //
-    }
-
-    fn interpret(_: &lifec::World, block: &lifec::Block) {
+    fn interpret(world: &lifec::World, block: &lifec::Block) {
         for index in block.index().iter().filter(|b| b.root().name() == "proxy") {
-            // for route in index
-            //     .properties()
-            //     .property("route")
-            //     .and_then(|p| p.symbol_vec())
-            //     .expect("should be a symbol vector")
-            // {
-            // }
+            Proxy::extract_routes(world, index)
         }
     }
 
-    fn configure_dispatcher(
-        dispatcher_builder: &mut lifec::DispatcherBuilder,
-        context: Option<ThunkContext>,
-    ) {
-        if let Some(tc) = context {
-            Host::add_error_context_listener::<Proxy>(tc, dispatcher_builder);
-        }
+    fn parser() -> lifec::Parser {
+        default_parser(Self::world()).with_special_attr::<Proxy>()
     }
 
-    fn on_error_context(&mut self, _error: lifec::plugins::ErrorContext) {}
+    fn runtime() -> lifec::Runtime {
+        let mut runtime = default_runtime();
+        runtime.install_with_custom::<Login>("");
+        runtime.install_with_custom::<Authenticate>("");
+        runtime.install_with_custom::<Resolve>("");
+        runtime.install_with_custom::<Discover>("");
+        runtime
+    }
 }
 
 impl WebApp for Proxy {
@@ -77,16 +103,26 @@ impl WebApp for Proxy {
     }
 
     fn routes(&mut self) -> poem::Route {
-        self.context.state().find_bool("todo");
-        /*
-        Sketching up initial design
-        ``` start proxy
-        + .runtime
-        : .login-acr              access_token
-        : .println                Starting proxy
-        : .mirror                 {registry_name}.{registry_host}
-        : .host                   localhost:8567, resolve, pull
+        todo!()
+    }
+}
 
+impl From<ThunkContext> for Proxy {
+    fn from(context: ThunkContext) -> Self {
+        Self { context }
+    }
+}
+
+mod tests {
+    #[test]
+    fn test_proxy_parsing() {
+        use lifec::prelude::*;
+
+        use crate::Proxy;
+        let host = Host::load_content::<Proxy>(
+            r#"
+        # Example proxy definition
+        ``` start proxy
         # Proxy setup
         + .proxy                  localhost:8567
 
@@ -99,26 +135,28 @@ impl WebApp for Proxy {
         :   .discover               sbom.json
 
         ## Teleport and dispatch a convert operation if teleport isn't available
-        :   .teleport               overlaybd, auto
-        :   .converter              convert overlaybd <name of the engine that can do the conversion>
+        # :   .teleport               overlaybd, auto
+        # :   .converter              convert overlaybd <name of the engine that can do the conversion>
 
         ## Validate signatures
-        :   .notary
+        # :   .notary
 
         ## Download blobs
         : .blobs head, get
-        :   .login                  access_token
-        :   .authn                  oauth2
-        :   .pull
+        : .login                  access_token
+        : .authn                  oauth2
+        : .println
         ```
-        */
+        "#,
+        );
 
-        Route::new()
-    }
-}
+        let block = Engine::find_block(host.world(), "start proxy").expect("block is created");
 
-impl From<ThunkContext> for Proxy {
-    fn from(context: ThunkContext) -> Self {
-        Self { context }
+        let blocks = host.world().read_component::<Block>();
+        if let Some(block) = blocks.get(block) {
+            for index in block.index() {
+                Proxy::extract_routes(host.world(), &index);
+            }
+        }
     }
 }

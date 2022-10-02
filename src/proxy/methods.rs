@@ -1,12 +1,12 @@
 use std::fmt::Display;
 
-use lifec::{AttributeParser, WorldExt, Value};
+use lifec::{AttributeParser, BlockIndex, Value, WorldExt};
 use logos::Logos;
 
 use super::resources::Resources;
 
 /// Enumeration of methods to proxy
-/// 
+///
 #[derive(Logos)]
 pub enum Methods {
     #[token("head")]
@@ -32,41 +32,69 @@ impl Methods {
             let mut lexer = Methods::lexer(content.as_ref());
 
             // This will indicate where to look to find each route
-            let route_entity = parser.world()
-                .expect("should exist")
-                .entities()
-                .create();
-            parser.define("route", route_entity.id() as usize);
-            
+            let route_entity = parser.world().expect("should exist").entities().create();
+
+            let clone = parser.clone();
+            let index = BlockIndex::index(clone);
+            let index = index.first().expect("should be an index at this point");
+            let current_root = parser.entity().expect("should be set at this point");
+
             // Each route will get it's own engine
             // By setting the id here, plugins will add to the route_entity's properties
-            parser.set_id(route_entity.id());
+            if let Some(proxy_entity) = index
+                .properties()
+                .property("proxy_entity")
+                .and_then(|p| p.int())
+            {
+                parser.set_id(proxy_entity as u32);
+                parser.define("route", route_entity.id() as usize);
+                parser.set_id(route_entity.id());
+                parser.define("proxy_entity", proxy_entity as usize);
+            } else {
+                parser.define("route", route_entity.id() as usize);
+                parser.set_id(route_entity.id());
+                parser.define("proxy_entity", current_root.id() as usize);
+            }
 
             while let Some(token) = lexer.next() {
-                parser.define("method", Value::Symbol(format!("{token}")));
+                match token {
+                    Methods::Error => continue,
+                    _ => {}
+                }
 
                 match (&token, &resource) {
-                    (Methods::Head | Methods::Delete | Methods::Get | Methods::Put, Resources::Manifests) => {
+                    (
+                        Methods::Head | Methods::Delete | Methods::Get | Methods::Put,
+                        Resources::Manifests,
+                    ) => {
+                        parser.define("method", Value::Symbol(format!("{token}")));
                         parser.define("path", "/:name<[a-zA-Z0-9/_-]+(?:manifests)>/:reference");
                         parser.define("resource", "manifests");
-                    },
+                    }
                     (Methods::Get, Resources::Blobs) => {
-                        parser.define("path", "/:name<[a-zA-Z0-9/_-]+(?:manifests)>/:reference");
+                        parser.define("method", Value::Symbol(format!("{token}")));
+                        parser.define("path", "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/:digest");
                         parser.define("resource", "blobs");
                     }
                     (Methods::Put | Methods::Patch, Resources::Blobs) => {
-                        parser.define("path", "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads/:reference");
+                        parser.define("method", Value::Symbol(format!("{token}")));
+                        parser.define(
+                            "path",
+                            "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads/:reference",
+                        );
                         parser.define("resource", "blobs");
                     }
                     (Methods::Post, Resources::Blobs) => {
+                        parser.define("method", Value::Symbol(format!("{token}")));
                         parser.define("path", "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads");
                         parser.define("resource", "blobs");
                     }
                     (Methods::Get, Resources::Tags) => {
-                        parser.define("path", "/:name<[a-zA-Z0-9/_-]+(?:tags)>/list");                        
+                        parser.define("method", Value::Symbol(format!("{token}")));
+                        parser.define("path", "/:name<[a-zA-Z0-9/_-]+(?:tags)>/list");
                         parser.define("resource", "tags");
                     }
-                    _ => continue
+                    _ => continue,
                 }
             }
         }
@@ -86,4 +114,3 @@ impl Display for Methods {
         }
     }
 }
-

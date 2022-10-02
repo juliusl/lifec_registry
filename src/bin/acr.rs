@@ -244,10 +244,6 @@ impl MirrorProxy for ACR {
 }
 
 impl Project for ACR {
-    fn configure_engine(_: &mut lifec::Engine) {
-        // No-op
-    }
-
     fn interpret(world: &lifec::World, block: &lifec::Block) {
         Mirror::<Self>::default().interpret(world, block)
     }

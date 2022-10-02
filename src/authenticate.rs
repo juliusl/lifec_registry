@@ -24,7 +24,7 @@ pub struct Credentials {
 
 impl Plugin for Authenticate {
     fn symbol() -> &'static str {
-        "authenticate"
+        "authn"
     }
 
     fn description() -> &'static str {
@@ -63,7 +63,7 @@ impl BlockObject for Authenticate {
     }
 
     fn parser(&self) -> Option<lifec::CustomAttribute> {
-        None
+        Some(Self::as_custom_attr())
     }
 }
 
