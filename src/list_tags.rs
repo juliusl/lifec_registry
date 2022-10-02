@@ -1,6 +1,6 @@
 use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component};
 
-/// BlobImport handler based on OCI spec endpoints: 
+/// ListTags  handler based on OCI spec endpoints: 
 /// 
 /// ```markdown
 /// | ID     | Method         | API Endpoint                                                 | Success     | Failure           |

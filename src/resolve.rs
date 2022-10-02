@@ -63,7 +63,7 @@ impl Plugin for Resolve {
                                 if let Some(digest) = response.headers().get("Docker-Content-Digest") {
                                     debug_assert!(!digest.is_sensitive(), "docker-content-digest should not be a sensitive header");
                                     event!(Level::DEBUG, "Resolved digest is {:?}", digest);
-                                    tc.state_mut().add_text_attr(
+                                    tc.state_mut().add_symbol(
                                         "digest", 
                                         digest.to_str().unwrap_or_default()
                                     );
@@ -90,7 +90,7 @@ impl Plugin for Resolve {
 
                                 if let (Some(artifact_type), Some(digest)) = (
                                     tc.state().find_symbol("artifact_type"), 
-                                    tc.state().find_text("digest"),
+                                    tc.state().find_symbol("digest"),
                                 ) {
                                     let api = tc.state()
                                         .find_symbol("referrers_api")
@@ -116,6 +116,8 @@ impl Plugin for Resolve {
                                     }
                                 }
 
+                                tc.state_mut().with_symbol("access_token", access_token);
+
                                 event!(Level::INFO, "Mirrored resolve registry resolve api");
                                 return Some(tc);
                             },
@@ -140,10 +142,8 @@ impl BlockObject for Resolve {
             .require("reference")
             .require("accept")
             .optional("access_token")
-            .optional("artifact_type")
             .optional("digest")
             .optional("protocol")
-            .optional("referrers_api")
     }
 
     fn parser(&self) -> Option<lifec::CustomAttribute> {

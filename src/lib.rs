@@ -5,6 +5,9 @@ pub use mirror::MirrorProxy;
 mod proxy;
 pub use proxy::Proxy;
 
+mod discover;
+pub use discover::Discover;
+
 mod authenticate;
 pub use authenticate::Authenticate;
 

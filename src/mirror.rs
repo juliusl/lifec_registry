@@ -166,7 +166,7 @@ Design of containerd registry mirror feature
                 match AppHost::<Self>::call(&tc) {
                     Some((task, _)) => match task.await {
                         Ok(tc) => {
-                            event!(Level::ERROR, "Exiting");
+                            event!(Level::INFO, "Exiting");
                             Some(tc)
                         }
                         Err(err) => {
