@@ -2,6 +2,9 @@ mod mirror;
 pub use mirror::Mirror;
 pub use mirror::MirrorProxy;
 
+mod proxy;
+pub use proxy::Proxy;
+
 mod authenticate;
 pub use authenticate::Authenticate;
 
