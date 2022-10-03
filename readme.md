@@ -36,6 +36,37 @@ Now to start the mirror, run this command, `acr --registry {your-registry-name} 
 
 (If you'd like to run this in the background, `acr --registry {your-registry-name} mirror start &`)
 
+### Troubleshooting start
+
+It might be the case you'd like to customize the engine sequence, and in that case you might want to start at a different place. In that case, if you run `acr --registry {your-registry-name} dump`, you will get a map that looks like this: 
+
+```
+1: mirror
+  2: install mirror
+    3: process "lifec"
+      arg List([Symbol("--runmd-path"), Symbol("lib/overlaybd/setup_env"), Symbol("start"), Symbol("--engine-name"), Symbol("ubuntu")])
+
+
+  4: start mirror
+        # file_src: Symbol(".world/azurecr.io/example/access_token")::Reference(17620018548555559471)
+        # src_dir: Symbol(".")::Reference(4027234349407905632)
+        # work_dir: Symbol(".world/azurecr.io/example")::Reference(10460137960410825781)
+    5: login-acr "example"
+
+    6: install "access_token"
+
+    7: mirror "example.azurecr.io"
+      app_host Single(Symbol("localhost:8578"))
+      feature_localhost:8578 List([Symbol("resolve"), Symbol("pull")])
+
+
+
+Engine control block: ``` mirror @ Entity(1, Generation(1))
+  Loop(Entity(1, Generation(1)))
+```
+
+If you pass the `--id {id}` flag with `start`, you can start at any of the plugin calls. For example to start at the `.install` plugin, you would use `acr --registry {your-registry-name} mirror start --id 6`.
+
 ## Customizing the mirror
 
 The `mirror.runmd` is self explanatory, and will have the most up to date information on how to configure the mirror. However, here are some high-level concepts to understand.
