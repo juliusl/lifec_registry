@@ -6,12 +6,8 @@ use lifec::{
 };
 use lifec_poem::AppHost;
 use logos::Logos;
-use poem::{http::StatusCode, Response};
 use toml::value::Map;
 use tracing::{event, Level};
-
-mod mirror_proxy;
-pub use mirror_proxy::MirrorProxy;
 
 mod host_capabilities;
 use host_capabilities::HostCapability;

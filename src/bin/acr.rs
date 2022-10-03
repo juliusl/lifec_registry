@@ -1,12 +1,10 @@
 use clap::{Args, Parser, Subcommand};
-use hyper::StatusCode;
 use lifec::{
-    default_runtime, AttributeGraph, AttributeIndex, Block, Engine, Inspector, Interpreter, Source,
-    Start, ThunkContext, WorldExt, default_parser,
+    default_runtime, AttributeIndex, Inspector, Interpreter,
+    Start, ThunkContext, default_parser,
 };
 use lifec::{Host, Project};
-use lifec_registry::{LoginACR, Mirror, MirrorProxy, Proxy, Login, Authenticate, Resolve, Discover, Pull};
-use poem::Response;
+use lifec_registry::{LoginACR, Mirror, Proxy, Login, Authenticate, Resolve, Discover, Pull};
 use serde::Serialize;
 use std::path::PathBuf;
 use tinytemplate::TinyTemplate;
@@ -71,40 +69,6 @@ async fn main() {
                             .expect("should be able to create string"),
                     );
                     if let Some(mut host) = host.create_host::<ACR>().await.take() {
-                        let block = {
-                            let block_entity = Engine::find_block(host.world(), "start mirror")
-                                .expect("runmd requires a `start mirror` block");
-                            let block = &host.world().read_component::<Block>();
-                            let block = block
-                                .get(block_entity)
-                                .expect("should have a block")
-                                .clone();
-                            block
-                        };
-
-                        if let Some(start) = host.find_start("start mirror") {
-                            if let Some(proxy_block) =
-                                block.index().iter().find(|b| b.root().name() == "proxy")
-                            {
-                                let graph = AttributeGraph::new(proxy_block.clone());
-                                let mut context =
-                                    ThunkContext::default().with_state(graph).with_block(&block);
-
-                                // Set up state
-                                {
-                                    let src = host.world().read_resource::<Source>();
-                                    context.state_mut()
-                                        .with_text("proxy_src", &src.0)
-                                        .with_symbol("registry", registry)
-                                        .with_symbol("registry_host", registry_host);
-                                }
-                                host.world_mut()
-                                    .write_component()
-                                    .insert(start, context)
-                                    .expect("should be able to insert thunk context");
-                            }
-                        }
-
                         if let Some(lifec::Commands::Start(start)) = host.command(){
                             match start {
                                 Start {
@@ -263,36 +227,6 @@ struct MirrorSettings {
     ///
     #[clap(skip)]
     artifact_type: Option<String>,
-}
-
-impl MirrorProxy for ACR {
-    fn resolve_response(tc: &lifec::ThunkContext) -> poem::Response {
-        if let Some(body) = tc.state().find_binary("body") {
-            let content_type = tc
-                .state()
-                .find_text("content-type")
-                .expect("A content type should've been provided");
-            let digest = tc
-                .state()
-                .find_text("digest")
-                .expect("A digest should've been provided");
-
-            Response::builder()
-                .status(StatusCode::OK)
-                .content_type(content_type)
-                .header("Docker-Content-Digest", digest)
-                .body(body)
-        } else {
-            // Fall-back response
-            Response::builder()
-                .status(StatusCode::SERVICE_UNAVAILABLE)
-                .finish()
-        }
-    }
-
-    fn resolve_error(_: String, _: &lifec::ThunkContext) -> poem::Response {
-        todo!()
-    }
 }
 
 impl Project for ACR {

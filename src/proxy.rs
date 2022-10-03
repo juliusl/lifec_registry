@@ -5,7 +5,11 @@ use lifec::{
 };
 use lifec_poem::WebApp;
 use logos::Logos;
-use poem::{get, handler, post, put, web::{Data, Query}, EndpointExt, Request, Response, Route};
+use poem::{
+    get, handler, post, put,
+    web::{Data, Query},
+    EndpointExt, Request, Response, Route,
+};
 use serde::Deserialize;
 use std::collections::HashMap;
 use tracing::{event, Level};
@@ -30,19 +34,19 @@ use tags::tags_api;
 
 /// Struct for creating a customizable registry proxy,
 ///
-/// # Customizable registry proxy 
-/// 
+/// # Customizable registry proxy
+///
 /// This special attribute enables describing a customizable registry proxy.
-/// Underneath the hood, this enables the `.runtime` attribute so that plugin 
-/// declarations can be assigned an entity/event. Next this attribute adds 3 
+/// Underneath the hood, this enables the `.runtime` attribute so that plugin
+/// declarations can be assigned an entity/event. Next this attribute adds 3
 /// custom attributes `manifests`, `blobs`, `tags` which represent the 3 core
 /// resources the OCI distribution api hosts. Methods for each resource can be
 /// customized with a sequence of plugin calls. Since these calls aren't part
 /// of the normal event runtime flow, they are executed with the host.execute(..)
-/// extension method instead. 
-/// 
+/// extension method instead.
+///
 /// ## Example proxy definition
-/// 
+///
 /// ```md
 /// <``` start proxy>
 /// # Proxy setup
@@ -50,23 +54,23 @@ use tags::tags_api;
 /// ## Resolve manifests and artifacts
 /// - This example shows how the proxy can be configuired to make discover calls,
 /// - When an image manifest is being resolved, the proxy will also call discover on artifacts
-/// 
+///
 /// : .manifests head, get
 /// :   .login                  access_token
 /// :   .authn                  oauth2
 /// :   .resolve                application/vnd.oci.image.manifest.v1+json
 /// :   .discover               dadi.image.v1
 /// :   .discover               notary.signature.v1
-/// 
+///
 /// ## Teleport and dispatch a convert operation if teleport isn't available
 /// :   .teleport               overlaybd
-/// :   .converter              convert overlaybd 
-/// 
+/// :   .converter              convert overlaybd
+///
 /// ## Validate signatures, or create a signature if it doesn't exist
 /// :   .notary
 /// :   .reject_if_missing
 /// :   .sign_if_missing
-/// 
+///
 /// ## Download blobs
 /// : .blobs head, get
 /// : .login                  login.pfx
@@ -77,6 +81,15 @@ use tags::tags_api;
 #[derive(Default)]
 pub struct Proxy {
     context: ThunkContext,
+}
+
+impl Proxy {
+    /// Fails in a way that the runtime will fallback to the upstream server
+    pub fn soft_fail() -> Response {
+        Response::builder()
+            .status(StatusCode::SERVICE_UNAVAILABLE)
+            .finish()
+    }
 }
 
 impl SpecialAttribute for Proxy {
@@ -147,15 +160,7 @@ Table of OCI Endpoints
 ID	Method	API Endpoint	Success	Failure
 end-1	GET	/v2/	                                                                            200	404/401
 
-end-2	GET / HEAD	/v2/<name>/blobs/<digest>	                                                200	404
-end-10	DELETE	    /v2/<name>/blobs/<digest>	                                                202	404/405
 
-end-4a	POST	    /v2/<name>/blobs/uploads/	                                                202	404
-end-4b	POST	    /v2/<name>/blobs/uploads/             ?digest=<digest>	                    201/202	404/400
-end-11	POST	    /v2/<name>/blobs/uploads/             ?mount=<digest>&from=<other_name>	    201	404
-
-end-5	PATCH	    /v2/<name>/blobs/uploads/<reference>	                                    202	404/416
-end-6	PUT	        /v2/<name>/blobs/uploads/<reference>  ?digest=<digest>	                    201	404/400
 
 end-8a	GET	        /v2/<name>/tags/list	                                                    200	404
 end-8b	GET	        /v2/<name>/tags/list                  ?n=<integer>&last=<integer>	        200	404
