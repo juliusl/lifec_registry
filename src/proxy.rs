@@ -349,6 +349,7 @@ impl Proxy {
                 Proxy::into_response(&result)
             }
             Err(err) => {
+                event!(Level::ERROR, "Error handling call sequence, {err}");
                 Proxy::soft_fail()
             }
         }

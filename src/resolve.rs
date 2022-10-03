@@ -55,7 +55,14 @@ impl Plugin for Resolve {
                         let req = Request::builder()
                             .uri_str(manifest_api.as_str())
                             .typed_header(auth_header.clone())
-                            .header("accept", accept)
+                            .header("accept", {
+                                if let Some(resolve) = tc.state().find_symbol("resolve") {
+                                    event!(Level::DEBUG, "Setting accept to {resolve}");
+                                    resolve
+                                } else {
+                                    accept
+                                }
+                            })
                             .finish();
                         let client = tc.client().expect("async should be enabled"); 
                         match client.request(req.into()).await {
@@ -109,6 +116,7 @@ impl Plugin for Resolve {
 impl BlockObject for Resolve {
     fn query(&self) -> lifec::BlockProperties {
         BlockProperties::default()
+            .require("resolve")
             .require("ns")
             .require("repo")
             .require("reference")

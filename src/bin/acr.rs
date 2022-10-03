@@ -1,7 +1,7 @@
 use clap::{Args, Parser, Subcommand};
 use lifec::{
     default_runtime, AttributeIndex, Inspector, Interpreter,
-    Start, ThunkContext, default_parser,
+    Start, ThunkContext, default_parser, Source, WorldExt, AttributeGraph,
 };
 use lifec::{Host, Project};
 use lifec_registry::{LoginACR, Mirror, Proxy, Login, Authenticate, Resolve, Discover, Pull};
@@ -231,7 +231,19 @@ struct MirrorSettings {
 
 impl Project for ACR {
     fn interpret(world: &lifec::World, block: &lifec::Block) {
-        Mirror::default().interpret(world, block)
+        Mirror::default().interpret(world, block);
+
+        let source = world.fetch::<Source>();
+        for index in block.index().iter().filter(|b| b.root().name() == "runtime") {
+            for (child, props) in index.iter_children() {
+                if props.property("mirror").is_some() {
+                    let child = world.entities().entity(*child);
+                    if let Some(graph) = world.write_component::<AttributeGraph>().get_mut(child) {
+                        graph.add_text_attr("proxy_src", source.0.to_string());
+                    }
+                }
+            }
+        }
     }
     
     fn parser() -> lifec::Parser {
