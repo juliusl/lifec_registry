@@ -44,7 +44,29 @@ The runtime for this code is based on `lifec` which is a plugin based runtime. T
 
 For example, `.println hello world`,
 
-Here is a list of plugins this repository provides and a short explanation about each, 
+Here is an example mirror/proxy configuration,
+
+```
++ .runtime
+: .login-acr    example
+: .install      access_token
+: .mirror       example.azurecr.io
+: .host         localhost:8578, resolve, pull
+
++ .proxy          localhost:8578
+: .manifests      head, get
+:   .login        access_token
+:   .authn        oauth2
+:   .resolve      application/vnd.docker.distribution.manifest.list.v2+json
+:   .discover     dadi.image.v1
+:   .teleport     overlaybd
+: .blobs          get
+:   .login        access_token
+:   .authn        oauth2
+:   .pull         
+```
+
+Just to re-iterate, the generated `mirror.runmd` is a better illustration of all the pieces put together. This is to give context to the following list of plugins this repository provides and a short explanation about each, 
 
 * `.login-acr` - This plugin will use az cli to get an access token for the mirror to use for authn.
     - The input should be the name of the registry (`acr init` will handle this)
@@ -76,29 +98,6 @@ Here is a list of plugins this repository provides and a short explanation about
 
 * `.pull` - This plugin will call the upstream server to download a blob. Only used in the context of the proxy.
 
-Here is an example configuration of what this looks like,
-
-```
-+ .runtime
-: .login-acr    example
-: .install      access_token
-: .mirror       example.azurecr.io
-: .host         localhost:8578, resolve, pull
-
-+ .proxy          localhost:8578
-: .manifests      head, get
-:   .login        access_token
-:   .authn        oauth2
-:   .resolve      application/vnd.docker.distribution.manifest.list.v2+json
-:   .discover     dadi.image.v1
-:   .teleport     overlaybd
-: .blobs          get
-:   .login        access_token
-:   .authn        oauth2
-:   .pull         
-```
-
-Just to re-iterate, the generated `mirror.runmd` is a better illustration of all the pieces put together.
-
 ## Getting started w/ Teleport 
+
 (TODO)
