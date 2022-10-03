@@ -27,11 +27,7 @@ impl Plugin for Teleport {
                     }
                 }
 
-                for (name, value) in tc.previous().expect("Should have been a previous state").values() {
-                    for value in value {
-                        tc.state_mut().with(&name, value);
-                    }
-                }
+                tc.copy_previous();
 
                 Some(tc) 
             }

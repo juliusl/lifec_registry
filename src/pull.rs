@@ -112,6 +112,8 @@ impl Plugin for Pull {
                                         Err(err) => event!(Level::ERROR, "{err}"),
                                     }
 
+                                    tc.copy_previous();
+
                                     return Some(tc);
                                 }
                                 Err(err) => event!(Level::ERROR, "{err}"),

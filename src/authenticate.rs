@@ -44,12 +44,7 @@ impl Plugin for Authenticate {
                             .expect("received some access token"),
                     );
 
-                    // TODO -- there's probably a better way to deal with this 
-                    for (name, value) in tc.previous().expect("should exist").values() {
-                        for value in value {
-                            tc.state_mut().with(&name, value);
-                        }
-                    }
+                    tc.copy_previous();
 
                     Some(tc)
                 } else {

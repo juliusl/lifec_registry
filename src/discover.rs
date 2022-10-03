@@ -28,7 +28,7 @@ impl Plugin for Discover {
                     // Check previous state for access token
                     tc.previous().unwrap().find_symbol("access_token")
                 ) { 
-                
+
                 event!(Level::DEBUG, "Discovering {artifact_type}");
 
                 let protocol = tc.previous()
@@ -66,11 +66,7 @@ impl Plugin for Discover {
                     Err(err) => event!(Level::ERROR, "Could not create auth bearer header, {err}")
                 }}
 
-                for (name, value) in tc.previous().expect("Should have been a previous state").values() {
-                    for value in value {
-                        tc.state_mut().with(&name, value);
-                    }
-                }
+                tc.copy_previous();
 
                 Some(tc)
             }
@@ -85,6 +81,7 @@ impl BlockObject for Discover {
             .require("digest")
             .require("repo")
             .require("ns")
+            .require("access_token")
     }
 
     fn parser(&self) -> Option<lifec::CustomAttribute> {

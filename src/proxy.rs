@@ -1,7 +1,7 @@
 use hyper::http::StatusCode;
 use lifec::{
     default_parser, default_runtime, AttributeGraph, AttributeIndex, BlockIndex, CustomAttribute,
-    Host, Project, Runtime, Source, SpecialAttribute, Start, ThunkContext, Value, WorldExt, Executor,
+    Host, Project, Runtime, SpecialAttribute, Start, ThunkContext, Value, Executor,
 };
 use lifec_poem::WebApp;
 use logos::Logos;
@@ -340,6 +340,8 @@ impl From<ThunkContext> for Proxy {
 }
 
 impl Proxy {
+    /// Handles executing the proxy sequence
+    /// 
     pub async fn handle(input: &ThunkContext) -> Response {
         let mut host = Host::load_content::<Proxy>(input.state().find_text("proxy_src").unwrap());
 
@@ -357,6 +359,7 @@ impl Proxy {
     }
 
     pub fn into_response(context: &ThunkContext) -> Response {
+        // TODO -- Add support for push flows
         if let Some(body) = context.state().find_binary("body") {
             let content_type = context
                 .previous()

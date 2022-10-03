@@ -28,13 +28,7 @@ impl Plugin for Login {
     fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         context.task(|_| {
             let mut tc = context.clone();
-            async {
-                for (name, value) in tc.previous().expect("Should have been a previous state").values() {
-                    for value in value {
-                        tc.state_mut().with(&name, value);
-                    }
-                }
-                
+            async {      
                 event!(Level::DEBUG, "Starting registry login");
                 if let Some(token_src) = tc.state().find_symbol("file_src") {
                     let token_src = &token_src;
@@ -57,6 +51,8 @@ impl Plugin for Login {
                 } else {
                     event!(Level::WARN, "Missing file_src property");
                 }
+
+                tc.copy_previous();
 
                 Some(tc)
             }

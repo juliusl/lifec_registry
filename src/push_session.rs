@@ -49,6 +49,7 @@ impl Plugin for PushSession {
                                             Ok(location) => {
                                                 tc.state_mut().add_text_attr("location", location);
 
+                                                tc.copy_previous();
                                                 return Some(tc);
                                             },
                                             Err(err) => {
