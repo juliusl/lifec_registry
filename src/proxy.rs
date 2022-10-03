@@ -55,11 +55,11 @@ impl SpecialAttribute for Proxy {
 
 impl Project for Proxy {
     fn interpret(_: &lifec::World, _: &lifec::Block) {
-        // for index in block.index().iter().filter(|b| b.root().name() == "proxy") {}
     }
 
     fn parser() -> lifec::Parser {
-        default_parser(Self::world()).with_special_attr::<Proxy>()
+        default_parser(Self::world())
+            .with_special_attr::<Proxy>()
     }
 
     fn runtime() -> lifec::Runtime {
@@ -119,12 +119,15 @@ impl WebApp for Proxy {
 
                         match (method, resource) {
                             (Methods::Get, Resources::Manifests) => {
+                                event!(Level::DEBUG, "Adding GET for Manifests to proxy");
                                 r = r.at(path, get(resolve).data(context));
                             }
                             (Methods::Head, Resources::Manifests) => {
+                                event!(Level::DEBUG, "Adding HEAD for Manifests to proxy");
                                 r = r.at(path, head(resolve).data(context));
                             }
                             (Methods::Put, Resources::Manifests) => {
+                                event!(Level::DEBUG, "Adding PUT for Manifests to proxy");
                                 r = r.at(path, put(resolve).data(context));
                             }
                             (Methods::Delete, Resources::Manifests) => {
@@ -152,7 +155,7 @@ impl WebApp for Proxy {
                     r
                 });
 
-                return Route::new().nest(
+                let route = Route::new().nest(
                     "/v2",
                     route.at(
                         "/",
@@ -160,6 +163,8 @@ impl WebApp for Proxy {
                             .head(index.data(self.context.clone())),
                     ),
                 );
+
+                return route;
             }
         }
 
@@ -219,30 +224,14 @@ async fn resolve(
         .with_symbol("accept", request.header("accept").unwrap_or_default())
         .with_symbol("method", method);
 
-    let mut host = Host::load_content::<Proxy>(input.state().find_text("proxy_src").unwrap());
+    let mut host = Host::load_content::<Proxy>(
+        input.state()
+        .find_text("proxy_src")
+        .unwrap()
+    );
 
     let input = host.execute(&input);
-
-    if let Some(body) = input.state().find_binary("body") {
-        let content_type = input
-            .state()
-            .find_text("content-type")
-            .expect("A content type should've been provided");
-        let digest = input
-            .state()
-            .find_text("digest")
-            .expect("A digest should've been provided");
-
-        Response::builder()
-            .status(StatusCode::OK)
-            .content_type(content_type)
-            .header("Docker-Content-Digest", digest)
-            .body(body)
-    } else {
-        Response::builder()
-            .status(StatusCode::SERVICE_UNAVAILABLE)
-            .finish()
-    }
+    Proxy::into_response(&input)
 }
 
 #[derive(Deserialize)]
@@ -404,6 +393,29 @@ impl From<ThunkContext> for Proxy {
 }
 
 impl Proxy {
+    pub fn into_response(context: &ThunkContext) -> Response {
+        if let Some(body) = context.state().find_binary("body") {
+            let content_type = context
+                .state()
+                .find_text("content-type")
+                .expect("A content type should've been provided");
+            let digest = context
+                .state()
+                .find_text("digest")
+                .expect("A digest should've been provided");
+    
+            Response::builder()
+                .status(StatusCode::OK)
+                .content_type(content_type)
+                .header("Docker-Content-Digest", digest)
+                .body(body)
+        } else {
+            Response::builder()
+                .status(StatusCode::SERVICE_UNAVAILABLE)
+                .finish()
+        }
+    }
+
     /// Extracts route definitions for the proxy and calls on_route for each route found,
     ///
     pub fn extract_routes(

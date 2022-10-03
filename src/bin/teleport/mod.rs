@@ -54,5 +54,11 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 
 : .mirror   {registry_name}.{registry_host}
 : .host     {mirror_address}, resolve, pull
+
++ .proxy    {mirror_address}
+: .manifests head, get
+: .println hello
+: .println world
+
 ```
 "#;

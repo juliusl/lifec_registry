@@ -4,7 +4,7 @@ use hyper::Uri;
 use lifec::{
     plugins::{Plugin, ThunkContext},
     AttributeIndex, BlockObject, BlockProperties, Component, CustomAttribute, HashMapStorage,
-    Interpreter, Value,
+    Interpreter, Value, Operation,
 };
 use lifec_poem::{AppHost, WebApp};
 use logos::Logos;
@@ -21,7 +21,7 @@ use tracing::{event, Level};
 
 use crate::{
     mirror::mirror_action::soft_fail, Authenticate, BlobImport, BlobUploadChunks,
-    BlobUploadMonolith, BlobUploadSessionId, DownloadBlob, Index, ListTags, Login, Resolve,
+    BlobUploadMonolith, BlobUploadSessionId, DownloadBlob, Index, ListTags, Login, Resolve, Proxy,
 };
 
 mod mirror_action;
@@ -154,16 +154,16 @@ Design of containerd registry mirror feature
         context.task(|_| {
             let tc = context.clone();
             async move {
-                if !tc.is_enabled("skip_hosts_dir_check") {
-                    let app_host = tc
-                        .state()
-                        .find_symbol("mirror")
-                        .expect("host name to mirror is required");
+                // if !tc.is_enabled("skip_hosts_dir_check") {
+                //     let app_host = tc
+                //         .state()
+                //         .find_symbol("mirror")
+                //         .expect("host name to mirror is required");
 
-                    Self::ensure_hosts_dir(app_host).await;
-                }
+                //     Self::ensure_hosts_dir(app_host).await;
+                // }
 
-                match AppHost::<Self>::call(&tc) {
+                match AppHost::<Proxy>::call(&tc) {
                     Some((task, _)) => match task.await {
                         Ok(tc) => {
                             event!(Level::INFO, "Exiting");
