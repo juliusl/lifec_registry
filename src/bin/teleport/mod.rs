@@ -44,6 +44,9 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : work_dir        .symbol .world/{registry_host}/{registry_name}
 : file_src        .symbol .world/{registry_host}/{registry_name}/access_token
 
+# Uncomment below to skip checking the hosts dir, this is useful when testing with curl
+# : skip_hosts_dir_check .true
+
 + .runtime
 : .login-acr {registry_name}
 

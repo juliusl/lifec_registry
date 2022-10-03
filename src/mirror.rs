@@ -2,7 +2,7 @@ use std::{path::PathBuf, str::FromStr};
 use hyper::Uri;
 use lifec::{
     plugins::{Plugin, ThunkContext},
-    BlockObject, BlockProperties, Component, CustomAttribute, HashMapStorage, Interpreter, Value,
+    BlockObject, BlockProperties, Component, CustomAttribute, HashMapStorage, Interpreter, Value, AttributeIndex,
 };
 use lifec_poem::AppHost;
 use logos::Logos;
@@ -123,15 +123,16 @@ Design of containerd registry mirror feature
         context.task(|_| {
             let tc = context.clone();
             async move {
-                // if !tc.is_enabled("skip_hosts_dir_check") {
-                //     let app_host = tc
-                //         .state()
-                //         .find_symbol("mirror")
-                //         .expect("host name to mirror is required");
+                if !tc.is_enabled("skip_hosts_dir_check") {
+                    let app_host = tc
+                        .state()
+                        .find_symbol("mirror")
+                        .expect("host name to mirror is required");
 
-                //     Self::ensure_hosts_dir(app_host).await;
-                // }
+                    Self::ensure_hosts_dir(app_host).await;
+                }
 
+                // TODO: Handle multiple proxies
                 match AppHost::<Proxy>::call(&tc) {
                     Some((task, _)) => match task.await {
                         Ok(tc) => {
