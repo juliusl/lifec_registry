@@ -29,6 +29,12 @@ impl Plugin for Login {
         context.task(|_| {
             let mut tc = context.clone();
             async {
+                for (name, value) in tc.previous().expect("Should have been a previous state").values() {
+                    for value in value {
+                        tc.state_mut().with(&name, value);
+                    }
+                }
+                
                 event!(Level::DEBUG, "Starting registry login");
                 if let Some(token_src) = tc.state().find_symbol("file_src") {
                     let token_src = &token_src;

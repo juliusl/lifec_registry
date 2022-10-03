@@ -43,9 +43,6 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : src_dir         .symbol .
 : work_dir        .symbol .world/{registry_host}/{registry_name}
 : file_src        .symbol .world/{registry_host}/{registry_name}/access_token
-: proxy_src       .symbol .world/{registry_host}/{registry_name}/mirror.runmd
-: teleport_format .symbol {teleport_format}
-: artifact_type   .symbol {artifact_type}
 
 + .runtime
 : .login-acr {registry_name}
@@ -56,15 +53,26 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : .host     {mirror_address}, resolve, pull
 
 + .proxy    {mirror_address}
-: .manifests      head, get
+# Resolve manifests sequence 
+: .manifests    head, get
 :   .login        access_token
 :   .authn        oauth2
 :   .resolve      application/vnd.oci.image.manifest.v1+json
-:   .discover     dadi.image.v1
-:   .teleport     overlaybd
+# You can update this to customize what formats to resolve
+# : .resolve      application/vnd.docker.distribution.manifest.list.v2+json
+:   .discover     {artifact_type}
+:   .teleport     {teleport_format}
+
+# Download blob sequence
 : .blobs          get
 :   .login        access_token
 :   .authn        oauth2
-:   .pull         
+:   .pull
+
+# Push blobs example
+# : .blobs          post
+# : .login          access_token
+# : .authn          oauth2
+#  
 ```
 "#;

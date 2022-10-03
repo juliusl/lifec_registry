@@ -14,7 +14,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use tracing::{event, Level};
 
-use crate::{Authenticate, Discover, Login, LoginACR, Mirror, Pull, Resolve};
+use crate::{Authenticate, Discover, Login, LoginACR, Mirror, Pull, Resolve, Teleport};
 
 mod methods;
 use methods::Methods;
@@ -136,6 +136,7 @@ impl Project for Proxy {
         runtime.install_with_custom::<Resolve>("");
         runtime.install_with_custom::<Discover>("");
         runtime.install_with_custom::<Pull>("");
+        runtime.install_with_custom::<Teleport>("");
         runtime
     }
 
@@ -358,12 +359,14 @@ impl Proxy {
     pub fn into_response(context: &ThunkContext) -> Response {
         if let Some(body) = context.state().find_binary("body") {
             let content_type = context
-                .state()
-                .find_text("content-type")
+                .previous()
+                .unwrap()
+                .find_symbol("content-type")
                 .expect("A content type should've been provided");
             let digest = context
-                .state()
-                .find_text("digest")
+                .previous()
+                .unwrap()
+                .find_symbol("digest")
                 .expect("A digest should've been provided");
 
             Response::builder()

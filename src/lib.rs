@@ -7,6 +7,9 @@ pub use proxy::Proxy;
 mod discover;
 pub use discover::Discover;
 
+mod teleport;
+pub use teleport::Teleport;
+
 mod authenticate;
 pub use authenticate::Authenticate;
 

@@ -21,15 +21,18 @@ impl Plugin for Discover {
             let mut tc = context.clone();
             async move {
                 if let (Some(ns), Some(repo), Some(artifact_type), Some(digest), Some(access_token)) = 
-                (   tc.state().find_symbol("ns"), 
-                    tc.state().find_symbol("repo"),
+                (   tc.previous().unwrap().find_symbol("ns"), 
+                    tc.previous().unwrap().find_symbol("repo"),
                     tc.state().find_symbol("discover"),
-                    tc.state().find_text("digest"),
+                    tc.previous().unwrap().find_symbol("digest"),
                     // Check previous state for access token
-                    tc.previous().and_then(|p| p.find_symbol("access_token"))
+                    tc.previous().unwrap().find_symbol("access_token")
                 ) { 
+                
+                event!(Level::DEBUG, "Discovering {artifact_type}");
 
-                let protocol = tc.state()
+                let protocol = tc.previous()
+                    .unwrap()
                     .find_symbol("protocol")
                     .unwrap_or("https".to_string());
 
@@ -50,7 +53,10 @@ impl Plugin for Discover {
                         match client.request(req.into()).await {
                             Ok(response) => { 
                                 match hyper::body::to_bytes(response.into_body()).await {
-                                    Ok(data) => tc.state_mut().add_binary_attr("artifact", data),
+                                    Ok(data) => tc.state_mut().add_binary_attr(
+                                        artifact_type, 
+                                        data
+                                    ),
                                     Err(err) =>  event!(Level::ERROR, "Could not read referrers response body {err}")
                                 }
                             }
@@ -59,6 +65,12 @@ impl Plugin for Discover {
                     }
                     Err(err) => event!(Level::ERROR, "Could not create auth bearer header, {err}")
                 }}
+
+                for (name, value) in tc.previous().expect("Should have been a previous state").values() {
+                    for value in value {
+                        tc.state_mut().with(&name, value);
+                    }
+                }
 
                 Some(tc)
             }

@@ -34,12 +34,12 @@ impl Plugin for Resolve {
             let mut tc = context.clone();
             async move {
                 if let (Some(ns), Some(repo), Some(reference), Some(accept), Some(access_token)) = 
-                (   tc.state().find_symbol("ns"), 
-                    tc.state().find_symbol("repo"),
-                    tc.state().find_symbol("reference"),
-                    tc.state().find_symbol("accept"),
+                (   tc.previous().unwrap().find_symbol("ns"), 
+                    tc.previous().unwrap().find_symbol("repo"),
+                    tc.previous().unwrap().find_symbol("reference"),
+                    tc.previous().unwrap().find_symbol("accept"),
                     // Check previous state for access token
-                    tc.previous().and_then(|p| p.find_symbol("access_token"))
+                    tc.previous().unwrap().find_symbol("access_token")
                 ) { 
 
                 let protocol = tc.state()
@@ -79,7 +79,7 @@ impl Plugin for Resolve {
                                 if let Some(content_type) = response.headers().get("Content-Type") {
                                     debug_assert!(!content_type.is_sensitive(), "content-type should not be a sensitive header");
                                     event!(Level::DEBUG, "Resolved content-type is {:?}", content_type);
-                                    tc.state_mut().add_text_attr(
+                                    tc.state_mut().add_symbol(
                                         "content-type", 
                                         content_type.to_str().expect("Content-Type must be a valid string")
                                     );
@@ -95,7 +95,11 @@ impl Plugin for Resolve {
                                     Err(err) =>  event!(Level::ERROR, "Could not read response body, {err}")
                                 }
 
-                                tc.state_mut().with_symbol("access_token", access_token);
+                                for (name, value) in tc.previous().expect("Should have been a previous state").values() {
+                                    for value in value {
+                                        tc.state_mut().with(&name, value);
+                                    }
+                                }
 
                                 event!(Level::INFO, "Mirrored resolve registry resolve api");
                                 return Some(tc);

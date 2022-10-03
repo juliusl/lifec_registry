@@ -44,6 +44,13 @@ impl Plugin for Authenticate {
                             .expect("received some access token"),
                     );
 
+                    // TODO -- there's probably a better way to deal with this 
+                    for (name, value) in tc.previous().expect("should exist").values() {
+                        for value in value {
+                            tc.state_mut().with(&name, value);
+                        }
+                    }
+
                     Some(tc)
                 } else {
                     event!(Level::ERROR, "Could not authn w/ registry");
@@ -134,7 +141,8 @@ impl Authenticate {
     async fn start_challenge(tc: &ThunkContext) -> Option<Uri> {
         if let Some(client) = tc.client() {
             let api = tc
-                .state()
+                .previous()
+                .expect("should be a previous state")
                 .find_symbol("api")
                 .and_then(|a| Uri::from_str(a.as_str()).ok());
 
