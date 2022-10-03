@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use hyper::http::StatusCode;
 use lifec::{
     default_parser, default_runtime, AttributeGraph, AttributeIndex, BlockIndex, CustomAttribute,
@@ -54,12 +56,10 @@ impl SpecialAttribute for Proxy {
 }
 
 impl Project for Proxy {
-    fn interpret(_: &lifec::World, _: &lifec::Block) {
-    }
+    fn interpret(_: &lifec::World, _: &lifec::Block) {}
 
     fn parser() -> lifec::Parser {
-        default_parser(Self::world())
-            .with_special_attr::<Proxy>()
+        default_parser(Self::world()).with_special_attr::<Proxy>()
     }
 
     fn runtime() -> lifec::Runtime {
@@ -110,46 +110,63 @@ impl WebApp for Proxy {
                         .iter()
                         .filter_map(|r| Resources::lexer(r).next())
                         .collect::<Vec<_>>();
-                    let paths = graph.find_symbol_values("path");
 
-                    for ((method, resource), path) in
-                        methods.iter().zip(resources).zip(paths.iter())
-                    {
-                        let context = context.clone();
+                    let context_map = HashMap::<(Methods, Resources), ThunkContext>::default();
+                    // Todo bring this outside, just change this to return graphs
+                    // That way you could technically customize each individual method/resource pair
+                    // for (method, resource) in methods.iter().zip(resources)
+                    // {
+                    //     let context = context.clone();
+                    //     match (method, resource) {
+                    //         (Methods::Get, Resources::Manifests) => {}
+                    //         (Methods::Head, Resources::Manifests) => {}
+                    //         (Methods::Put, Resources::Manifests) => {}
+                    //         (Methods::Delete, Resources::Manifests) => {}
+                    //         (Methods::Get, Resources::Blobs) => {}
+                    //         (Methods::Get, Resources::Tags) => {}
+                    //         (Methods::Put, Resources::Blobs) => {}
+                    //         (Methods::Patch, Resources::Blobs) => {}
+                    //         (Methods::Post, Resources::Blobs) => {}
+                    //         _ => continue,
+                    //     }
+                    // }
 
-                        match (method, resource) {
-                            (Methods::Get, Resources::Manifests) => {
-                                event!(Level::DEBUG, "Adding GET for Manifests to proxy");
-                                r = r.at(path, get(resolve).data(context));
-                            }
-                            (Methods::Head, Resources::Manifests) => {
-                                event!(Level::DEBUG, "Adding HEAD for Manifests to proxy");
-                                r = r.at(path, head(resolve).data(context));
-                            }
-                            (Methods::Put, Resources::Manifests) => {
-                                event!(Level::DEBUG, "Adding PUT for Manifests to proxy");
-                                r = r.at(path, put(resolve).data(context));
-                            }
-                            (Methods::Delete, Resources::Manifests) => {
-                                r = r.at(path, delete(resolve).data(context));
-                            }
-                            (Methods::Get, Resources::Blobs) => {
-                                r = r.at(path, get(download_blob).data(context));
-                            }
-                            (Methods::Put, Resources::Blobs) => {
-                                r = r.at(path, put(blob_upload_chunks).data(context));
-                            }
-                            (Methods::Patch, Resources::Blobs) => {
-                                r = r.at(path, patch(blob_upload_chunks).data(context));
-                            }
-                            (Methods::Post, Resources::Blobs) => {
-                                r = r.at(path, post(blob_upload).data(context));
-                            }
-                            (Methods::Get, Resources::Tags) => {
-                                r = r.at(path, get(list_tags).data(context));
-                            }
-                            _ => continue,
-                        }
+                    if resources.iter().all(|r| *r == Resources::Manifests) {
+                        let get_manifests_data = context_map
+                            .get(&(Methods::Get, Resources::Manifests))
+                            .cloned()
+                            .unwrap_or_default();
+
+                        let head_manifests_data = context_map
+                            .get(&(Methods::Head, Resources::Manifests))
+                            .cloned()
+                            .unwrap_or_default();
+
+                        let put_manifests_data = context_map
+                            .get(&(Methods::Put, Resources::Manifests))
+                            .cloned()
+                            .unwrap_or_default();
+
+                        let delete_manifests_data = context_map
+                            .get(&(Methods::Delete, Resources::Manifests))
+                            .cloned()
+                            .unwrap_or_default();
+
+                        r = r.at(
+                            "/:name<[a-zA-Z0-9/_-]+(?:manifests)>/:reference",
+                            get(manifests_api.data(get_manifests_data))
+                                .head(manifests_api.data(head_manifests_data))
+                                .put(manifests_api.data(put_manifests_data))
+                                .delete(manifests_api.data(delete_manifests_data)),
+                        );
+                    }
+
+                    if resources.iter().all(|r| *r == Resources::Blobs) {
+
+                    }
+
+                    if resources.iter().all(|r| *r == Resources::Tags) {
+
                     }
 
                     r
@@ -195,16 +212,17 @@ async fn index(
 }
 
 #[derive(Deserialize)]
-struct ResolveParams {
+struct ManifestAPIParams {
     ns: String,
 }
 /// Resolves an image
+/// 
 #[handler]
-async fn resolve(
+async fn manifests_api(
     request: &Request,
     method: poem::http::Method,
     Path((name, reference)): Path<(String, String)>,
-    Query(ResolveParams { ns }): Query<ResolveParams>,
+    Query(ManifestAPIParams { ns }): Query<ManifestAPIParams>,
     dispatcher: Data<&ThunkContext>,
 ) -> Response {
     let name = name.trim_end_matches("/manifests");
@@ -224,25 +242,21 @@ async fn resolve(
         .with_symbol("accept", request.header("accept").unwrap_or_default())
         .with_symbol("method", method);
 
-    let mut host = Host::load_content::<Proxy>(
-        input.state()
-        .find_text("proxy_src")
-        .unwrap()
-    );
+    let mut host = Host::load_content::<Proxy>(input.state().find_text("proxy_src").unwrap());
 
     let input = host.execute(&input);
     Proxy::into_response(&input)
 }
 
 #[derive(Deserialize)]
-struct ListTagsParams {
+struct TagsAPIParams {
     ns: String,
 }
 #[handler]
-async fn list_tags(
+async fn tags_api(
     request: &Request,
     Path(name): Path<String>,
-    Query(ListTagsParams { ns }): Query<ListTagsParams>,
+    Query(TagsAPIParams { ns }): Query<TagsAPIParams>,
     dispatcher: Data<&ThunkContext>,
 ) -> Response {
     let name = name.trim_end_matches("/tags");
@@ -260,10 +274,10 @@ async fn list_tags(
 }
 
 #[handler]
-async fn download_blob(
+async fn blob_download_api(
     request: &Request,
     Path((name, digest)): Path<(String, String)>,
-    Query(ResolveParams { ns }): Query<ResolveParams>,
+    Query(ManifestAPIParams { ns }): Query<ManifestAPIParams>,
     dispatcher: Data<&ThunkContext>,
 ) -> Response {
     let name = name.trim_end_matches("/blobs");
@@ -291,7 +305,7 @@ struct UploadParameters {
     ns: String,
 }
 #[handler]
-async fn blob_upload_chunks(
+async fn blob_chunk_upload_api(
     request: &Request,
     method: poem::http::Method,
     Path((name, reference)): Path<(String, String)>,
@@ -326,7 +340,7 @@ struct ImportParameters {
     ns: String,
 }
 #[handler]
-async fn blob_upload(
+async fn blob_upload_api(
     request: &Request,
     Path(name): Path<String>,
     Query(ImportParameters {
@@ -403,7 +417,7 @@ impl Proxy {
                 .state()
                 .find_text("digest")
                 .expect("A digest should've been provided");
-    
+
             Response::builder()
                 .status(StatusCode::OK)
                 .content_type(content_type)

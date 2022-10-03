@@ -4,7 +4,7 @@ use hyper::Uri;
 use lifec::{
     plugins::{Plugin, ThunkContext},
     AttributeIndex, BlockObject, BlockProperties, Component, CustomAttribute, HashMapStorage,
-    Interpreter, Value, Operation,
+    Interpreter, Value
 };
 use lifec_poem::{AppHost, WebApp};
 use logos::Logos;

@@ -7,7 +7,7 @@ use super::resources::Resources;
 
 /// Enumeration of methods to proxy
 ///
-#[derive(Logos)]
+#[derive(Logos, Hash, PartialEq, Eq)]
 pub enum Methods {
     #[token("head")]
     Head,
@@ -68,30 +68,22 @@ impl Methods {
                         Resources::Manifests,
                     ) => {
                         parser.define("method", Value::Symbol(format!("{token}")));
-                        parser.define("path", "/:name<[a-zA-Z0-9/_-]+(?:manifests)>/:reference");
                         parser.define("resource", "manifests");
                     }
                     (Methods::Get, Resources::Blobs) => {
                         parser.define("method", Value::Symbol(format!("{token}")));
-                        parser.define("path", "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/:digest");
                         parser.define("resource", "blobs");
                     }
                     (Methods::Put | Methods::Patch, Resources::Blobs) => {
                         parser.define("method", Value::Symbol(format!("{token}")));
-                        parser.define(
-                            "path",
-                            "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads/:reference",
-                        );
                         parser.define("resource", "blobs");
                     }
                     (Methods::Post, Resources::Blobs) => {
                         parser.define("method", Value::Symbol(format!("{token}")));
-                        parser.define("path", "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads");
                         parser.define("resource", "blobs");
                     }
                     (Methods::Get, Resources::Tags) => {
                         parser.define("method", Value::Symbol(format!("{token}")));
-                        parser.define("path", "/:name<[a-zA-Z0-9/_-]+(?:tags)>/list");
                         parser.define("resource", "tags");
                     }
                     _ => continue,
