@@ -43,6 +43,7 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : src_dir         .symbol .
 : work_dir        .symbol .world/{registry_host}/{registry_name}
 : file_src        .symbol .world/{registry_host}/{registry_name}/access_token
+: proxy_src       .symbol .world/{registry_host}/{registry_name}/mirror.runmd
 : teleport_format .symbol {teleport_format}
 : artifact_type   .symbol {artifact_type}
 

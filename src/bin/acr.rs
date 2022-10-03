@@ -1,10 +1,15 @@
 use clap::{Args, Parser, Subcommand};
 use hyper::StatusCode;
-use lifec::{default_runtime, AttributeIndex, Inspector, Interpreter};
+use lifec::{
+    default_runtime, AttributeGraph, AttributeIndex, Block, Engine, Inspector, Interpreter, Source,
+    Start, ThunkContext, WorldExt,
+};
 use lifec::{Host, Project};
-use lifec_registry::{Mirror, MirrorProxy, LoginACR};
+use lifec_registry::{LoginACR, Mirror, MirrorProxy};
 use poem::Response;
 use serde::Serialize;
+use std::collections::HashMap;
+use std::ops::Deref;
 use std::path::PathBuf;
 use tinytemplate::TinyTemplate;
 use tracing::event;
@@ -68,6 +73,55 @@ async fn main() {
                             .expect("should be able to create string"),
                     );
                     if let Some(mut host) = host.create_host::<ACR>().await.take() {
+                        let block = {
+                            let block_entity = Engine::find_block(host.world(), "start mirror")
+                                .expect("runmd requires a `start mirror` block");
+                            let block = &host.world().read_component::<Block>();
+                            let block = block
+                                .get(block_entity)
+                                .expect("should have a block")
+                                .clone();
+                            block
+                        };
+
+                        if let Some(start) = host.find_start("start mirror") {
+                            if let Some(proxy_block) =
+                                block.index().iter().find(|b| b.root().name() == "proxy")
+                            {
+                                let graph = AttributeGraph::new(proxy_block.clone());
+                                let mut context =
+                                    ThunkContext::default().with_state(graph).with_block(&block);
+
+                                // Set up state
+                                {
+                                    let src = host.world().read_resource::<Source>();
+                                    context.state_mut()
+                                        .with_text("proxy_src", &src.0)
+                                        .with_symbol("registry", registry)
+                                        .with_symbol("registry_host", registry_host);
+                                }
+                                host.world_mut()
+                                    .write_component()
+                                    .insert(start, context)
+                                    .expect("should be able to insert thunk context");
+                            }
+                        }
+
+                        if let Some(lifec::Commands::Start(start)) = host.command(){
+                            match start {
+                                Start {
+                                    id: None, 
+                                    engine_name: None,
+                                    ..
+                                } => {
+                                    host.set_command(lifec::Commands::start_engine("start mirror"));
+                                },
+                                _ => {
+
+                                }
+                            }
+                        }
+
                         host.handle_start::<ACR>();
                     } else {
                         panic!("Could not create/start host");
@@ -253,5 +307,43 @@ impl Project for ACR {
         runtime.install_with_custom::<Mirror<Self>>("");
         runtime.install_with_custom::<LoginACR>("");
         runtime
+    }
+
+    fn configure_dispatcher(
+        _dispatcher_builder: &mut lifec::DispatcherBuilder,
+        _context: Option<lifec::ThunkContext>,
+    ) {
+        if let Some(_context) = _context {
+            Host::add_start_command_listener::<ACR>(_context, _dispatcher_builder);
+        }
+    }
+
+    fn on_start_command(&mut self, start_command: lifec::Start) {
+        if let Start {
+            id: Some(id),
+            thunk_context: Some(tc),
+            ..
+        } = start_command
+        {
+            // This will create a new host and start the command
+            if let Self { command: Some(Commands::Mirror(mut host)), .. } = ACR::from(tc.clone()) {
+                host.start::<ACR>(id, Some(tc));
+            }
+        }
+    }
+}
+
+impl From<ThunkContext> for ACR {
+    fn from(tc: ThunkContext) -> Self {
+        if let Some(proxy_src) = tc.state().find_text("proxy_src") {
+            Self {
+                registry: tc.state().find_symbol("registry").expect("should be in state"),
+                registry_host: tc.state().find_symbol("registry_host").expect("should be in state"),
+                debug: false,
+                command: Some(Commands::Mirror(Host::load_content::<ACR>(proxy_src))),
+            }
+        } else {
+            panic!("proxy_src was not included")
+        }
     }
 }
