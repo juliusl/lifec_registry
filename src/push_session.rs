@@ -15,11 +15,11 @@ use tracing::{event, Level};
 /// 
 #[derive(Component, Default)]
 #[storage(DenseVecStorage)]
-pub struct BlobUploadSessionId; 
+pub struct PushSession; 
 
-impl Plugin for BlobUploadSessionId {
+impl Plugin for PushSession {
     fn symbol() -> &'static str {
-        "blob_upload_session_id"
+        "push_session"
     }
 
     fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {

@@ -7,7 +7,7 @@ use super::resources::Resources;
 
 /// Enumeration of methods to proxy
 ///
-#[derive(Logos, Hash, PartialEq, Eq)]
+#[derive(Logos, Clone, Hash, PartialEq, Eq)]
 pub enum Methods {
     #[token("head")]
     Head,

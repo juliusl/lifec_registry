@@ -2,14 +2,12 @@ use clap::{Args, Parser, Subcommand};
 use hyper::StatusCode;
 use lifec::{
     default_runtime, AttributeGraph, AttributeIndex, Block, Engine, Inspector, Interpreter, Source,
-    Start, ThunkContext, WorldExt,
+    Start, ThunkContext, WorldExt, default_parser,
 };
 use lifec::{Host, Project};
-use lifec_registry::{LoginACR, Mirror, MirrorProxy};
+use lifec_registry::{LoginACR, Mirror, MirrorProxy, Proxy, Login, Authenticate, Resolve, Discover, Pull};
 use poem::Response;
 use serde::Serialize;
-use std::collections::HashMap;
-use std::ops::Deref;
 use std::path::PathBuf;
 use tinytemplate::TinyTemplate;
 use tracing::event;
@@ -299,13 +297,23 @@ impl MirrorProxy for ACR {
 
 impl Project for ACR {
     fn interpret(world: &lifec::World, block: &lifec::Block) {
-        Mirror::<Self>::default().interpret(world, block)
+        Mirror::default().interpret(world, block)
+    }
+    
+    fn parser() -> lifec::Parser {
+        default_parser(Self::world())
+            .with_special_attr::<Proxy>()
     }
 
     fn runtime() -> lifec::Runtime {
         let mut runtime = default_runtime();
-        runtime.install_with_custom::<Mirror<Self>>("");
+        runtime.install_with_custom::<Authenticate>("");
         runtime.install_with_custom::<LoginACR>("");
+        runtime.install_with_custom::<Mirror>("");
+        runtime.install_with_custom::<Login>("");
+        runtime.install_with_custom::<Resolve>("");
+        runtime.install_with_custom::<Pull>("");
+        runtime.install_with_custom::<Discover>("");
         runtime
     }
 

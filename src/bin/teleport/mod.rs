@@ -56,9 +56,15 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : .host     {mirror_address}, resolve, pull
 
 + .proxy    {mirror_address}
-: .manifests head, get
-: .println hello
-: .println world
-
+: .manifests      head, get
+:   .login        access_token
+:   .authn        oauth2
+:   .resolve      application/vnd.oci.image.manifest.v1+json
+:   .discover     dadi.image.v1
+:   .teleport     overlaybd
+: .blobs          get
+:   .login        access_token
+:   .authn        oauth2
+:   .pull         
 ```
 "#;

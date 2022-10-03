@@ -1,30 +1,79 @@
-use std::collections::HashMap;
-
 use hyper::http::StatusCode;
 use lifec::{
     default_parser, default_runtime, AttributeGraph, AttributeIndex, BlockIndex, CustomAttribute,
-    Executor, Host, Project, Runtime, SpecialAttribute, Start, ThunkContext, Value,
+    Host, Project, Runtime, SpecialAttribute, Start, ThunkContext, Value,
 };
 use lifec_poem::WebApp;
-use tracing::event;
-use tracing::Level;
-mod methods;
 use logos::Logos;
-use methods::Methods;
-
-mod resources;
-use poem::{
-    delete, get, handler, head, patch, post, put,
-    web::{Data, Path, Query},
-    EndpointExt, Request, Response, Route,
-};
-use resources::Resources;
+use poem::{get, handler, post, put, web::{Data, Query}, EndpointExt, Request, Response, Route};
 use serde::Deserialize;
+use std::collections::HashMap;
+use tracing::{event, Level};
 
-use crate::{Authenticate, Discover, Login, Resolve};
+use crate::{Authenticate, Discover, Login, LoginACR, Mirror, Resolve};
+
+mod methods;
+use methods::Methods;
+mod resources;
+use resources::Resources;
+
+mod blobs;
+use blobs::blob_chunk_upload_api;
+use blobs::blob_download_api;
+use blobs::blob_upload_api;
+
+mod manifests;
+use manifests::manifests_api;
+
+mod tags;
+use tags::tags_api;
 
 /// Struct for creating a customizable registry proxy,
 ///
+/// # Customizable registry proxy 
+/// 
+/// This special attribute enables describing a customizable registry proxy.
+/// Underneath the hood, this enables the `.runtime` attribute so that plugin 
+/// declarations can be assigned an entity/event. Next this attribute adds 3 
+/// custom attributes `manifests`, `blobs`, `tags` which represent the 3 core
+/// resources the OCI distribution api hosts. Methods for each resource can be
+/// customized with a sequence of plugin calls. Since these calls aren't part
+/// of the normal event runtime flow, they are executed with the host.execute(..)
+/// extension method instead. 
+/// 
+/// ## Example proxy definition
+/// 
+/// ```md
+/// <``` start proxy>
+/// # Proxy setup
+/// + .proxy                  localhost:8567
+/// ## Resolve manifests and artifacts
+/// - This example shows how the proxy can be configuired to make discover calls,
+/// - When an image manifest is being resolved, the proxy will also call discover on artifacts
+/// 
+/// : .manifests head, get
+/// :   .login                  access_token
+/// :   .authn                  oauth2
+/// :   .resolve                application/vnd.oci.image.manifest.v1+json
+/// :   .discover               dadi.image.v1
+/// :   .discover               notary.signature.v1
+/// 
+/// ## Teleport and dispatch a convert operation if teleport isn't available
+/// :   .teleport               overlaybd
+/// :   .converter              convert overlaybd 
+/// 
+/// ## Validate signatures, or create a signature if it doesn't exist
+/// :   .notary
+/// :   .reject_if_missing
+/// :   .sign_if_missing
+/// 
+/// ## Download blobs
+/// : .blobs head, get
+/// : .login                  login.pfx
+/// : .authn                  cert
+/// : .pull
+/// <```>  
+/// ```
 #[derive(Default)]
 pub struct Proxy {
     context: ThunkContext,
@@ -64,8 +113,10 @@ impl Project for Proxy {
 
     fn runtime() -> lifec::Runtime {
         let mut runtime = default_runtime();
-        runtime.install_with_custom::<Login>("");
         runtime.install_with_custom::<Authenticate>("");
+        runtime.install_with_custom::<LoginACR>("");
+        runtime.install_with_custom::<Mirror>("");
+        runtime.install_with_custom::<Login>("");
         runtime.install_with_custom::<Resolve>("");
         runtime.install_with_custom::<Discover>("");
         runtime
@@ -90,6 +141,30 @@ impl Project for Proxy {
     }
 }
 
+/*
+Table of OCI Endpoints
+
+ID	Method	API Endpoint	Success	Failure
+end-1	GET	/v2/	                                                                            200	404/401
+
+end-2	GET / HEAD	/v2/<name>/blobs/<digest>	                                                200	404
+end-10	DELETE	    /v2/<name>/blobs/<digest>	                                                202	404/405
+
+end-4a	POST	    /v2/<name>/blobs/uploads/	                                                202	404
+end-4b	POST	    /v2/<name>/blobs/uploads/             ?digest=<digest>	                    201/202	404/400
+end-11	POST	    /v2/<name>/blobs/uploads/             ?mount=<digest>&from=<other_name>	    201	404
+
+end-5	PATCH	    /v2/<name>/blobs/uploads/<reference>	                                    202	404/416
+end-6	PUT	        /v2/<name>/blobs/uploads/<reference>  ?digest=<digest>	                    201	404/400
+
+end-8a	GET	        /v2/<name>/tags/list	                                                    200	404
+end-8b	GET	        /v2/<name>/tags/list                  ?n=<integer>&last=<integer>	        200	404
+
+end-3	GET / HEAD	/v2/<name>/manifests/<reference>	                                        200	404
+end-7	PUT	        /v2/<name>/manifests/<reference>	                                        201	404
+end-9	DELETE	    /v2/<name>/manifests/<reference>	                                        202	404/400/405
+*/
+
 impl WebApp for Proxy {
     fn create(context: &mut lifec::ThunkContext) -> Self {
         Self::from(context.clone())
@@ -99,7 +174,12 @@ impl WebApp for Proxy {
         if let Some(block) = self.context.block() {
             let context = self.context.clone();
             if let Some(i) = block.index().iter().find(|b| b.root().name() == "proxy") {
-                let (route, _) = Proxy::extract_routes(i, Route::new(), move |mut r, graph| {
+                let mut context_map = HashMap::<(Methods, Resources), ThunkContext>::default();
+
+                let mut route = Route::new();
+                let graphs = Proxy::extract_routes(i);
+
+                for graph in graphs {
                     let methods = graph
                         .find_symbol_values("method")
                         .iter()
@@ -111,66 +191,92 @@ impl WebApp for Proxy {
                         .filter_map(|r| Resources::lexer(r).next())
                         .collect::<Vec<_>>();
 
-                    let context_map = HashMap::<(Methods, Resources), ThunkContext>::default();
-                    // Todo bring this outside, just change this to return graphs
-                    // That way you could technically customize each individual method/resource pair
-                    // for (method, resource) in methods.iter().zip(resources)
-                    // {
-                    //     let context = context.clone();
-                    //     match (method, resource) {
-                    //         (Methods::Get, Resources::Manifests) => {}
-                    //         (Methods::Head, Resources::Manifests) => {}
-                    //         (Methods::Put, Resources::Manifests) => {}
-                    //         (Methods::Delete, Resources::Manifests) => {}
-                    //         (Methods::Get, Resources::Blobs) => {}
-                    //         (Methods::Get, Resources::Tags) => {}
-                    //         (Methods::Put, Resources::Blobs) => {}
-                    //         (Methods::Patch, Resources::Blobs) => {}
-                    //         (Methods::Post, Resources::Blobs) => {}
-                    //         _ => continue,
-                    //     }
-                    // }
-
-                    if resources.iter().all(|r| *r == Resources::Manifests) {
-                        let get_manifests_data = context_map
-                            .get(&(Methods::Get, Resources::Manifests))
-                            .cloned()
-                            .unwrap_or_default();
-
-                        let head_manifests_data = context_map
-                            .get(&(Methods::Head, Resources::Manifests))
-                            .cloned()
-                            .unwrap_or_default();
-
-                        let put_manifests_data = context_map
-                            .get(&(Methods::Put, Resources::Manifests))
-                            .cloned()
-                            .unwrap_or_default();
-
-                        let delete_manifests_data = context_map
-                            .get(&(Methods::Delete, Resources::Manifests))
-                            .cloned()
-                            .unwrap_or_default();
-
-                        r = r.at(
-                            "/:name<[a-zA-Z0-9/_-]+(?:manifests)>/:reference",
-                            get(manifests_api.data(get_manifests_data))
-                                .head(manifests_api.data(head_manifests_data))
-                                .put(manifests_api.data(put_manifests_data))
-                                .delete(manifests_api.data(delete_manifests_data)),
-                        );
+                    for (method, resource) in methods.iter().zip(resources) {
+                        let mut context = context.clone();
+                        context.state_mut().with_bool("proxy_enabled", true);
+                        context_map.insert((method.clone(), resource), context);
                     }
+                }
 
-                    if resources.iter().all(|r| *r == Resources::Blobs) {
+                // Resolve manifest settings
+                //
+                let get_manifests_settings = context_map
+                    .get(&(Methods::Get, Resources::Manifests))
+                    .cloned()
+                    .unwrap_or_default();
 
-                    }
+                let head_manifests_settings = context_map
+                    .get(&(Methods::Head, Resources::Manifests))
+                    .cloned()
+                    .unwrap_or_default();
 
-                    if resources.iter().all(|r| *r == Resources::Tags) {
+                let put_manifests_settings = context_map
+                    .get(&(Methods::Put, Resources::Manifests))
+                    .cloned()
+                    .unwrap_or_default();
 
-                    }
+                let delete_manifests_settings = context_map
+                    .get(&(Methods::Delete, Resources::Manifests))
+                    .cloned()
+                    .unwrap_or_default();
 
-                    r
-                });
+                route = route.at(
+                    "/:name<[a-zA-Z0-9/_-]+(?:manifests)>/:reference",
+                    get(manifests_api.data(get_manifests_settings))
+                        .head(manifests_api.data(head_manifests_settings))
+                        .put(manifests_api.data(put_manifests_settings))
+                        .delete(manifests_api.data(delete_manifests_settings)),
+                );
+
+                // Resolve blob settings
+                //
+                let get_blobs_settings = context_map
+                    .get(&(Methods::Get, Resources::Blobs))
+                    .cloned()
+                    .unwrap_or_default();
+
+                let post_blobs_settings = context_map
+                    .get(&(Methods::Post, Resources::Blobs))
+                    .cloned()
+                    .unwrap_or_default();
+
+                let put_blobs_settings = context_map
+                    .get(&(Methods::Put, Resources::Blobs))
+                    .cloned()
+                    .unwrap_or_default();
+
+                let patch_blobs_settings = context_map
+                    .get(&(Methods::Patch, Resources::Blobs))
+                    .cloned()
+                    .unwrap_or_default();
+
+                route = route.at(
+                    "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/:digest",
+                    get(blob_download_api.data(get_blobs_settings)),
+                );
+
+                route = route.at(
+                    "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads",
+                    post(blob_upload_api.data(post_blobs_settings)),
+                );
+
+                route = route.at(
+                    "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads/:reference",
+                    put(blob_chunk_upload_api.data(put_blobs_settings))
+                        .patch(blob_chunk_upload_api.data(patch_blobs_settings)),
+                );
+
+                // Resolve tags settings
+                //
+                let get_tags_settings = context_map
+                    .get(&(Methods::Get, Resources::Tags))
+                    .cloned()
+                    .unwrap_or_default();
+
+                route = route.at(
+                    "/:name<[a-zA-Z0-9/_-]+(?:tags)>/list",
+                    get(tags_api.data(get_tags_settings)),
+                );
 
                 let route = Route::new().nest(
                     "/v2",
@@ -197,207 +303,19 @@ struct IndexParams {
 async fn index(
     request: &Request,
     Query(IndexParams { ns }): Query<IndexParams>,
-    dispatcher: Data<&ThunkContext>,
+    context: Data<&ThunkContext>,
 ) -> Response {
     event!(Level::DEBUG, "Got /v2 request");
     event!(Level::TRACE, "{:#?}", request);
 
-    let mut input = dispatcher.clone();
+    let mut input = context.clone();
 
     if let Some(ns) = ns {
         input.state_mut().with_symbol("ns", &ns);
     }
 
+    // TODO Dump proxy state here
     todo!()
-}
-
-#[derive(Deserialize)]
-struct ManifestAPIParams {
-    ns: String,
-}
-/// Resolves an image
-/// 
-#[handler]
-async fn manifests_api(
-    request: &Request,
-    method: poem::http::Method,
-    Path((name, reference)): Path<(String, String)>,
-    Query(ManifestAPIParams { ns }): Query<ManifestAPIParams>,
-    dispatcher: Data<&ThunkContext>,
-) -> Response {
-    let name = name.trim_end_matches("/manifests");
-    event!(
-        Level::DEBUG,
-        "Got resolve request, repo: {name} ref: {reference} host: {ns}"
-    );
-    event!(Level::TRACE, "{:#?}", request);
-
-    let mut input = dispatcher.clone();
-    input
-        .state_mut()
-        .with_symbol("repo", name)
-        .with_symbol("reference", reference)
-        .with_symbol("ns", &ns)
-        .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
-        .with_symbol("accept", request.header("accept").unwrap_or_default())
-        .with_symbol("method", method);
-
-    let mut host = Host::load_content::<Proxy>(input.state().find_text("proxy_src").unwrap());
-
-    let input = host.execute(&input);
-    Proxy::into_response(&input)
-}
-
-#[derive(Deserialize)]
-struct TagsAPIParams {
-    ns: String,
-}
-#[handler]
-async fn tags_api(
-    request: &Request,
-    Path(name): Path<String>,
-    Query(TagsAPIParams { ns }): Query<TagsAPIParams>,
-    dispatcher: Data<&ThunkContext>,
-) -> Response {
-    let name = name.trim_end_matches("/tags");
-
-    event!(Level::DEBUG, "Got list_tags request, {name}");
-    event!(Level::TRACE, "{:#?}", request);
-
-    let mut input = dispatcher.clone();
-    input
-        .state_mut()
-        .with_symbol("ns", ns)
-        .with_symbol("name", name);
-
-    todo!()
-}
-
-#[handler]
-async fn blob_download_api(
-    request: &Request,
-    Path((name, digest)): Path<(String, String)>,
-    Query(ManifestAPIParams { ns }): Query<ManifestAPIParams>,
-    dispatcher: Data<&ThunkContext>,
-) -> Response {
-    let name = name.trim_end_matches("/blobs");
-    event!(Level::DEBUG, "Got download_blobs request, {name} {digest}");
-    event!(Level::TRACE, "{:#?}", request);
-
-    let mut input = dispatcher.clone();
-    input
-        .state_mut()
-        .with_symbol("name", name)
-        .with_symbol("ns", &ns)
-        .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
-        .with_symbol("digest", digest);
-
-    if let Some(accept) = request.header("accept") {
-        input.state_mut().add_text_attr("accept", accept)
-    }
-
-    todo!()
-}
-
-#[derive(Deserialize)]
-struct UploadParameters {
-    digest: Option<String>,
-    ns: String,
-}
-#[handler]
-async fn blob_chunk_upload_api(
-    request: &Request,
-    method: poem::http::Method,
-    Path((name, reference)): Path<(String, String)>,
-    Query(UploadParameters { digest, ns }): Query<UploadParameters>,
-    dispatcher: Data<&ThunkContext>,
-) -> Response {
-    let name = name.trim_end_matches("/blobs");
-
-    event!(
-        Level::DEBUG,
-        "Got {method} blob_upload_chunks request, {name} {reference}, {:?}",
-        digest
-    );
-    event!(Level::TRACE, "{:#?}", request);
-
-    let mut input = dispatcher.clone();
-    input
-        .state_mut()
-        .with_symbol("name", name)
-        .with_symbol("reference", reference)
-        .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
-        .with_symbol("digest", digest.unwrap_or_default());
-
-    todo!()
-}
-
-#[derive(Deserialize)]
-struct ImportParameters {
-    digest: Option<String>,
-    mount: Option<String>,
-    from: Option<String>,
-    ns: String,
-}
-#[handler]
-async fn blob_upload_api(
-    request: &Request,
-    Path(name): Path<String>,
-    Query(ImportParameters {
-        digest,
-        mount,
-        from,
-        ns,
-    }): Query<ImportParameters>,
-    dispatcher: Data<&ThunkContext>,
-) -> Response {
-    let name = name.trim_end_matches("/blobs");
-
-    if let (Some(mount), Some(from)) = (mount, from) {
-        event!(
-            Level::DEBUG,
-            "Got blob_import request, {name}, {mount}, {from}"
-        );
-        event!(Level::TRACE, "{:#?}", request);
-
-        let mut input = dispatcher.clone();
-        input
-            .state_mut()
-            .with_symbol("name", name)
-            .with_symbol("mount", mount)
-            .with_symbol("from", from)
-            .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
-
-        todo!()
-    } else if let Some(digest) = digest {
-        event!(
-            Level::DEBUG,
-            "Got blob_upload_monolith request, {name}, {digest}"
-        );
-        event!(Level::TRACE, "{:#?}", request);
-
-        let mut input = dispatcher.clone();
-        input
-            .state_mut()
-            .with_symbol("name", name)
-            .with_symbol("digest", digest)
-            .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
-
-        todo!()
-    } else if let None = digest {
-        event!(Level::DEBUG, "Got blob_upload_session_id request, {name}");
-        event!(Level::TRACE, "{:#?}", request);
-
-        let mut input = dispatcher.clone();
-        input
-            .state_mut()
-            .with_symbol("name", name)
-            .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
-
-        todo!()
-    } else {
-        todo!() // soft_fail
-    }
 }
 
 impl From<ThunkContext> for Proxy {
@@ -432,11 +350,7 @@ impl Proxy {
 
     /// Extracts route definitions for the proxy and calls on_route for each route found,
     ///
-    pub fn extract_routes(
-        block_index: &BlockIndex,
-        mut route: Route,
-        on_route: impl Fn(Route, &AttributeGraph) -> Route,
-    ) -> (Route, Vec<AttributeGraph>) {
+    pub fn extract_routes(block_index: &BlockIndex) -> Vec<AttributeGraph> {
         let mut graphs = vec![];
         let graph = AttributeGraph::new(block_index.clone());
 
@@ -450,7 +364,6 @@ impl Proxy {
                 match route_value {
                     Value::Int(id) if id as u32 != original => {
                         let graph = graph.scope(id as u32).expect("should be a route");
-                        route = on_route(route, &graph);
                         graphs.push(graph);
                     }
                     _ => continue,
@@ -458,24 +371,18 @@ impl Proxy {
             }
 
             let graph = graph.unscope();
-            route = on_route(route, &graph);
             graphs.push(graph);
         }
 
-        (route, graphs)
+        graphs
     }
 }
 
 mod tests {
-    use lifec::AttributeGraph;
-
     #[test]
     #[tracing_test::traced_test]
     fn test_proxy_parsing() {
         use lifec::prelude::*;
-        use lifec::Executor;
-        use lifec::ThunkContext;
-        use poem::Route;
 
         use crate::Proxy;
         let mut host = Host::load_content::<Proxy>(
@@ -525,18 +432,109 @@ mod tests {
         };
 
         for index in block.index() {
-            let (_, graphs) = Proxy::extract_routes(&index, Route::new(), |r, graph| {
-                for (name, value) in graph.values() {
-                    eprintln!("{name}\n\t{:#?}", value);
-                }
-                eprintln!();
-                r
-            });
+            let graphs = Proxy::extract_routes(&index);
 
-            let graph = graphs.first().expect("should be a graph");
-            let tc = ThunkContext::default().with_state(graph.clone());
+            let graphs = graphs.first().expect("should be a graph");
+            // let tc = ThunkContext::default().with_state(graph.clone());
 
-            let _ = host.execute(&tc);
+            // let _ = host.execute(&tc);
         }
     }
 }
+
+// #[test]
+// #[tracing_test::traced_test]
+// fn test_mirror() {
+//     use hyper::Client;
+//     use hyper_tls::HttpsConnector;
+//     use lifec::WorldExt;
+
+//     tokio::runtime::Runtime::new().unwrap().block_on(async {
+//         let world = lifec::World::new();
+//         let entity = world.entities().create();
+//         let https = HttpsConnector::new();
+//         let client = Client::builder().build::<_, hyper::Body>(https);
+//         let runtime = tokio::runtime::Runtime::new().unwrap();
+//         let handle = runtime.handle();
+//         let mut tc = ThunkContext::default()
+//             .enable_https_client(client)
+//             .enable_async(entity, handle.clone());
+
+//         let app = Mirror::create(&mut tc).routes();
+//         let cli = poem::test::TestClient::new(app);
+
+//         let resp = cli.get("/").send().await;
+//         resp.assert_status(StatusCode::NOT_FOUND);
+
+//         let resp = cli.head("/").send().await;
+//         resp.assert_status(StatusCode::NOT_FOUND);
+
+//         let resp = cli.get("/v2").send().await;
+//         resp.assert_status_is_ok();
+
+//         let resp = cli.get("/v2/").send().await;
+//         resp.assert_status_is_ok();
+
+//         let resp = cli.head("/v2").send().await;
+//         resp.assert_status_is_ok();
+
+//         let resp = cli.head("/v2/").send().await;
+//         resp.assert_status_is_ok();
+
+//         let resp = cli
+//             .get("/v2/library/test/manifests/test_ref?ns=test.com")
+//             .send()
+//             .await;
+//         resp.assert_status_is_ok();
+
+//         let resp = cli
+//             .head("/v2/library/test/manifests/test_ref?ns=test.com")
+//             .send()
+//             .await;
+//         resp.assert_status_is_ok();
+
+//         let resp = cli
+//             .put("/v2/library/test/manifests/test_ref?ns=test.com")
+//             .send()
+//             .await;
+//         resp.assert_status_is_ok();
+
+//         let resp = cli
+//             .delete("/v2/library/test/manifests/test_ref?ns=test.com")
+//             .send()
+//             .await;
+//         resp.assert_status_is_ok();
+
+//         // let resp = cli
+//         //     .get("/v2/library/test/blobs/test_digest?ns=test.com")
+//         //     .send()
+//         //     .await;
+//         // resp.assert_status_is_ok();
+
+//         // let resp = cli
+//         //     .post("/v2/library/test/blobs/uploads?ns=test.com")
+//         //     .send()
+//         //     .await;
+//         // resp.assert_status_is_ok();
+
+//         // let resp = cli
+//         //     .patch("/v2/library/test/blobs/uploads/test?ns=test.com")
+//         //     .send()
+//         //     .await;
+//         // resp.assert_status_is_ok();
+
+//         // let resp = cli
+//         //     .put("/v2/library/test/blobs/uploads/test?ns=test.com")
+//         //     .send()
+//         //     .await;
+//         // resp.assert_status_is_ok();
+
+//         // let resp = cli
+//         //     .get("/v2/library/test/tags/list?ns=test.com")
+//         //     .send()
+//         //     .await;
+//         // resp.assert_status_is_ok();
+
+//         runtime.shutdown_background();
+//     });
+// }

@@ -1,37 +1,22 @@
 use std::{path::PathBuf, str::FromStr};
-
 use hyper::Uri;
 use lifec::{
     plugins::{Plugin, ThunkContext},
-    AttributeIndex, BlockObject, BlockProperties, Component, CustomAttribute, HashMapStorage,
-    Interpreter, Value
+    BlockObject, BlockProperties, Component, CustomAttribute, HashMapStorage, Interpreter, Value,
 };
-use lifec_poem::{AppHost, WebApp};
+use lifec_poem::AppHost;
 use logos::Logos;
-use poem::{
-    get, handler,
-    http::{Method, StatusCode},
-    patch, post,
-    web::{Data, Path, Query},
-    EndpointExt, Request, Response, Route,
-};
-use serde::Deserialize;
+use poem::{http::StatusCode, Response};
 use toml::value::Map;
 use tracing::{event, Level};
-
-use crate::{
-    mirror::mirror_action::soft_fail, Authenticate, BlobImport, BlobUploadChunks,
-    BlobUploadMonolith, BlobUploadSessionId, DownloadBlob, Index, ListTags, Login, Resolve, Proxy,
-};
-
-mod mirror_action;
-use mirror_action::MirrorAction;
 
 mod mirror_proxy;
 pub use mirror_proxy::MirrorProxy;
 
 mod host_capabilities;
 use host_capabilities::HostCapability;
+
+use crate::Proxy;
 
 /// Designed to be used w/ containerd's registry config described here:
 /// https://github.com/containerd/containerd/blob/main/docs/hosts.md
@@ -60,18 +45,9 @@ use host_capabilities::HostCapability;
 ///
 #[derive(Component, Clone, Default)]
 #[storage(HashMapStorage)]
-pub struct Mirror<M>
-where
-    M: MirrorProxy + Default + Send + Sync + 'static,
-{
-    _proxy: M,
-    context: ThunkContext,
-}
+pub struct Mirror;
 
-impl<M> Mirror<M>
-where
-    M: MirrorProxy + Default + Send + Sync + 'static,
-{
+impl Mirror {
     /// Ensures the hosts dir exists
     ///
     async fn ensure_hosts_dir(app_host: impl AsRef<str>) {
@@ -123,10 +99,7 @@ where
     }
 }
 
-impl<M> Plugin for Mirror<M>
-where
-    M: MirrorProxy + Default + Send + Sync + 'static,
-{
+impl Plugin for Mirror {
     fn symbol() -> &'static str {
         "mirror"
     }
@@ -249,10 +222,7 @@ Design of containerd registry mirror feature
     }
 }
 
-impl<M> Interpreter for Mirror<M>
-where
-    M: MirrorProxy + Default + Send + Sync + 'static,
-{
+impl Interpreter for Mirror {
     fn initialize(&self, _world: &mut lifec::World) {
         // TODO
     }
@@ -352,10 +322,7 @@ where
     }
 }
 
-impl<Event> BlockObject for Mirror<Event>
-where
-    Event: MirrorProxy + Default + Send + Sync + 'static,
-{
+impl BlockObject for Mirror {
     fn query(&self) -> BlockProperties {
         BlockProperties::default().require("mirror")
     }
@@ -363,475 +330,4 @@ where
     fn parser(&self) -> Option<lifec::CustomAttribute> {
         Some(Self::as_custom_attr())
     }
-}
-
-impl<P> WebApp for Mirror<P>
-where
-    P: MirrorProxy + Default + Send + Sync + 'static,
-{
-    fn create(context: &mut ThunkContext) -> Self {
-        Self {
-            context: context.clone(),
-            _proxy: P::default(),
-        }
-    }
-
-    fn routes(&mut self) -> Route {
-        let context = &self.context;
-        Route::new().nest(
-            "/v2",
-            Route::new()
-                .at(
-                    "/",
-                    get(index.data(context.clone()).data(MirrorAction::from::<P>()))
-                        .head(index.data(context.clone()).data(MirrorAction::from::<P>())),
-                )
-                .at(
-                    "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/:digest",
-                    get(download_blob
-                        .data(context.clone())
-                        .data(MirrorAction::from::<P>())),
-                )
-                .at(
-                    "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads",
-                    post(
-                        blob_upload
-                            .data(context.clone())
-                            .data(MirrorAction::from::<P>()),
-                    ),
-                )
-                .at(
-                    "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads/:reference",
-                    patch(
-                        blob_upload_chunks
-                            .data(context.clone())
-                            .data(MirrorAction::from::<P>()),
-                    )
-                    .put(
-                        blob_upload_chunks
-                            .data(context.clone())
-                            .data(MirrorAction::from::<P>()),
-                    ),
-                )
-                .at(
-                    "/:name<[a-zA-Z0-9/_-]+(?:manifests)>/:reference",
-                    get(resolve
-                        .data(context.clone())
-                        .data(MirrorAction::from::<P>()))
-                    .head(
-                        resolve
-                            .data(context.clone())
-                            .data(MirrorAction::from::<P>()),
-                    )
-                    .put(
-                        resolve
-                            .data(context.clone())
-                            .data(MirrorAction::from::<P>()),
-                    )
-                    .delete(
-                        resolve
-                            .data(context.clone())
-                            .data(MirrorAction::from::<P>()),
-                    ),
-                )
-                .at(
-                    "/:name<[a-zA-Z0-9/_-]+(?:tags)>/list",
-                    get(list_tags
-                        .data(context.clone())
-                        .data(MirrorAction::from::<P>())),
-                ),
-        )
-    }
-}
-
-#[derive(Deserialize)]
-struct IndexParams {
-    ns: Option<String>,
-}
-#[handler]
-async fn index(
-    request: &Request,
-    Query(IndexParams { ns }): Query<IndexParams>,
-    dispatcher: Data<&ThunkContext>,
-    mirror_action: Data<&MirrorAction>,
-) -> Response {
-    event!(Level::DEBUG, "Got /v2 request");
-    event!(Level::TRACE, "{:#?}", request);
-
-    let mut input = dispatcher.clone();
-
-    if let Some(ns) = ns {
-        input.state_mut().with_symbol("ns", &ns);
-    }
-
-    if let Some(response) = mirror_action.proxy(&mut input, request) {
-        response
-    } else {
-        mirror_action.handle::<Index>(&mut input).await
-    }
-}
-
-#[derive(Deserialize)]
-struct ResolveParams {
-    ns: String,
-}
-/// Resolves an image
-#[handler]
-async fn resolve(
-    request: &Request,
-    Path((name, reference)): Path<(String, String)>,
-    Query(ResolveParams { ns }): Query<ResolveParams>,
-    dispatcher: Data<&ThunkContext>,
-    mirror_action: Data<&MirrorAction>,
-) -> Response {
-    let name = name.trim_end_matches("/manifests");
-
-    event!(
-        Level::DEBUG,
-        "Got resolve request, repo: {name} ref: {reference} host: {ns}"
-    );
-    event!(Level::TRACE, "{:#?}", request);
-
-    let mut input = dispatcher.clone();
-    input
-        .state_mut()
-        .with_symbol("repo", name)
-        .with_symbol("reference", reference)
-        .with_symbol("ns", &ns)
-        .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
-        .add_symbol("accept", request.header("accept").unwrap_or_default());
-
-    if let Some(response) = mirror_action.proxy(&mut input, request) {
-        response
-    } else {
-        mirror_action
-            .handle::<((Login, Authenticate), Resolve)>(&mut input.clone())
-            .await
-    }
-}
-
-#[derive(Deserialize)]
-struct ListTagsParams {
-    ns: String,
-}
-#[handler]
-async fn list_tags(
-    request: &Request,
-    Path(name): Path<String>,
-    Query(ListTagsParams { ns }): Query<ListTagsParams>,
-    dispatcher: Data<&ThunkContext>,
-    mirror_action: Data<&MirrorAction>,
-) -> Response {
-    let name = name.trim_end_matches("/tags");
-
-    event!(Level::DEBUG, "Got list_tags request, {name}");
-    event!(Level::TRACE, "{:#?}", request);
-
-    let mut input = dispatcher.clone();
-    input
-        .state_mut()
-        .with_symbol("ns", ns)
-        .with_symbol("name", name);
-
-    if let Some(response) = mirror_action.proxy(&mut input, request) {
-        response
-    } else {
-        mirror_action
-            .handle::<((Login, Authenticate), ListTags)>(&mut input)
-            .await
-    }
-}
-
-#[handler]
-async fn download_blob(
-    request: &Request,
-    Path((name, digest)): Path<(String, String)>,
-    Query(ResolveParams { ns }): Query<ResolveParams>,
-    dispatcher: Data<&ThunkContext>,
-    mirror_action: Data<&MirrorAction>,
-) -> Response {
-    let name = name.trim_end_matches("/blobs");
-    event!(Level::DEBUG, "Got download_blobs request, {name} {digest}");
-    event!(Level::TRACE, "{:#?}", request);
-
-    let mut input = dispatcher.clone();
-    input
-        .state_mut()
-        .with_symbol("name", name)
-        .with_symbol("ns", &ns)
-        .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
-        .with_symbol("digest", digest);
-
-    if let Some(accept) = request.header("accept") {
-        input.state_mut().add_text_attr("accept", accept)
-    }
-
-    if let Some(response) = mirror_action.proxy(&mut input, request) {
-        response
-    } else {
-        mirror_action
-            .handle::<((Login, Authenticate), DownloadBlob)>(&mut input)
-            .await
-    }
-}
-
-#[derive(Deserialize)]
-struct UploadParameters {
-    digest: Option<String>,
-    ns: String,
-}
-#[handler]
-async fn blob_upload_chunks(
-    request: &Request,
-    method: Method,
-    Path((name, reference)): Path<(String, String)>,
-    Query(UploadParameters { digest, ns }): Query<UploadParameters>,
-    dispatcher: Data<&ThunkContext>,
-    mirror_action: Data<&MirrorAction>,
-) -> Response {
-    let name = name.trim_end_matches("/blobs");
-
-    event!(
-        Level::DEBUG,
-        "Got {method} blob_upload_chunks request, {name} {reference}, {:?}",
-        digest
-    );
-    event!(Level::TRACE, "{:#?}", request);
-
-    let mut input = dispatcher.clone();
-    input
-        .state_mut()
-        .with_symbol("name", name)
-        .with_symbol("reference", reference)
-        .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
-        .with_symbol("digest", digest.unwrap_or_default());
-
-    if let Some(response) = mirror_action.proxy(&mut input, request) {
-        response
-    } else {
-        mirror_action
-            .handle::<((Login, Authenticate), BlobUploadChunks)>(&mut input)
-            .await
-    }
-}
-
-#[derive(Deserialize)]
-struct ImportParameters {
-    digest: Option<String>,
-    mount: Option<String>,
-    from: Option<String>,
-    ns: String,
-}
-#[handler]
-async fn blob_upload(
-    request: &Request,
-    Path(name): Path<String>,
-    Query(ImportParameters {
-        digest,
-        mount,
-        from,
-        ns,
-    }): Query<ImportParameters>,
-    dispatcher: Data<&ThunkContext>,
-    mirror_action: Data<&MirrorAction>,
-) -> Response {
-    let name = name.trim_end_matches("/blobs");
-
-    if let (Some(mount), Some(from)) = (mount, from) {
-        event!(
-            Level::DEBUG,
-            "Got blob_import request, {name}, {mount}, {from}"
-        );
-        event!(Level::TRACE, "{:#?}", request);
-
-        let mut input = dispatcher.clone();
-        input
-            .state_mut()
-            .with_symbol("name", name)
-            .with_symbol("mount", mount)
-            .with_symbol("from", from)
-            .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
-
-        if let Some(response) = mirror_action.proxy(&mut input, request) {
-            response
-        } else {
-            mirror_action
-                .handle::<((Login, Authenticate), BlobImport)>(&mut input)
-                .await
-        }
-    } else if let Some(digest) = digest {
-        event!(
-            Level::DEBUG,
-            "Got blob_upload_monolith request, {name}, {digest}"
-        );
-        event!(Level::TRACE, "{:#?}", request);
-
-        let mut input = dispatcher.clone();
-        input
-            .state_mut()
-            .with_symbol("name", name)
-            .with_symbol("digest", digest)
-            .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
-
-        if let Some(response) = mirror_action.proxy(&mut input, request) {
-            response
-        } else {
-            mirror_action
-                .handle::<((Login, Authenticate), BlobUploadMonolith)>(&mut input)
-                .await
-        }
-    } else if let None = digest {
-        event!(Level::DEBUG, "Got blob_upload_session_id request, {name}");
-        event!(Level::TRACE, "{:#?}", request);
-
-        let mut input = dispatcher.clone();
-        input
-            .state_mut()
-            .with_symbol("name", name)
-            .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
-
-        if let Some(response) = mirror_action.proxy(&mut input, request) {
-            response
-        } else {
-            mirror_action
-                .handle::<((Login, Authenticate), BlobUploadSessionId)>(&mut input)
-                .await
-        }
-    } else {
-        soft_fail()
-    }
-}
-
-/*
-Table of OCI Endpoints
-
-ID	Method	API Endpoint	Success	Failure
-end-1	GET	/v2/	                                                                            200	404/401
-
-end-2	GET / HEAD	/v2/<name>/blobs/<digest>	                                                200	404
-end-10	DELETE	    /v2/<name>/blobs/<digest>	                                                202	404/405
-
-end-4a	POST	    /v2/<name>/blobs/uploads/	                                                202	404
-end-4b	POST	    /v2/<name>/blobs/uploads/             ?digest=<digest>	                    201/202	404/400
-end-11	POST	    /v2/<name>/blobs/uploads/             ?mount=<digest>&from=<other_name>	    201	404
-
-end-5	PATCH	    /v2/<name>/blobs/uploads/<reference>	                                    202	404/416
-end-6	PUT	        /v2/<name>/blobs/uploads/<reference>  ?digest=<digest>	                    201	404/400
-
-end-8a	GET	        /v2/<name>/tags/list	                                                    200	404
-end-8b	GET	        /v2/<name>/tags/list                  ?n=<integer>&last=<integer>	        200	404
-
-end-3	GET / HEAD	/v2/<name>/manifests/<reference>	                                        200	404
-end-7	PUT	        /v2/<name>/manifests/<reference>	                                        201	404
-end-9	DELETE	    /v2/<name>/manifests/<reference>	                                        202	404/400/405
-*/
-
-#[derive(Default)]
-struct TestMirrorEvent;
-
-impl MirrorProxy for TestMirrorEvent {
-    fn resolve_response(_tc: &ThunkContext) -> Response {
-        Response::builder().status(StatusCode::OK).finish()
-    }
-
-    fn resolve_error(_err: String, _tc: &ThunkContext) -> Response {
-        Response::builder().status(StatusCode::OK).finish()
-    }
-}
-
-#[test]
-#[tracing_test::traced_test]
-fn test_mirror() {
-    use hyper::Client;
-    use hyper_tls::HttpsConnector;
-    use lifec::WorldExt;
-
-    tokio::runtime::Runtime::new().unwrap().block_on(async {
-        let world = lifec::World::new();
-        let entity = world.entities().create();
-        let https = HttpsConnector::new();
-        let client = Client::builder().build::<_, hyper::Body>(https);
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let handle = runtime.handle();
-        let mut tc = ThunkContext::default()
-            .enable_https_client(client)
-            .enable_async(entity, handle.clone());
-
-        let app = Mirror::<TestMirrorEvent>::create(&mut tc).routes();
-        let cli = poem::test::TestClient::new(app);
-
-        let resp = cli.get("/").send().await;
-        resp.assert_status(StatusCode::NOT_FOUND);
-
-        let resp = cli.head("/").send().await;
-        resp.assert_status(StatusCode::NOT_FOUND);
-
-        let resp = cli.get("/v2").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.get("/v2/").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.head("/v2").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli.head("/v2/").send().await;
-        resp.assert_status_is_ok();
-
-        let resp = cli
-            .get("/v2/library/test/manifests/test_ref?ns=test.com")
-            .send()
-            .await;
-        resp.assert_status_is_ok();
-
-        let resp = cli
-            .head("/v2/library/test/manifests/test_ref?ns=test.com")
-            .send()
-            .await;
-        resp.assert_status_is_ok();
-
-        let resp = cli
-            .put("/v2/library/test/manifests/test_ref?ns=test.com")
-            .send()
-            .await;
-        resp.assert_status_is_ok();
-
-        let resp = cli
-            .delete("/v2/library/test/manifests/test_ref?ns=test.com")
-            .send()
-            .await;
-        resp.assert_status_is_ok();
-
-        // let resp = cli
-        //     .get("/v2/library/test/blobs/test_digest?ns=test.com")
-        //     .send()
-        //     .await;
-        // resp.assert_status_is_ok();
-
-        // let resp = cli
-        //     .post("/v2/library/test/blobs/uploads?ns=test.com")
-        //     .send()
-        //     .await;
-        // resp.assert_status_is_ok();
-
-        // let resp = cli
-        //     .patch("/v2/library/test/blobs/uploads/test?ns=test.com")
-        //     .send()
-        //     .await;
-        // resp.assert_status_is_ok();
-
-        // let resp = cli
-        //     .put("/v2/library/test/blobs/uploads/test?ns=test.com")
-        //     .send()
-        //     .await;
-        // resp.assert_status_is_ok();
-
-        // let resp = cli
-        //     .get("/v2/library/test/tags/list?ns=test.com")
-        //     .send()
-        //     .await;
-        // resp.assert_status_is_ok();
-
-        runtime.shutdown_background();
-    });
 }

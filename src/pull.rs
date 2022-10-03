@@ -1,6 +1,6 @@
 use lifec::{
     plugins::{Plugin, ThunkContext},
-    AttributeIndex, Component, DenseVecStorage,
+    AttributeIndex, Component, DenseVecStorage, BlockObject, BlockProperties,
 };
 use poem::{web::headers::Authorization, Request};
 use tracing::{event, Level};
@@ -16,11 +16,11 @@ use tracing::{event, Level};
 ///
 #[derive(Component, Default)]
 #[storage(DenseVecStorage)]
-pub struct DownloadBlob;
+pub struct Pull;
 
-impl Plugin for DownloadBlob {
+impl Plugin for Pull {
     fn symbol() -> &'static str {
-        "download_blob"
+        "pull"
     }
 
     fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
@@ -124,5 +124,15 @@ impl Plugin for DownloadBlob {
                 None
             }
         })
+    }
+}
+
+impl BlockObject for Pull {
+    fn query(&self) -> lifec::BlockProperties {
+        BlockProperties::default()
+    }
+
+    fn parser(&self) -> Option<lifec::CustomAttribute> {
+        Some(Pull::as_custom_attr())
     }
 }
