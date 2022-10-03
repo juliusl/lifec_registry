@@ -1,11 +1,14 @@
-use lifec::{ThunkContext, AttributeIndex, Host, Executor};
 use crate::Proxy;
-use poem::{Request, Response, web::{Query, Path, Data}, handler};
-use serde::Deserialize;
 use hyper::http::StatusCode;
+use lifec::{AttributeIndex, ThunkContext};
+use poem::{
+    handler,
+    web::{Data, Path, Query},
+    Request, Response,
+};
+use serde::Deserialize;
 use tracing::event;
 use tracing::Level;
-
 
 /*
 # Table of OCI Blob apis
@@ -23,14 +26,14 @@ end-6	PUT	        /v2/<name>/blobs/uploads/<reference>  ?digest=<digest>	       
 */
 
 /// Struct for blob download query parameters
-/// 
+///
 #[derive(Deserialize)]
 pub struct BlobDownloadParams {
     ns: String,
 }
 
 /// API handler for end-2
-/// 
+///
 #[handler]
 pub async fn blob_download_api(
     request: &Request,
@@ -39,7 +42,7 @@ pub async fn blob_download_api(
     context: Data<&ThunkContext>,
 ) -> Response {
     if !context.is_enabled("proxy_enabled") {
-        return Proxy::soft_fail()
+        return Proxy::soft_fail();
     }
 
     let name = name.trim_end_matches("/blobs");
@@ -58,14 +61,11 @@ pub async fn blob_download_api(
         input.state_mut().add_text_attr("accept", accept)
     }
 
-    let mut host = Host::load_content::<Proxy>(input.state().find_text("proxy_src").unwrap());
-
-    let input = host.execute(&input);
-    Proxy::into_response(&input)
+    Proxy::handle(&input).await
 }
 
 /// API handler for end-4a, end-4b, end-11
-/// 
+///
 #[derive(Deserialize)]
 pub struct ImportParameters {
     digest: Option<String>,
@@ -108,10 +108,7 @@ pub async fn blob_upload_api(
             .with_symbol("from", from)
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
-        let mut host = Host::load_content::<Proxy>(input.state().find_text("proxy_src").unwrap());
-
-        let input = host.execute(&input);
-        Proxy::into_response(&input)
+        Proxy::handle(&input).await
     } else if let Some(digest) = digest {
         event!(
             Level::DEBUG,
@@ -126,10 +123,7 @@ pub async fn blob_upload_api(
             .with_symbol("digest", digest)
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
-        let mut host = Host::load_content::<Proxy>(input.state().find_text("proxy_src").unwrap());
-
-        let input = host.execute(&input);
-        Proxy::into_response(&input)
+        Proxy::handle(&input).await
     } else if let None = digest {
         event!(Level::DEBUG, "Got blob_upload_session_id request, {name}");
         event!(Level::TRACE, "{:#?}", request);
@@ -140,10 +134,7 @@ pub async fn blob_upload_api(
             .with_symbol("name", name)
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
-        let mut host = Host::load_content::<Proxy>(input.state().find_text("proxy_src").unwrap());
-
-        let input = host.execute(&input);
-        Proxy::into_response(&input)
+        Proxy::handle(&input).await
     } else {
         return Response::builder()
             .status(StatusCode::SERVICE_UNAVAILABLE)
@@ -152,7 +143,7 @@ pub async fn blob_upload_api(
 }
 
 /// API handler for end-5, end-6
-/// 
+///
 #[derive(Deserialize)]
 pub struct UploadParameters {
     digest: Option<String>,
@@ -189,8 +180,5 @@ pub async fn blob_chunk_upload_api(
         .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
         .with_symbol("digest", digest.unwrap_or_default());
 
-    let mut host = Host::load_content::<Proxy>(input.state().find_text("proxy_src").unwrap());
-
-    let input = host.execute(&input);
-    Proxy::into_response(&input)
+    Proxy::handle(&input).await
 }

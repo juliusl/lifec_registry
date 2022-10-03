@@ -1,11 +1,6 @@
 use crate::Proxy;
 use hyper::http::StatusCode;
-use lifec::{
-    AttributeIndex, 
-    Host, 
-    ThunkContext,
-    Executor
-};
+use lifec::{AttributeIndex, ThunkContext};
 use poem::{
     handler,
     web::{Data, Path, Query},
@@ -42,10 +37,5 @@ pub async fn tags_api(
         .with_symbol("ns", ns)
         .with_symbol("name", name);
 
-    let mut host = Host::load_content::<Proxy>(
-        input.state().find_text("proxy_src").unwrap()
-    );
-
-    let input = host.execute(&input);
-    Proxy::into_response(&input)
+    Proxy::handle(&input).await
 }

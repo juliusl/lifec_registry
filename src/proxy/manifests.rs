@@ -5,6 +5,16 @@ use serde::Deserialize;
 use tracing::{event, Level};
 use crate::Proxy;
 
+/*
+# Table of OCI distribution manifest apis
+
+end-3	GET / HEAD	/v2/<name>/manifests/<reference>	                                        200	404
+end-7	PUT	        /v2/<name>/manifests/<reference>	                                        201	404
+end-9	DELETE	    /v2/<name>/manifests/<reference>	                                        202	404/400/405
+*/
+
+/// Struct for manifest api query parameters 
+/// 
 #[derive(Deserialize)]
 pub struct ManifestAPIParams {
     ns: String,
@@ -41,9 +51,19 @@ pub async fn manifests_api(
         .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
         .with_symbol("accept", request.header("accept").unwrap_or_default())
         .with_symbol("method", method);
+    
+    eprintln!("{:#?}", input.state().values());
 
     let mut host = Host::load_content::<Proxy>(input.state().find_text("proxy_src").unwrap());
 
-    let input = host.execute(&input);
-    Proxy::into_response(&input)
+    let (join, cancel) = host.execute(&input);
+
+    match join.await {
+        Ok(result) => {
+            Proxy::into_response(&result)
+        }
+        Err(err) => {
+            Proxy::soft_fail()
+        }
+    }
 }

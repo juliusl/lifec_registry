@@ -1,7 +1,7 @@
 use hyper::http::StatusCode;
 use lifec::{
     default_parser, default_runtime, AttributeGraph, AttributeIndex, BlockIndex, CustomAttribute,
-    Host, Project, Runtime, SpecialAttribute, Start, ThunkContext, Value,
+    Host, Project, Runtime, Source, SpecialAttribute, Start, ThunkContext, Value, WorldExt, Executor,
 };
 use lifec_poem::WebApp;
 use logos::Logos;
@@ -14,7 +14,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use tracing::{event, Level};
 
-use crate::{Authenticate, Discover, Login, LoginACR, Mirror, Resolve};
+use crate::{Authenticate, Discover, Login, LoginACR, Mirror, Pull, Resolve};
 
 mod methods;
 use methods::Methods;
@@ -118,7 +118,9 @@ impl SpecialAttribute for Proxy {
 }
 
 impl Project for Proxy {
-    fn interpret(_: &lifec::World, _: &lifec::Block) {}
+    fn interpret(_: &lifec::World, _: &lifec::Block) {
+       
+    }
 
     fn parser() -> lifec::Parser {
         default_parser(Self::world()).with_special_attr::<Proxy>()
@@ -126,12 +128,14 @@ impl Project for Proxy {
 
     fn runtime() -> lifec::Runtime {
         let mut runtime = default_runtime();
-        runtime.install_with_custom::<Authenticate>("");
+        // TODO -- Change login-acr to something more generic
         runtime.install_with_custom::<LoginACR>("");
+        runtime.install_with_custom::<Authenticate>("");
         runtime.install_with_custom::<Mirror>("");
         runtime.install_with_custom::<Login>("");
         runtime.install_with_custom::<Resolve>("");
         runtime.install_with_custom::<Discover>("");
+        runtime.install_with_custom::<Pull>("");
         runtime
     }
 
@@ -165,9 +169,6 @@ end-1	GET	/v2/	                                                                 
 end-8a	GET	        /v2/<name>/tags/list	                                                    200	404
 end-8b	GET	        /v2/<name>/tags/list                  ?n=<integer>&last=<integer>	        200	404
 
-end-3	GET / HEAD	/v2/<name>/manifests/<reference>	                                        200	404
-end-7	PUT	        /v2/<name>/manifests/<reference>	                                        201	404
-end-9	DELETE	    /v2/<name>/manifests/<reference>	                                        202	404/400/405
 */
 
 impl WebApp for Proxy {
@@ -176,6 +177,11 @@ impl WebApp for Proxy {
     }
 
     fn routes(&mut self) -> poem::Route {
+        let proxy_src = self
+            .context
+            .state()
+            .find_text("proxy_src")
+            .expect("should have src for proxy");
         if let Some(block) = self.context.block() {
             let context = self.context.clone();
             if let Some(i) = block.index().iter().find(|b| b.root().name() == "proxy") {
@@ -197,8 +203,11 @@ impl WebApp for Proxy {
                         .collect::<Vec<_>>();
 
                     for (method, resource) in methods.iter().zip(resources) {
-                        let mut context = context.clone();
-                        context.state_mut().with_bool("proxy_enabled", true);
+                        let mut context = context.with_state(graph.clone());
+                        context
+                            .state_mut()
+                            .with_bool("proxy_enabled", true)
+                            .with_text("proxy_src", proxy_src.to_string());
                         context_map.insert((method.clone(), resource), context);
                     }
                 }
@@ -330,6 +339,21 @@ impl From<ThunkContext> for Proxy {
 }
 
 impl Proxy {
+    pub async fn handle(input: &ThunkContext) -> Response {
+        let mut host = Host::load_content::<Proxy>(input.state().find_text("proxy_src").unwrap());
+
+        let (join, _) = host.execute(&input);
+    
+        match join.await {
+            Ok(result) => {
+                Proxy::into_response(&result)
+            }
+            Err(err) => {
+                Proxy::soft_fail()
+            }
+        }
+    }
+
     pub fn into_response(context: &ThunkContext) -> Response {
         if let Some(body) = context.state().find_binary("body") {
             let content_type = context
@@ -387,7 +411,14 @@ mod tests {
     #[test]
     #[tracing_test::traced_test]
     fn test_proxy_parsing() {
+        use hyper::Client;
+        use hyper::StatusCode;
+        use hyper_tls::HttpsConnector;
         use lifec::prelude::*;
+        use lifec::Source;
+        use lifec::ThunkContext;
+        use lifec::WorldExt;
+        use lifec_poem::WebApp;
 
         use crate::Proxy;
         let mut host = Host::load_content::<Proxy>(
@@ -397,30 +428,19 @@ mod tests {
         # Proxy setup
         + .proxy                  localhost:8567
 
-        ## Resolve manifests and artifacts
         : .manifests head, get
         : .println test
         : .println that
+        : .println manifests
         : .println sequence
         : .println works
-        # :   .login                  access_token
-        # :   .authn                  oauth2
-        # :   .resolve                application/vnd.oci.image.manifest.v1+json <if accept is * or matches>
-        # :   .discover               dadi.image.v1
-        # :   .discover               sbom.json
 
-        ## Teleport and dispatch a convert operation if teleport isn't available
-        # :   .teleport               overlaybd, auto
-        # :   .converter              convert overlaybd <name of the engine that can do the conversion>
-
-        ## Validate signatures
-        # :   .notary
-
-        ## Download blobs
-        # : .blobs head, get
-        # : .login                  access_token
-        # : .authn                  oauth2
-        # : .println
+        : .blobs head, get
+        : .println test
+        : .println that
+        : .println blobs
+        : .println sequence
+        : .println works
         ```
         "#,
         );
@@ -430,20 +450,110 @@ mod tests {
         dispatcher.setup(host.world_mut());
 
         let block = Engine::find_block(host.world(), "start proxy").expect("block is created");
-
         let block = {
             let blocks = host.world().read_component::<Block>();
             blocks.get(block).unwrap().clone()
         };
 
-        for index in block.index() {
-            let graphs = Proxy::extract_routes(&index);
+        let index = block.index().first().expect("should exist").clone();
+        let src = host.world().fetch::<Source>();
+        let mut graph = AttributeGraph::new(index);
+        graph.add_text_attr("proxy_src", src.0.to_string());
 
-            let graphs = graphs.first().expect("should be a graph");
-            // let tc = ThunkContext::default().with_state(graph.clone());
+        tokio::runtime::Runtime::new().unwrap().block_on(async {
+            let world = lifec::World::new();
+            let entity = world.entities().create();
+            let https = HttpsConnector::new();
+            let client = Client::builder().build::<_, hyper::Body>(https);
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let handle = runtime.handle();
 
-            // let _ = host.execute(&tc);
-        }
+            let mut tc = ThunkContext::default()
+                .with_block(&block)
+                .with_state(graph)
+                .enable_https_client(client)
+                .enable_async(entity, handle.clone());
+
+            let app = Proxy::create(&mut tc).routes();
+            let cli = poem::test::TestClient::new(app);
+
+            let resp = cli
+                .get("/v2/library/test/manifests/test_ref?ns=test.com")
+                .send()
+                .await;
+            resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
+
+            let resp = cli
+                .get("/v2/library/test/blobs/test_digest?ns=test.com")
+                .send()
+                .await;
+            resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
+            
+            // TODO add these tests back 
+            // let resp = cli.get("/").send().await;
+            // resp.assert_status(StatusCode::NOT_FOUND);
+
+            // let resp = cli.head("/").send().await;
+            // resp.assert_status(StatusCode::NOT_FOUND);
+
+            // let resp = cli.get("/v2").send().await;
+            // resp.assert_status_is_ok();
+
+            // let resp = cli.get("/v2/").send().await;
+            // resp.assert_status_is_ok();
+
+            // let resp = cli.head("/v2").send().await;
+            // resp.assert_status_is_ok();
+
+            // let resp = cli.head("/v2/").send().await;
+            // resp.assert_status_is_ok();
+
+            // let resp = cli
+            //     .head("/v2/library/test/manifests/test_ref?ns=test.com")
+            //     .send()
+            //     .await;
+            // resp.assert_status_is_ok();
+
+            // let resp = cli
+            //     .put("/v2/library/test/manifests/test_ref?ns=test.com")
+            //     .send()
+            //     .await;
+            // resp.assert_status_is_ok();
+
+            // let resp = cli
+            //     .delete("/v2/library/test/manifests/test_ref?ns=test.com")
+            //     .send()
+            //     .await;
+            // resp.assert_status_is_ok();
+
+        
+
+            // let resp = cli
+            //     .post("/v2/library/test/blobs/uploads?ns=test.com")
+            //     .send()
+            //     .await;
+            // resp.assert_status_is_ok();
+
+            // let resp = cli
+            //     .patch("/v2/library/test/blobs/uploads/test?ns=test.com")
+            //     .send()
+            //     .await;
+            // resp.assert_status_is_ok();
+
+            // let resp = cli
+            //     .put("/v2/library/test/blobs/uploads/test?ns=test.com")
+            //     .send()
+            //     .await;
+            // resp.assert_status_is_ok();
+
+            // let resp = cli
+            //     .get("/v2/library/test/tags/list?ns=test.com")
+            //     .send()
+            //     .await;
+            // resp.assert_status_is_ok();
+
+            runtime.shutdown_background();
+        });
     }
 }
 
