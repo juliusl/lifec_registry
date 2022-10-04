@@ -55,7 +55,7 @@ pub async fn blob_download_api(
         .state_mut()
         .with_symbol("name", name)
         .with_symbol("ns", &ns)
-        .with_symbol("method", method)
+        .with_symbol("method", method.as_str().to_ascii_uppercase())
         .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
         .with_symbol("digest", digest);
 
@@ -78,6 +78,7 @@ pub struct ImportParameters {
 #[handler]
 pub async fn blob_upload_api(
     request: &Request,
+    method: poem::http::Method,
     Path(name): Path<String>,
     Query(ImportParameters {
         digest,
@@ -108,6 +109,7 @@ pub async fn blob_upload_api(
             .with_symbol("name", name)
             .with_symbol("mount", mount)
             .with_symbol("from", from)
+            .with_symbol("method", method.as_str().to_ascii_uppercase())
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
         Proxy::handle(&input).await
@@ -123,6 +125,7 @@ pub async fn blob_upload_api(
             .state_mut()
             .with_symbol("name", name)
             .with_symbol("digest", digest)
+            .with_symbol("method", method.as_str().to_ascii_uppercase())
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
         Proxy::handle(&input).await
@@ -134,6 +137,7 @@ pub async fn blob_upload_api(
         input
             .state_mut()
             .with_symbol("name", name)
+            .with_symbol("method", method.as_str().to_ascii_uppercase())
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
         Proxy::handle(&input).await
@@ -179,6 +183,7 @@ pub async fn blob_chunk_upload_api(
         .state_mut()
         .with_symbol("name", name)
         .with_symbol("reference", reference)
+        .with_symbol("method", method.as_str().to_ascii_uppercase())
         .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
         .with_symbol("digest", digest.unwrap_or_default());
 

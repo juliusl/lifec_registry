@@ -16,6 +16,7 @@ pub struct TagsAPIParams {
 #[handler]
 pub async fn tags_api(
     request: &Request,
+    method: poem::http::Method,
     Path(name): Path<String>,
     Query(TagsAPIParams { ns }): Query<TagsAPIParams>,
     context: Data<&ThunkContext>,
@@ -35,6 +36,7 @@ pub async fn tags_api(
     input
         .state_mut()
         .with_symbol("ns", ns)
+        .with_symbol("method", method.as_str().to_ascii_uppercase())
         .with_symbol("name", name);
 
     Proxy::handle(&input).await

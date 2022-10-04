@@ -44,7 +44,7 @@ use crate::Proxy;
 pub struct Mirror;
 
 impl Mirror {
-    /// Ensures the hosts dir exists
+    /// Ensures the hosts dir exists for the given registry exists,
     ///
     async fn ensure_hosts_dir(app_host: impl AsRef<str>) {
         let hosts_dir = format!("/etc/containerd/certs.d/{}/", app_host.as_ref());

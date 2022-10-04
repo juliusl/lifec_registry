@@ -53,7 +53,7 @@ pub async fn manifests_api(
         .with_symbol("ns", &ns)
         .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
         .with_symbol("accept", request.header("accept").unwrap_or_default())
-        .with_symbol("method", method);
+        .with_symbol("method", method.as_str().to_ascii_uppercase());
 
     Proxy::handle(&input).await
 }

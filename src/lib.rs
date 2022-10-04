@@ -23,9 +23,6 @@ mod login;
 pub use login::Login;
 pub use login::LoginACR;
 
-mod push_session;
-pub use push_session::PushSession;
-
 mod download;
 pub use download::Download;
 

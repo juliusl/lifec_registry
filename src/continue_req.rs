@@ -56,7 +56,7 @@ impl Plugin for Continue {
                                     }
                                 })
                                 .method(
-                                    Method::from_bytes(method.to_ascii_uppercase().as_bytes())
+                                    Method::from_bytes(method.as_bytes())
                                         .unwrap(),
                                 );
 
