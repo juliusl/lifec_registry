@@ -1,58 +1,71 @@
-use lifec::{
-    plugins::{Plugin, ThunkContext},
-    AttributeIndex, Component, DenseVecStorage, BlockObject, BlockProperties,
-};
+use lifec::{prelude::*, BlockObject, BlockProperties, Plugin};
 use poem::{web::headers::Authorization, Request};
 use tracing::{event, Level};
 
-/// Blob download handler based on OCI spec endpoints:
+/// Plugin that will continue the request from the proxy, using the auth context from the previous state
 ///
-/// ```markdown
-/// | ID     | Method         | API Endpoint                                                 | Success     | Failure           |
-/// | ------ | -------------- | ------------------------------------------------------------ | ----------- | ----------------- |
-/// | end-2  | `GET` / `HEAD` | `/v2/<name>/blobs/<digest>`                                  | `200`       | `404`             |
-/// | end-10 | `DELETE`       | `/v2/<name>/blobs/<digest>`                                  | `202`       | `404`/`405`       |
-/// ```
-///
-#[derive(Component, Default)]
-#[storage(DenseVecStorage)]
-pub struct Download;
+pub struct Continue;
 
-impl Plugin for Download {
+impl Plugin for Continue {
     fn symbol() -> &'static str {
-        "download"
+        "continue"
     }
 
     fn description() -> &'static str {
-        "Downloads content from a registry"
+        "Continues making the request to the upstream server, uses the auth context from the previous plugin state"
     }
 
-    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
-        context.clone().task(|_| {
+    fn caveats() -> &'static str {
+        "Useful if all you require is authn or response inspection"
+    }
+
+    fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {
+        context.task(|_| {
             let mut tc = context.clone();
             async move {
-                if let (Some(ns), Some(name), Some(digest), Some(accept), Some(access_token)) = (
-                    tc.previous().expect("previous should exist").find_symbol("ns"),
-                    tc.previous().expect("previous should exist").find_symbol("name"),
-                    tc.previous().expect("previous should exist").find_symbol("digest"),
-                    tc.previous().expect("previous should exist").find_symbol("accept"),
-                    tc.previous().expect("previous should exist").find_symbol("access_token"),
+                if let (Some(ns), Some(api), Some(method), Some(accept), Some(access_token)) = (
+                    tc.previous()
+                        .expect("previous should exist")
+                        .find_symbol("ns"),
+                    tc.previous()
+                        .expect("previous should exist")
+                        .find_symbol("api"),
+                    tc.previous()
+                        .expect("previous should exist")
+                        .find_symbol("method"),
+                    tc.previous()
+                        .expect("previous should exist")
+                        .find_symbol("accept"),
+                    tc.previous()
+                        .expect("previous should exist")
+                        .find_symbol("access_token"),
                 ) {
                     let protocol = tc
                         .state()
                         .find_symbol("protocol")
                         .unwrap_or("https".to_string());
 
-                    let download_api = format!("{protocol}://{ns}/v2/{name}/blobs/{digest}");
-                    event!(Level::DEBUG, "Starting blob download, {download_api}");
+                    let url = format!("{protocol}://{ns}/v2/{api}");
+                    event!(Level::DEBUG, "Continuing proxied request, {url}");
                     match Authorization::bearer(&access_token) {
                         Ok(auth_header) => {
                             event!(Level::DEBUG, "accept header is: {}", &accept);
                             let req = Request::builder()
-                                .uri_str(download_api.as_str())
+                                .uri_str(url.as_str())
                                 .typed_header(auth_header.clone())
                                 .header("accept", accept)
-                                .finish();
+                                .method(method.parse().expect("should be a valid method"));
+
+                            let req = if let Some(body) = tc
+                                .previous()
+                                .expect("previous should exist")
+                                .find_binary("body")
+                            {
+                                req.body(body)
+                            } else {
+                                req.finish()
+                            };
+
                             let client = tc.client().expect("async should be enabled");
                             match client.request(req.into()).await {
                                 Ok(response) => {
@@ -85,21 +98,11 @@ impl Plugin for Download {
                                         );
                                     }
 
-                                    let response = if let Some(location) =
-                                        response.headers().get("Location")
-                                    {
-                                        client
-                                            .get(
-                                                location
-                                                    .to_str()
-                                                    .unwrap_or_default()
-                                                    .parse()
-                                                    .unwrap(),
-                                            )
-                                            .await
-                                            .unwrap()
-                                    } else {
-                                        response
+                                    if let Some(location) = response.headers().get("Location") {
+                                        tc.state_mut().add_symbol(
+                                            "location",
+                                            location.to_str().unwrap_or_default(),
+                                        );
                                     };
 
                                     match hyper::body::to_bytes(response.into_body()).await {
@@ -116,8 +119,6 @@ impl Plugin for Download {
                                         Err(err) => event!(Level::ERROR, "{err}"),
                                     }
 
-                                    tc.copy_previous();
-
                                     return Some(tc);
                                 }
                                 Err(err) => event!(Level::ERROR, "{err}"),
@@ -127,18 +128,24 @@ impl Plugin for Download {
                     }
                 }
 
-                None
+                tc.copy_previous();
+
+                Some(tc)
             }
         })
     }
 }
 
-impl BlockObject for Download {
-    fn query(&self) -> lifec::BlockProperties {
+impl BlockObject for Continue {
+    fn query(&self) -> BlockProperties {
         BlockProperties::default()
+            .require("api")
+            .require("ns")
+            .require("accept")
+            .optional("body")
     }
 
     fn parser(&self) -> Option<lifec::CustomAttribute> {
-        Some(Download::as_custom_attr())
+        Some(Self::as_custom_attr())
     }
 }

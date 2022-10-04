@@ -1,6 +1,9 @@
 mod mirror;
 pub use mirror::Mirror;
 
+mod continue_req;
+pub use continue_req::Continue;
+
 mod artifact;
 pub use artifact::Artifact;
 

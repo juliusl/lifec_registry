@@ -1,7 +1,7 @@
 use hyper::http::StatusCode;
 use lifec::{
     default_parser, default_runtime, AttributeGraph, AttributeIndex, BlockIndex, CustomAttribute,
-    Host, Project, Runtime, SpecialAttribute, Start, ThunkContext, Value, Executor,
+    Executor, Host, Project, Runtime, SpecialAttribute, Start, ThunkContext, Value,
 };
 use lifec_poem::WebApp;
 use logos::Logos;
@@ -14,7 +14,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use tracing::{event, Level};
 
-use crate::{Authenticate, Discover, Login, LoginACR, Mirror, Download, Resolve, Teleport};
+use crate::{Authenticate, Discover, Download, Login, LoginACR, Mirror, Resolve, Teleport};
 
 mod methods;
 use methods::Methods;
@@ -118,9 +118,7 @@ impl SpecialAttribute for Proxy {
 }
 
 impl Project for Proxy {
-    fn interpret(_: &lifec::World, _: &lifec::Block) {
-       
-    }
+    fn interpret(_: &lifec::World, _: &lifec::Block) {}
 
     fn parser() -> lifec::Parser {
         default_parser(Self::world()).with_special_attr::<Proxy>()
@@ -341,16 +339,14 @@ impl From<ThunkContext> for Proxy {
 
 impl Proxy {
     /// Handles executing the proxy sequence
-    /// 
+    ///
     pub async fn handle(input: &ThunkContext) -> Response {
         let mut host = Host::load_content::<Proxy>(input.state().find_text("proxy_src").unwrap());
 
         let (join, _) = host.execute(&input);
-    
+
         match join.await {
-            Ok(result) => {
-                Proxy::into_response(&result)
-            }
+            Ok(result) => Proxy::into_response(&result),
             Err(err) => {
                 event!(Level::ERROR, "Error handling call sequence, {err}");
                 Proxy::soft_fail()
@@ -359,7 +355,6 @@ impl Proxy {
     }
 
     pub fn into_response(context: &ThunkContext) -> Response {
-        // TODO -- Add support for push flows
         if let Some(body) = context.state().find_binary("body") {
             let content_type = context
                 .previous()
@@ -372,11 +367,16 @@ impl Proxy {
                 .find_symbol("digest")
                 .expect("A digest should've been provided");
 
-            Response::builder()
+            let mut response = Response::builder()
                 .status(StatusCode::OK)
                 .content_type(content_type)
-                .header("Docker-Content-Digest", digest)
-                .body(body)
+                .header("Docker-Content-Digest", digest);
+
+            if let Some(location) = context.previous().unwrap().find_symbol("location") {
+                response = response.header("Location", location);
+            }
+
+            response.body(body)
         } else {
             Response::builder()
                 .status(StatusCode::SERVICE_UNAVAILABLE)
@@ -495,8 +495,8 @@ mod tests {
                 .send()
                 .await;
             resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
-            
-            // TODO add these tests back 
+
+            // TODO add these tests back
             // let resp = cli.get("/").send().await;
             // resp.assert_status(StatusCode::NOT_FOUND);
 
@@ -532,8 +532,6 @@ mod tests {
             //     .send()
             //     .await;
             // resp.assert_status_is_ok();
-
-        
 
             // let resp = cli
             //     .post("/v2/library/test/blobs/uploads?ns=test.com")
