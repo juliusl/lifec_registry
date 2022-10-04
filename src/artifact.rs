@@ -21,14 +21,20 @@ impl Plugin for Artifact {
     }
 
     /// # Example usage
+    /// 
     /// ```md
+    /// .process sh convert.sh
+    /// 
     /// .artifact artifact.example.v1
     /// - This will get resolved when the plugin is called
-    /// .subject {registry-name}.{registry-host}/redis:{reference}
-    /// .blob    world://{subject-dir}/sbom.json, application/json
-    /// .blob    world://{subject-dir}/output.txt, application/json
-    /// .blob    registry://{registry-name}.{registry-host}/redis:{reference}-example, application/vnd.oci.image.manifest.v1+json
+    /// 
+    /// .subject {registry-name}.{registry-host}/{repo}:{reference}
+    /// .blob    world://{subject}/sbom.json, application/json
+    /// .blob    world://{subject}/output.txt, text/utf8
+    /// .blob    registry://{registry-name}.{registry-host}/{repo}:{reference}-obd, application/vnd.oci.image.manifest.v1+json
+    /// 
     /// ```
+    /// 
     fn compile(parser: &mut lifec::AttributeParser) {
         parser.add_custom(CustomAttribute::new_with("subject", |p, content| {
             if let Some(last) = p.last_child_entity() {

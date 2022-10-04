@@ -76,7 +76,7 @@ async fn main() {
                                     engine_name: None,
                                     ..
                                 } => {
-                                    host.set_command(lifec::Commands::start_engine("start mirror"));
+                                    host.set_command(lifec::Commands::start_engine("mirror"));
                                 },
                                 _ => {
 

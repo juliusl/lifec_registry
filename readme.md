@@ -17,6 +17,12 @@ Next, clone this repo and from the root run,
 cargo install --path .
 ```
 
+or,
+
+```
+cargo install --git https://github.com/juliusl/lifec_registry --branch pr/v2_api
+```
+ 
 This will install a binary called `acr` on your PATH. 
 
 ## (TODO) Install dependencies
