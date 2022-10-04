@@ -4,6 +4,7 @@ use logos::{Logos, Lexer};
 
 /// This plugin is for adding artifacts to a registry,
 /// 
+#[derive(Default)]
 pub struct Artifact;
 
 
@@ -44,7 +45,7 @@ impl Plugin for Artifact {
 
 
         parser.add_custom(CustomAttribute::new_with("blob", |p, content| {
-
+            
         }));
     }
 }

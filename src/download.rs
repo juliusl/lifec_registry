@@ -16,11 +16,15 @@ use tracing::{event, Level};
 ///
 #[derive(Component, Default)]
 #[storage(DenseVecStorage)]
-pub struct Pull;
+pub struct Download;
 
-impl Plugin for Pull {
+impl Plugin for Download {
     fn symbol() -> &'static str {
-        "pull"
+        "download"
+    }
+
+    fn description() -> &'static str {
+        "Downloads content from a registry"
     }
 
     fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
@@ -28,11 +32,11 @@ impl Plugin for Pull {
             let mut tc = context.clone();
             async move {
                 if let (Some(ns), Some(name), Some(digest), Some(accept), Some(access_token)) = (
-                    tc.state().find_symbol("ns"),
-                    tc.state().find_symbol("name"),
-                    tc.state().find_symbol("digest"),
-                    tc.state().find_symbol("accept"),
-                    tc.previous().and_then(|p| p.find_symbol("access_token")),
+                    tc.previous().expect("previous should exist").find_symbol("ns"),
+                    tc.previous().expect("previous should exist").find_symbol("name"),
+                    tc.previous().expect("previous should exist").find_symbol("digest"),
+                    tc.previous().expect("previous should exist").find_symbol("accept"),
+                    tc.previous().expect("previous should exist").find_symbol("access_token"),
                 ) {
                     let protocol = tc
                         .state()
@@ -129,12 +133,12 @@ impl Plugin for Pull {
     }
 }
 
-impl BlockObject for Pull {
+impl BlockObject for Download {
     fn query(&self) -> lifec::BlockProperties {
         BlockProperties::default()
     }
 
     fn parser(&self) -> Option<lifec::CustomAttribute> {
-        Some(Pull::as_custom_attr())
+        Some(Download::as_custom_attr())
     }
 }

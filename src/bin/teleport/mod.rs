@@ -65,7 +65,7 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : .blobs          get
 :   .login        access_token
 :   .authn        oauth2
-:   .pull
+:   .download
 
 # Push blobs example
 # : .blobs          post

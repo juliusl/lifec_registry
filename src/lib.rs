@@ -23,8 +23,11 @@ pub use login::LoginACR;
 mod push_session;
 pub use push_session::PushSession;
 
-mod pull;
-pub use pull::Pull;
+mod download;
+pub use download::Download;
+
+mod upload;
+pub use upload::Upload;
 
 mod list_tags;
 pub use list_tags::ListTags;

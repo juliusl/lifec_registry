@@ -4,7 +4,7 @@ use lifec::{
     Start, ThunkContext, default_parser, Source, WorldExt, AttributeGraph,
 };
 use lifec::{Host, Project};
-use lifec_registry::{LoginACR, Mirror, Proxy, Login, Authenticate, Resolve, Discover, Pull, Teleport};
+use lifec_registry::{LoginACR, Mirror, Proxy, Login, Authenticate, Resolve, Discover, Download, Teleport, Upload, Artifact};
 use serde::Serialize;
 use std::path::PathBuf;
 use tinytemplate::TinyTemplate;
@@ -258,9 +258,11 @@ impl Project for ACR {
         runtime.install_with_custom::<Mirror>("");
         runtime.install_with_custom::<Login>("");
         runtime.install_with_custom::<Resolve>("");
-        runtime.install_with_custom::<Pull>("");
+        runtime.install_with_custom::<Download>("");
         runtime.install_with_custom::<Discover>("");
         runtime.install_with_custom::<Teleport>("");
+        runtime.install_with_custom::<Upload>("");
+        runtime.install_with_custom::<Artifact>("");
         runtime
     }
 
