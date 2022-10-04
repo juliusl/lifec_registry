@@ -1,10 +1,13 @@
 use clap::{Args, Parser, Subcommand};
 use lifec::{
-    default_runtime, AttributeIndex, Inspector, Interpreter,
-    Start, ThunkContext, default_parser, Source, WorldExt, AttributeGraph,
+    default_parser, default_runtime, AttributeGraph, AttributeIndex, Block, BlockProperties, Event,
+    Inspector, Interpreter, Source, Start, ThunkContext, Value, WorldExt,
 };
 use lifec::{Host, Project};
-use lifec_registry::{LoginACR, Mirror, Proxy, Login, Authenticate, Resolve, Discover, Download, Teleport, Upload, Artifact, Continue};
+use lifec_registry::{
+    Artifact, Authenticate, Continue, Discover, Download, Login, LoginACR, Mirror, Proxy, Resolve,
+    Teleport, Upload,
+};
 use serde::Serialize;
 use std::path::PathBuf;
 use tinytemplate::TinyTemplate;
@@ -69,18 +72,16 @@ async fn main() {
                             .expect("should be able to create string"),
                     );
                     if let Some(mut host) = host.create_host::<ACR>().await.take() {
-                        if let Some(lifec::Commands::Start(start)) = host.command(){
+                        if let Some(lifec::Commands::Start(start)) = host.command() {
                             match start {
                                 Start {
-                                    id: None, 
+                                    id: None,
                                     engine_name: None,
                                     ..
                                 } => {
                                     host.set_command(lifec::Commands::start_engine("mirror"));
-                                },
-                                _ => {
-
                                 }
+                                _ => {}
                             }
                         }
 
@@ -134,6 +135,54 @@ async fn main() {
 
                     host.print_engine_event_graph();
                     host.print_lifecycle_graph();
+
+                    // Print the proxy state
+                    for block in host.world().read_component::<Block>().as_slice() {
+                        for i in block.index().iter().filter(|b| b.root().name() == "proxy") {
+                            println!("Proxy routes:");
+                            println!("This is the configuration for the proxy sub-engine hosted by the mirror");
+                            println!();
+                            for route in Proxy::extract_routes(i) {
+                                let methods = route.find_symbol_values("method");
+                                let resources = route.find_symbol_values("resource");
+
+                                let mut zipped = methods.iter().zip(resources.iter());
+                                if let Some((method, resource)) = zipped.next() {
+                                    print!("\t{:2}:\t{resource} - {method}", route.entity_id());
+                                }
+                                for (method, _) in zipped {
+                                    print!(" {method}");
+                                }
+                                println!();
+
+                                for i in
+                                    route
+                                        .find_values("sequence")
+                                        .iter()
+                                        .filter_map(|v| match v {
+                                            Value::Int(ent) => {
+                                                Some(host.world().entities().entity(*ent as u32))
+                                            }
+                                            _ => None,
+                                        })
+                                {
+                                    let props = host.world().read_component::<BlockProperties>();
+                                    let events = host.world().read_component::<Event>();
+                                    if let (Some(event), Some(properties)) =
+                                        (events.get(i), props.get(i))
+                                    {
+                                        print!("\t{:2}:\t{}", i.id(), event);
+                                        if let Some(prop) = properties.property(event.1.0) {
+                                            print!(" {prop}");
+                                        }
+                                        println!();
+                                    }
+                                }
+                                println!();
+                            }
+                            return;
+                        }
+                    }
                 }
             }
         }
@@ -234,7 +283,11 @@ impl Project for ACR {
         Mirror::default().interpret(world, block);
 
         let source = world.fetch::<Source>();
-        for index in block.index().iter().filter(|b| b.root().name() == "runtime") {
+        for index in block
+            .index()
+            .iter()
+            .filter(|b| b.root().name() == "runtime")
+        {
             for (child, props) in index.iter_children() {
                 if props.property("mirror").is_some() {
                     let child = world.entities().entity(*child);
@@ -245,10 +298,9 @@ impl Project for ACR {
             }
         }
     }
-    
+
     fn parser() -> lifec::Parser {
-        default_parser(Self::world())
-            .with_special_attr::<Proxy>()
+        default_parser(Self::world()).with_special_attr::<Proxy>()
     }
 
     fn runtime() -> lifec::Runtime {
@@ -284,7 +336,11 @@ impl Project for ACR {
         } = start_command
         {
             // This will create a new host and start the command
-            if let Self { command: Some(Commands::Mirror(mut host)), .. } = ACR::from(tc.clone()) {
+            if let Self {
+                command: Some(Commands::Mirror(mut host)),
+                ..
+            } = ACR::from(tc.clone())
+            {
                 host.start::<ACR>(id, Some(tc));
             }
         }
@@ -295,8 +351,14 @@ impl From<ThunkContext> for ACR {
     fn from(tc: ThunkContext) -> Self {
         if let Some(proxy_src) = tc.state().find_text("proxy_src") {
             Self {
-                registry: tc.state().find_symbol("registry").expect("should be in state"),
-                registry_host: tc.state().find_symbol("registry_host").expect("should be in state"),
+                registry: tc
+                    .state()
+                    .find_symbol("registry")
+                    .expect("should be in state"),
+                registry_host: tc
+                    .state()
+                    .find_symbol("registry_host")
+                    .expect("should be in state"),
                 debug: false,
                 command: Some(Commands::Mirror(Host::load_content::<ACR>(proxy_src))),
             }
