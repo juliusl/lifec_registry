@@ -64,6 +64,7 @@ impl BlockObject for Login {
     fn query(&self) -> lifec::BlockProperties {
         BlockProperties::default()
             .require("file_src")
+            .require("login")
             .optional("user")
     }
 

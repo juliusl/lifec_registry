@@ -32,11 +32,11 @@ impl Plugin for Download {
             let mut tc = context.clone();
             async move {
                 if let (Some(ns), Some(name), Some(digest), Some(accept), Some(access_token)) = (
-                    tc.previous().expect("previous should exist").find_symbol("ns"),
-                    tc.previous().expect("previous should exist").find_symbol("name"),
-                    tc.previous().expect("previous should exist").find_symbol("digest"),
-                    tc.previous().expect("previous should exist").find_symbol("accept"),
-                    tc.previous().expect("previous should exist").find_symbol("access_token"),
+                    tc.search().find_symbol("ns"),
+                    tc.search().find_symbol("name"),
+                    tc.search().find_symbol("digest"),
+                    tc.search().find_symbol("accept"),
+                    tc.search().find_symbol("access_token"),
                 ) {
                     let protocol = tc
                         .state()

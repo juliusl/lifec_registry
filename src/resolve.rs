@@ -34,12 +34,12 @@ impl Plugin for Resolve {
             let mut tc = context.clone();
             async move {
                 if let (Some(ns), Some(repo), Some(reference), Some(accept), Some(access_token)) = 
-                (   tc.previous().unwrap().find_symbol("ns"), 
-                    tc.previous().unwrap().find_symbol("repo"),
-                    tc.previous().unwrap().find_symbol("reference"),
-                    tc.previous().unwrap().find_symbol("accept"),
+                (   tc.search().find_symbol("ns"), 
+                    tc.search().find_symbol("repo"),
+                    tc.search().find_symbol("reference"),
+                    tc.search().find_symbol("accept"),
                     // Check previous state for access token
-                    tc.previous().unwrap().find_symbol("access_token")
+                    tc.search().find_symbol("access_token")
                 ) { 
 
                 let protocol = tc.state()

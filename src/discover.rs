@@ -16,23 +16,26 @@ impl Plugin for Discover {
         "discover"
     }
 
+    fn description() -> &'static str {
+        "Uses the registry referrer's api to find artifacts by type and subject digest"
+    }
+
     fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {
         context.task(|_| {
             let mut tc = context.clone();
             async move {
                 if let (Some(ns), Some(repo), Some(artifact_type), Some(digest), Some(access_token)) = 
-                (   tc.previous().unwrap().find_symbol("ns"), 
-                    tc.previous().unwrap().find_symbol("repo"),
+                (   tc.search().find_symbol("ns"), 
+                    tc.search().find_symbol("repo"),
                     tc.state().find_symbol("discover"),
-                    tc.previous().unwrap().find_symbol("digest"),
+                    tc.search().find_symbol("digest"),
                     // Check previous state for access token
-                    tc.previous().unwrap().find_symbol("access_token")
+                    tc.search().find_symbol("access_token")
                 ) { 
 
                 event!(Level::DEBUG, "Discovering {artifact_type}");
 
-                let protocol = tc.previous()
-                    .unwrap()
+                let protocol = tc.search()
                     .find_symbol("protocol")
                     .unwrap_or("https".to_string());
 

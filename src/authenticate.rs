@@ -79,8 +79,8 @@ impl Authenticate {
     async fn authenticate(tc: &ThunkContext) -> Option<Credentials> {
         if let Some(challenge_uri) = Self::start_challenge(tc).await {
             if let (Some(ns), Some(token)) = (
-                tc.previous().expect("previous should exist").find_symbol("ns"),
-                tc.previous().expect("previous should exits").find_text("token"),
+                tc.search().find_symbol("ns"),
+                tc.search().find_text("token"),
             ) {
                 event!(Level::DEBUG, "Start authn for {challenge_uri}");
 
@@ -136,8 +136,7 @@ impl Authenticate {
     async fn start_challenge(tc: &ThunkContext) -> Option<Uri> {
         if let Some(client) = tc.client() {
             let api = tc
-                .previous()
-                .expect("should be a previous state")
+                .search()
                 .find_symbol("api")
                 .and_then(|a| Uri::from_str(a.as_str()).ok());
 
