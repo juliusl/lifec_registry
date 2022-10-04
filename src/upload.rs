@@ -48,7 +48,15 @@ impl Plugin for Upload {
 }
 
 impl Upload {
-    /// Upload using registry's session id method,
+    /// Upload a manifest to the registry,
+    /// 
+    pub async fn upload_manifest(tc: &ThunkContext) -> Option<ThunkContext> {
+        let tc = tc.clone();
+
+        Some(tc)
+    }
+
+    /// Upload a blob using registry's session id method,
     ///
     pub async fn upload_session_id(tc: &ThunkContext) -> Option<ThunkContext> {
         let mut tc = tc.clone();

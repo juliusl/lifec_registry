@@ -11,10 +11,12 @@ use poem::{
     EndpointExt, Request, Response, Route,
 };
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 use tracing::{event, Level};
 
-use crate::{Authenticate, Discover, Download, Login, LoginACR, Mirror, Resolve, Teleport, Upload, Continue};
+use crate::{
+    Authenticate, Continue, Discover, Download, Login, LoginACR, Mirror, Resolve, Teleport, Upload,
+};
 
 mod methods;
 use methods::Methods;
@@ -105,6 +107,12 @@ impl SpecialAttribute for Proxy {
         parser.define("app_host", Value::Symbol(content.as_ref().to_string()));
 
         Runtime::parse(parser, &content);
+
+        // A new entity is created per resource/method being proxied
+        // When the below attributes are parsed, the context will be set to that entity
+        // So that subsequent plugin definitions will modify the "sequence" property
+        // of the proxied resource. This is how a call sequence can be built per resource
+        // without modifying external engine/runtime in the host.
         parser.add_custom(CustomAttribute::new_with("manifests", |p, c| {
             Methods::parse_methods(Resources::Manifests)(p, c);
         }));
@@ -159,19 +167,6 @@ impl Project for Proxy {
     }
 }
 
-/*
-Table of OCI Endpoints
-
-ID	Method	API Endpoint	Success	Failure
-end-1	GET	/v2/	                                                                            200	404/401
-
-
-
-end-8a	GET	        /v2/<name>/tags/list	                                                    200	404
-end-8b	GET	        /v2/<name>/tags/list                  ?n=<integer>&last=<integer>	        200	404
-
-*/
-
 impl WebApp for Proxy {
     fn create(context: &mut lifec::ThunkContext) -> Self {
         Self::from(context.clone())
@@ -209,6 +204,14 @@ impl WebApp for Proxy {
                             .state_mut()
                             .with_bool("proxy_enabled", true)
                             .with_text("proxy_src", proxy_src.to_string());
+
+                        if let Some(proxy_src_path) = graph.find_symbol("proxy_src_path") {
+                            event!(Level::TRACE, "Adding proxy_src_path to {:?} {:?}", method, resource);
+                            context
+                                .state_mut()
+                                .with_symbol("proxy_src_path", proxy_src_path);
+                        }
+
                         context_map.insert((method.clone(), resource), context);
                     }
                 }
@@ -343,7 +346,13 @@ impl Proxy {
     /// Handles executing the proxy sequence
     ///
     pub async fn handle(input: &ThunkContext) -> Response {
-        let mut host = Host::load_content::<Proxy>(input.state().find_text("proxy_src").unwrap());
+        let mut host = if let Some(proxy_src_path) = input.search().find_symbol("proxy_src_path") {
+            Host::open::<Proxy>(proxy_src_path)
+                .await
+                .expect("should open")
+        } else {
+            Host::load_content::<Proxy>(input.state().find_text("proxy_src").unwrap())
+        };
 
         let (join, _) = host.execute(&input);
 

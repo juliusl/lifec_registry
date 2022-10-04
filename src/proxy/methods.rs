@@ -1,13 +1,14 @@
-use std::fmt::Display;
+use std::{fmt::Display, path::PathBuf};
 
-use lifec::{AttributeParser, BlockIndex, Value, WorldExt};
+use lifec::{AttributeParser, BlockIndex, Value, WorldExt, CustomAttribute};
 use logos::Logos;
+use tracing::{event, Level};
 
 use super::resources::Resources;
 
 /// Enumeration of methods to proxy
 ///
-#[derive(Logos, Clone, Hash, PartialEq, Eq)]
+#[derive(Logos, Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Methods {
     #[token("head")]
     Head,
@@ -89,6 +90,31 @@ impl Methods {
                     _ => continue,
                 }
             }
+
+            // This allows hot reoloading of proxy src so that the host the proxy uses can be
+            // edited without restarting the server. However, this will only work for
+            // modifying values, and will not allow the actual plugin sequence to be modified
+            parser.add_custom(CustomAttribute::new_with("proxy_src_path", |p, content| {
+                let path = PathBuf::from(content);
+
+                // The path must actually exist or this will not be set
+                if let Some(path) = path.canonicalize().ok() {
+                    event!(
+                        Level::DEBUG,
+                        "Adding proxy_src path for entity -> {:?}",
+                        p.entity(),
+                    );
+                    p.define(
+                        "proxy_src_path",
+                        Value::Symbol(path.to_str().expect("should be a string").to_string()),
+                    );
+                } else {
+                    event!(
+                        Level::ERROR,
+                        "proxy_src_path was not set because the given path does not exist"
+                    );
+                }
+            }));
         }
     }
 }
