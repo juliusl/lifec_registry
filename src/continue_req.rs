@@ -1,9 +1,11 @@
-use lifec::{prelude::*, BlockObject, BlockProperties, Plugin};
+use hyper::Method;
+use lifec::{prelude::*, BlockObject, BlockProperties, CustomAttribute, Plugin, Value};
 use poem::{web::headers::Authorization, Request};
 use tracing::{event, Level};
 
 /// Plugin that will continue the request from the proxy, using the auth context from the previous state
 ///
+#[derive(Default)]
 pub struct Continue;
 
 impl Plugin for Continue {
@@ -23,10 +25,7 @@ impl Plugin for Continue {
         context.task(|_| {
             let mut tc = context.clone();
             async move {
-                if let (Some(ns), Some(api), Some(method), Some(accept), Some(access_token)) = (
-                    tc.previous()
-                        .expect("previous should exist")
-                        .find_symbol("ns"),
+                if let (Some(api), Some(method), Some(accept), Some(access_token)) = (
                     tc.previous()
                         .expect("previous should exist")
                         .find_symbol("api"),
@@ -40,27 +39,33 @@ impl Plugin for Continue {
                         .expect("previous should exist")
                         .find_symbol("access_token"),
                 ) {
-                    let protocol = tc
-                        .state()
-                        .find_symbol("protocol")
-                        .unwrap_or("https".to_string());
-
-                    let url = format!("{protocol}://{ns}/v2/{api}");
+                    let url = format!("{api}");
                     event!(Level::DEBUG, "Continuing proxied request, {url}");
                     match Authorization::bearer(&access_token) {
                         Ok(auth_header) => {
-                            event!(Level::DEBUG, "accept header is: {}", &accept);
                             let req = Request::builder()
                                 .uri_str(url.as_str())
                                 .typed_header(auth_header.clone())
-                                .header("accept", accept)
-                                .method(method.parse().expect("should be a valid method"));
+                                .header("accept", {
+                                    if let Some(accept) = tc.state().find_symbol("accept") {
+                                        event!(Level::DEBUG, "accept header is: {}", &accept);
+                                        accept
+                                    } else {
+                                        event!(Level::DEBUG, "accept header is: {}", &accept);
+                                        accept
+                                    }
+                                })
+                                .method(
+                                    Method::from_bytes(method.to_ascii_uppercase().as_bytes())
+                                        .unwrap(),
+                                );
 
                             let req = if let Some(body) = tc
                                 .previous()
                                 .expect("previous should exist")
                                 .find_binary("body")
                             {
+                                event!(Level::DEBUG, "Attaching body to request");
                                 req.body(body)
                             } else {
                                 req.finish()
@@ -87,11 +92,27 @@ impl Plugin for Continue {
                                             "digest",
                                             digest.to_str().unwrap_or_default(),
                                         );
+                                    } else if let Some(digest) = tc
+                                        .previous()
+                                        .expect("should have a previous state")
+                                        .find_symbol("digest")
+                                    {
+                                        event!(
+                                            Level::DEBUG,
+                                            "Resolved digest from state {}",
+                                            &digest
+                                        );
+                                        tc.state_mut().add_symbol("digest", digest);
                                     }
 
                                     if let Some(content_type) =
                                         response.headers().get("Content-Type")
                                     {
+                                        event!(
+                                            Level::DEBUG,
+                                            "Resolved content-type {:?}",
+                                            &content_type.to_str()
+                                        );
                                         tc.state_mut().add_symbol(
                                             "content-type",
                                             content_type.to_str().unwrap_or_default(),
@@ -99,11 +120,24 @@ impl Plugin for Continue {
                                     }
 
                                     if let Some(location) = response.headers().get("Location") {
+                                        event!(
+                                            Level::DEBUG,
+                                            "Resolved location {:?}",
+                                            &location.to_str()
+                                        );
                                         tc.state_mut().add_symbol(
                                             "location",
                                             location.to_str().unwrap_or_default(),
                                         );
                                     };
+
+                                    event!(
+                                        Level::DEBUG,
+                                        "Resolved status code {}",
+                                        response.status().as_str()
+                                    );
+                                    tc.state_mut()
+                                        .add_symbol("status_code", response.status().as_str());
 
                                     match hyper::body::to_bytes(response.into_body()).await {
                                         Ok(data) => {
@@ -133,6 +167,14 @@ impl Plugin for Continue {
                 Some(tc)
             }
         })
+    }
+
+    fn compile(parser: &mut lifec::AttributeParser) {
+        parser.add_custom(CustomAttribute::new_with("accept", |p, content| {
+            if let Some(last_entity) = p.last_child_entity() {
+                p.define_child(last_entity, "accept", Value::Symbol(content));
+            }
+        }));
     }
 }
 

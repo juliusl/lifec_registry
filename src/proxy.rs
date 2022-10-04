@@ -14,7 +14,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use tracing::{event, Level};
 
-use crate::{Authenticate, Discover, Download, Login, LoginACR, Mirror, Resolve, Teleport};
+use crate::{Authenticate, Discover, Download, Login, LoginACR, Mirror, Resolve, Teleport, Upload, Continue};
 
 mod methods;
 use methods::Methods;
@@ -135,6 +135,8 @@ impl Project for Proxy {
         runtime.install_with_custom::<Discover>("");
         runtime.install_with_custom::<Download>("");
         runtime.install_with_custom::<Teleport>("");
+        runtime.install_with_custom::<Continue>("");
+        runtime.install_with_custom::<Upload>("");
         runtime
     }
 

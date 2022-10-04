@@ -37,6 +37,7 @@ pub struct BlobDownloadParams {
 #[handler]
 pub async fn blob_download_api(
     request: &Request,
+    method: poem::http::Method,
     Path((name, digest)): Path<(String, String)>,
     Query(BlobDownloadParams { ns }): Query<BlobDownloadParams>,
     context: Data<&ThunkContext>,
@@ -54,11 +55,12 @@ pub async fn blob_download_api(
         .state_mut()
         .with_symbol("name", name)
         .with_symbol("ns", &ns)
+        .with_symbol("method", method)
         .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
         .with_symbol("digest", digest);
 
     if let Some(accept) = request.header("accept") {
-        input.state_mut().add_text_attr("accept", accept)
+        input.state_mut().add_symbol("accept", accept)
     }
 
     Proxy::handle(&input).await
