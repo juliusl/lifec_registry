@@ -26,59 +26,79 @@ impl Plugin for Continue {
             let mut tc = context.clone();
             async move {
                 if let (Some(api), Some(method), Some(accept), Some(access_token)) = (
-                    tc.previous()
-                        .expect("previous should exist")
-                        .find_symbol("api"),
-                    tc.previous()
-                        .expect("previous should exist")
-                        .find_symbol("method"),
-                    tc.previous()
-                        .expect("previous should exist")
-                        .find_symbol("accept"),
-                    tc.previous()
-                        .expect("previous should exist")
-                        .find_symbol("access_token"),
+                    tc.search().find_symbol("api"),
+                    tc.search().find_symbol("method"),
+                    tc.search().find_symbol("accept"),
+                    tc.search().find_symbol("access_token"),
                 ) {
                     let url = format!("{api}");
                     event!(Level::DEBUG, "Continuing proxied request, {url}");
                     match Authorization::bearer(&access_token) {
                         Ok(auth_header) => {
+                            let method = Method::from_bytes(method.to_uppercase().as_bytes())
+                                .expect("should be a valid http method");
+
                             let req = Request::builder()
                                 .uri_str(url.as_str())
                                 .typed_header(auth_header.clone())
-                                .header("accept", {
-                                    if let Some(accept) = tc.state().find_symbol("accept") {
-                                        event!(Level::DEBUG, "accept header is: {}", &accept);
-                                        accept
-                                    } else {
-                                        event!(Level::DEBUG, "accept header is: {}", &accept);
-                                        accept
-                                    }
-                                })
-                                .method(
-                                    Method::from_bytes(method.as_bytes())
-                                        .unwrap(),
-                                );
+                                .method(method);
 
-                            let req = if let Some(body) = tc
-                                .previous()
-                                .expect("previous should exist")
-                                .find_binary("body")
-                            {
+                            let req = if let Some(body) = tc.search().find_binary("body") {
                                 event!(Level::DEBUG, "Attaching body to request");
-                                req.body(body)
+                                let content_type = tc
+                                    .search()
+                                    .find_symbol("content-type")
+                                    .expect("should be a content type if there is a body");
+
+                                req.header("content-type", content_type).body(body)
                             } else {
-                                req.finish()
+                                req.header("accept", accept).finish()
                             };
+
+                            event!(Level::TRACE, "Prepared request {:#?}", req);
 
                             let client = tc.client().expect("async should be enabled");
                             match client.request(req.into()).await {
-                                Ok(response) => {
+                                Ok(mut response) => {
                                     event!(
                                         Level::TRACE,
                                         "Received response for blob download, {:#?}",
                                         response
                                     );
+
+                                    if let Some(location) = response.headers().get("Location") {
+                                        event!(
+                                            Level::DEBUG,
+                                            "Resolved location {:?}",
+                                            &location.to_str()
+                                        );
+                                        tc.state_mut().add_symbol(
+                                            "location",
+                                            location.to_str().unwrap_or_default(),
+                                        );
+
+                                        if tc.is_enabled("follow-redirect")
+                                            && response.status().is_redirection()
+                                        {
+                                            event!(Level::DEBUG, "Following redirect from location header");
+                                            response = if let Some(location) =
+                                                response.headers().get("Location")
+                                            {
+                                                client
+                                                    .get(
+                                                        location
+                                                            .to_str()
+                                                            .unwrap_or_default()
+                                                            .parse()
+                                                            .unwrap(),
+                                                    )
+                                                    .await
+                                                    .unwrap()
+                                            } else {
+                                                response
+                                            };
+                                        }
+                                    };
 
                                     if let Some(digest) =
                                         response.headers().get("Docker-Content-Digest")
@@ -118,18 +138,6 @@ impl Plugin for Continue {
                                             content_type.to_str().unwrap_or_default(),
                                         );
                                     }
-
-                                    if let Some(location) = response.headers().get("Location") {
-                                        event!(
-                                            Level::DEBUG,
-                                            "Resolved location {:?}",
-                                            &location.to_str()
-                                        );
-                                        tc.state_mut().add_symbol(
-                                            "location",
-                                            location.to_str().unwrap_or_default(),
-                                        );
-                                    };
 
                                     event!(
                                         Level::DEBUG,
@@ -175,6 +183,12 @@ impl Plugin for Continue {
                 p.define_child(last_entity, "accept", Value::Symbol(content));
             }
         }));
+
+        parser.add_custom(CustomAttribute::new_with("follow-redirect", |p, _| {
+            if let Some(last_entity) = p.last_child_entity() {
+                p.define_child(last_entity, "follow-redirect", true);
+            }
+        }));
     }
 }
 
@@ -184,6 +198,7 @@ impl BlockObject for Continue {
             .require("api")
             .require("ns")
             .require("accept")
+            .optional("follow-redirect")
             .optional("body")
     }
 

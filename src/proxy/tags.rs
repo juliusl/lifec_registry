@@ -36,7 +36,7 @@ pub async fn tags_api(
     input
         .state_mut()
         .with_symbol("ns", ns)
-        .with_symbol("method", method.as_str().to_ascii_uppercase())
+        .with_symbol("method", method)
         .with_symbol("name", name);
 
     Proxy::handle(&input).await

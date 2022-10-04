@@ -51,11 +51,14 @@ pub async fn blob_download_api(
     event!(Level::TRACE, "{:#?}", request);
 
     let mut input = context.clone();
+
+    eprintln!("{}", method.as_str().to_ascii_uppercase());
+
     input
         .state_mut()
         .with_symbol("name", name)
         .with_symbol("ns", &ns)
-        .with_symbol("method", method.as_str().to_ascii_uppercase())
+        .with_symbol("method", method.as_str().to_string().to_uppercase())
         .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
         .with_symbol("digest", digest);
 
@@ -79,6 +82,7 @@ pub struct ImportParameters {
 pub async fn blob_upload_api(
     request: &Request,
     method: poem::http::Method,
+    body: poem::Body,
     Path(name): Path<String>,
     Query(ImportParameters {
         digest,
@@ -95,21 +99,32 @@ pub async fn blob_upload_api(
     }
 
     let name = name.trim_end_matches("/blobs");
+    let mut input = context.clone();
+
+    if !body.is_empty() {
+        match body.into_bytes().await.ok() {
+            Some(bytes) => {
+                input.state_mut().with_binary("body", bytes).with_symbol(
+                    "content-type",
+                    request.header("content-type").unwrap_or_default(),
+                );
+            }
+            None => {}
+        }
+    }
 
     if let (Some(mount), Some(from)) = (mount, from) {
         event!(
             Level::DEBUG,
             "Got blob_import request, {name}, {mount}, {from}"
         );
-        event!(Level::TRACE, "{:#?}", request);
-
-        let mut input = context.clone();
+        event!(Level::TRACE, "{:#?}", &request);
         input
             .state_mut()
             .with_symbol("name", name)
             .with_symbol("mount", mount)
             .with_symbol("from", from)
-            .with_symbol("method", method.as_str().to_ascii_uppercase())
+            .with_symbol("method", method)
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
         Proxy::handle(&input).await
@@ -119,25 +134,21 @@ pub async fn blob_upload_api(
             "Got blob_upload_monolith request, {name}, {digest}"
         );
         event!(Level::TRACE, "{:#?}", request);
-
-        let mut input = context.clone();
         input
             .state_mut()
             .with_symbol("name", name)
             .with_symbol("digest", digest)
-            .with_symbol("method", method.as_str().to_ascii_uppercase())
+            .with_symbol("method", method)
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
         Proxy::handle(&input).await
     } else if let None = digest {
         event!(Level::DEBUG, "Got blob_upload_session_id request, {name}");
         event!(Level::TRACE, "{:#?}", request);
-
-        let mut input = context.clone();
         input
             .state_mut()
             .with_symbol("name", name)
-            .with_symbol("method", method.as_str().to_ascii_uppercase())
+            .with_symbol("method", method)
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
         Proxy::handle(&input).await
@@ -159,6 +170,7 @@ pub struct UploadParameters {
 pub async fn blob_chunk_upload_api(
     request: &Request,
     method: poem::http::Method,
+    body: poem::Body,
     Path((name, reference)): Path<(String, String)>,
     Query(UploadParameters { digest, ns }): Query<UploadParameters>,
     context: Data<&ThunkContext>,
@@ -168,8 +180,21 @@ pub async fn blob_chunk_upload_api(
             .status(StatusCode::SERVICE_UNAVAILABLE)
             .finish();
     }
-
     let name = name.trim_end_matches("/blobs");
+
+    let mut input = context.clone();
+
+    if !body.is_empty() {
+        match body.into_bytes().await.ok() {
+            Some(bytes) => {
+                input.state_mut().with_binary("body", bytes).with_symbol(
+                    "content-type",
+                    request.header("content-type").unwrap_or_default(),
+                );
+            }
+            None => {}
+        }
+    }
 
     event!(
         Level::DEBUG,
@@ -177,8 +202,6 @@ pub async fn blob_chunk_upload_api(
         digest
     );
     event!(Level::TRACE, "{:#?}", request);
-
-    let mut input = context.clone();
     input
         .state_mut()
         .with_symbol("name", name)

@@ -1,5 +1,5 @@
 use crate::Proxy;
-use hyper::http::StatusCode;
+use hyper::{http::StatusCode, Method};
 use lifec::{AttributeIndex, ThunkContext};
 use poem::{
     handler,
@@ -29,6 +29,7 @@ pub struct ManifestAPIParams {
 pub async fn manifests_api(
     request: &Request,
     method: poem::http::Method,
+    body: poem::Body,
     Path((name, reference)): Path<(String, String)>,
     Query(ManifestAPIParams { ns }): Query<ManifestAPIParams>,
     context: Data<&ThunkContext>,
@@ -46,6 +47,24 @@ pub async fn manifests_api(
     event!(Level::TRACE, "{:#?}", request);
 
     let mut input = context.clone();
+
+    match method {
+        Method::PUT => {
+            if !body.is_empty() {
+                match body.into_bytes().await.ok() {
+                    Some(bytes) => {
+                        input.state_mut().with_binary("body", bytes).with_symbol(
+                            "content-type",
+                            request.header("content-type").unwrap_or_default(),
+                        );
+                    }
+                    None => {}
+                }
+            }
+        }
+        _ => {}
+    }
+
     input
         .state_mut()
         .with_symbol("repo", name)
@@ -53,7 +72,7 @@ pub async fn manifests_api(
         .with_symbol("ns", &ns)
         .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
         .with_symbol("accept", request.header("accept").unwrap_or_default())
-        .with_symbol("method", method.as_str().to_ascii_uppercase());
+        .with_symbol("method", method);
 
     Proxy::handle(&input).await
 }
