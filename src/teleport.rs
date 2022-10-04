@@ -13,6 +13,14 @@ impl Plugin for Teleport {
         "teleport"
     }
 
+    fn description() -> &'static str {
+        "Checks to see the current image being resolved has a streamable format, if so, sets the response for the streamable format instead of the original"
+    }
+
+    fn caveats() -> &'static str {
+        "Expects that the calling snapshotter is capable of using the streamable format."
+    }
+
     fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {
         context.task(|_| {
             let mut tc = context.clone();
@@ -20,10 +28,17 @@ impl Plugin for Teleport {
                 if let Some(teleport_format) = tc.state().find_symbol("teleport") {
                     event!(Level::DEBUG, "Teleport format {teleport_format}");
 
-                    if let Some(artifact) = tc.state().find_binary("dadi.image.v1") {
-                        let artifact = from_utf8(artifact.as_slice()).expect("should deserialize");
-
-                        event!(Level::DEBUG, "{}", &artifact);
+                    match teleport_format.as_str() {
+                        "overlaybd" => {
+                            if let Some(artifact) = tc.state().find_binary("dadi.image.v1") {
+                                let artifact = from_utf8(artifact.as_slice()).expect("should deserialize");
+        
+                                event!(Level::DEBUG, "{}", &artifact);
+                            }
+                        }
+                        _ => {
+                            event!(Level::ERROR, "Unrecognized teleport format {teleport_format}");
+                        }
                     }
                 }
 

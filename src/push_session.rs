@@ -27,11 +27,16 @@ impl Plugin for PushSession {
             let mut tc = context.clone();
             async move {
                 if let (Some(ns), Some(name), Some(access_token)) = 
-                (   tc.state().find_symbol("ns"), 
-                    tc.state().find_symbol("name"),
-                    tc.state().find_symbol("access_token")
+                (   tc.previous().expect("should be a previous state").find_symbol("ns"), 
+                    tc.previous().expect("should be a previous state").find_symbol("name"),
+                    tc.previous().expect("should be a previous state").find_symbol("access_token")
                 ) {
-                    let upload_session_id = format!("https://{ns}/v2/{name}/blobs/uploads");
+                    let protocol = tc.previous()
+                        .expect("should be a previous state")
+                        .find_symbol("protocol")
+                        .unwrap_or("https".to_string());
+
+                    let upload_session_id = format!("{protocol}://{ns}/v2/{name}/blobs/uploads");
                     event!(Level::DEBUG, "Starting blob upload, {upload_session_id}");
                     match Authorization::bearer(&access_token) {
                         Ok(auth_header) => {

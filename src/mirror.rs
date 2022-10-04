@@ -328,3 +328,4 @@ impl BlockObject for Mirror {
         Some(Self::as_custom_attr())
     }
 }
+

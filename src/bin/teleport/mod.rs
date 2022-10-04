@@ -2,9 +2,6 @@
 mod teleport_settings;
 pub use teleport_settings::TeleportSettings;
 
-mod overlaybd;
-pub use overlaybd::OverlayBD;
-
 /// Template user's runmd mirror file,
 ///
 pub static MIRROR_TEMPLATE: &'static str = r#"
@@ -49,15 +46,13 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 
 + .runtime
 : .login-acr {registry_name}
-
-: .install  access_token
-
-: .mirror   {registry_name}.{registry_host}
-: .host     {mirror_address}, resolve, pull
+: .install   access_token
+: .mirror    {registry_name}.{registry_host}
+: .host      {mirror_address}, resolve, pull
 
 + .proxy    {mirror_address}
-# Resolve manifests sequence 
-: .manifests    head, get
+# Resolve manifests sequence
+: .manifests      head, get
 :   .login        access_token
 :   .authn        oauth2
 :   .resolve      application/vnd.oci.image.manifest.v1+json

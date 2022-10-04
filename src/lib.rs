@@ -1,6 +1,9 @@
 mod mirror;
 pub use mirror::Mirror;
 
+mod artifact;
+pub use artifact::Artifact;
+
 mod proxy;
 pub use proxy::Proxy;
 
@@ -12,9 +15,6 @@ pub use teleport::Teleport;
 
 mod authenticate;
 pub use authenticate::Authenticate;
-
-mod index;
-pub use index::Index;
 
 mod login;
 pub use login::Login;
