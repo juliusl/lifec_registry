@@ -59,14 +59,14 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 :   .resolve      application/vnd.oci.image.manifest.v1+json
 # You can update this to customize what formats to resolve
 # : .resolve      application/vnd.docker.distribution.manifest.list.v2+json
-:   .discover     {artifact_type}
-:   .teleport     {teleport_format}
+# : .discover     {artifact_type}
+# : .teleport     {teleport_format}
 
 # Download blob sequence
 : .blobs          get
 :   .login        access_token
 :   .authn        oauth2
-:   .download
+:   .continue
 
 # Push blobs example
 # : .blobs          post
