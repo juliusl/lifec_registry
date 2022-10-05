@@ -53,7 +53,7 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 
 + .proxy    {mirror_address}
 # Resolve manifests sequence
-: .manifests      head, get
+: .manifests      get, head
 :   .login        access_token
 :   .authn        oauth2
 :   .resolve      application/vnd.oci.image.manifest.v1+json
