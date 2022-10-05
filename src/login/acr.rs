@@ -1,4 +1,4 @@
-use lifec::BlockObject;
+use lifec::{BlockObject, Value};
 use lifec::{AttributeIndex, Plugin, Resources, Process};
 use rust_embed::RustEmbed;
 use tokio::select;
@@ -18,7 +18,7 @@ impl Plugin for LoginACR {
     }
 
     fn description() -> &'static str {
-        "Calls a login script, and outputs an access_token to world_dir"
+        "Calls a login script, and outputs an access_token"
     }
 
     fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {
@@ -36,12 +36,24 @@ impl Plugin for LoginACR {
                         .with_symbol("process", "sh login-acr.sh")
                         .with_symbol("env", "REGISTRY_NAME")
                         .with_symbol("REGISTRY_NAME", &registry_name);
+                        
+                    let registry_host = tc.state().find_symbol("host").unwrap_or("azurecr.io".to_string());
                 
                     let (task, cancel) = Process::call(&tc).expect("Should start");
                     select! {
                         tc = task => {
                             event!(Level::DEBUG, "Finished login to acr - {}", registry_name);
-                            tc.ok()
+                            if let Some(mut tc) = tc.ok() {
+                                tc.state_mut()
+                                    .with_symbol(
+                                        format!("{registry_name}.{registry_host}"), 
+                                        tokio::fs::read_to_string("access_token").await.expect("a file should have been created")
+                                    );
+
+                                Some(tc)
+                            } else {
+                                None
+                            }
                         }
                         _ = cancel_source => {
                             cancel.send(()).ok();
@@ -53,6 +65,14 @@ impl Plugin for LoginACR {
                 }
             }
         })
+    }
+
+    fn compile(parser: &mut lifec::AttributeParser) {
+        parser.add_custom_with("host", |p, content| {
+            if let Some(last_entity) = p.last_child_entity() {
+                p.define_child(last_entity, "host", Value::Symbol(content));
+            }
+        });
     }
 }
 

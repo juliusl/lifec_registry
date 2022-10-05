@@ -21,15 +21,17 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 ```
 
 ## Install mirror components
-- The overlaybd snapshotter is the current teleport provider,
-- This section can be expanded, once new providers are available.
+- Teleport's current provider is overlaybd, it requires sign in at `/opt/overlaybd/cred.json`
 
 ``` install mirror
+: src_dir         .symbol .
+: work_dir        .symbol .world/{registry_host}/{registry_name}
+: file_src        .symbol .world/{registry_host}/{registry_name}/access_token
+
 + .runtime
-: .process lifec 
-: .flag --runmd-path lib/overlaybd/setup_env
-: .arg start
-: .flag --engine-name {operating_system}
+: .login-acr        {registry_name}
+: .login-overlaybd  /opt/overlaybd/cred.json
+: .registry         {registry_name}.{registry_host}
 ```
 
 ## Start the mirror server
@@ -45,7 +47,6 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 # : skip_hosts_dir_check .true
 
 + .runtime
-: .login-acr {registry_name}
 : .install   access_token
 : .mirror    {registry_name}.{registry_host}
 : .host      {mirror_address}, resolve, pull

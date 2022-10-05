@@ -8,6 +8,9 @@ use tracing::{event, Level};
 mod acr;
 pub use acr::LoginACR;
 
+mod overlaybd;
+pub use overlaybd::LoginOverlayBD;
+
 /// Component to login to a registry, 
 /// 
 /// Reads token from file_src in the work directory,
