@@ -5,6 +5,7 @@ use tracing::Level;
 
 /// Plugin that handles setting up the registry credentials for overlaybd
 ///
+#[derive(Default)]
 pub struct LoginOverlayBD;
 
 impl Plugin for LoginOverlayBD {

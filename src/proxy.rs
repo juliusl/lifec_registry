@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use tracing::{event, Level};
 
 use crate::{
-    Authenticate, Continue, Discover, Download, Login, LoginACR, Mirror, Resolve, Teleport, Upload, Artifact,
+    Authenticate, Continue, Discover, Download, Login, LoginACR, Mirror, Resolve, Teleport, Upload, Artifact, LoginOverlayBD,
 };
 
 mod proxy_target;
@@ -149,6 +149,7 @@ impl Project for Proxy {
         runtime.install_with_custom::<Continue>("");
         runtime.install_with_custom::<Upload>("");
         runtime.install_with_custom::<Artifact>("");
+        runtime.install_with_custom::<LoginOverlayBD>("");
         runtime
     }
 

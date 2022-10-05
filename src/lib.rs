@@ -22,6 +22,7 @@ pub use authenticate::Authenticate;
 mod login;
 pub use login::Login;
 pub use login::LoginACR;
+pub use login::LoginOverlayBD;
 
 mod download;
 pub use download::Download;
