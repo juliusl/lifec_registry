@@ -15,7 +15,7 @@ use tracing::{event, Level};
 pub struct Authenticate;
 
 /// Struct for token response when authenticating
-/// 
+///
 #[derive(Deserialize, Serialize)]
 pub struct Credentials {
     access_token: Option<String>,
@@ -142,7 +142,17 @@ impl Authenticate {
 
             if let Some(api) = api {
                 event!(Level::DEBUG, "calling {api} to initiate authn");
-                if let Some(response) = client.get(api.clone()).await.ok() {
+                let method = tc
+                    .search()
+                    .find_symbol("method")
+                    .expect("should have a method");
+
+                let request = Request::builder().uri(api).method(
+                    Method::from_bytes(method.to_string().to_uppercase().as_bytes())
+                        .expect("should be able to parse"),
+                ).finish();
+
+                if let Some(response) = client.request(request.into()).await.ok() {
                     if response.status().is_client_error() {
                         event!(
                             Level::DEBUG,
@@ -179,6 +189,9 @@ impl Authenticate {
             .replace(r#"",service="#, r#"?service="#)
             .replace(",", "&")
             .replace('"', "")
+            // TODO fix this later
+            .replace("pull&push", "pull,push")
+            .replace("push&pull", "push,pull")
     }
 }
 

@@ -34,3 +34,19 @@ pub use list_tags::ListTags;
 
 mod resolve;
 pub use resolve::Resolve;
+
+mod copy;
+pub use copy::Copy;
+
+mod content;
+pub use content::Platform;
+pub use content::ReferrersList;
+pub use content::OverlaybdArtifact;
+pub use content::Descriptor;
+pub use content::ArtifactManifest;
+pub use content::ImageIndex;
+pub use content::ImageManifest;
+pub use content::OCI_ARTIFACTS_MANIFEST_MEDIA_TYPE;
+pub use content::ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE;
+
+// Manifest -> World ? 

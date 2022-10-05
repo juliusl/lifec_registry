@@ -145,7 +145,7 @@ impl Plugin for Continue {
                                         response.status().as_str()
                                     );
                                     tc.state_mut()
-                                        .add_symbol("status_code", response.status().as_str());
+                                        .add_symbol("status-code", response.status().as_str());
 
                                     match hyper::body::to_bytes(response.into_body()).await {
                                         Ok(data) => {

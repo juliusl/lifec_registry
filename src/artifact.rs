@@ -1,5 +1,7 @@
 use lifec::{Plugin, BlockObject, BlockProperties, CustomAttribute, Value};
 use logos::{Logos, Lexer};
+use serde_json::json;
+use crate::{proxy::ProxyTarget, content::{OverlaybdArtifact, Descriptor}};
 
 
 /// This plugin is for adding artifacts to a registry,
@@ -18,7 +20,33 @@ impl Plugin for Artifact {
     }
 
     fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {
-        todo!()
+        context.task(|_| {
+            let mut tc = context.clone();
+            async {
+                if let Some(proxy_target) = ProxyTarget::try_from(&tc).ok() {
+                    let subject = json!({
+                        "digest":"sha256:ed8cba11c09451dbb3495f15951e4afb4f1ba72a4a13e135c6da06c6346e0333",
+                        "mediaType":"application/vnd.docker.distribution.manifest.list.v2+json",
+                        "size":1862
+                    });
+                    let subject = serde_json::from_value::<Descriptor>(subject).expect("should be a descriptor");
+                
+                    let artifact = json!({
+                        "digest":"sha256:20ac9fbb5ae6000b78f7e825bef3b7f01710048d939fe6571248b435b01ff8ba",
+                        "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
+                        "size": 3363
+                    });
+                    let artifact = serde_json::from_value::<Descriptor>(artifact).expect("should be a descriptor");
+
+                    let overlaybd = OverlaybdArtifact::new(subject, artifact);
+                
+                    overlaybd.artifact().upload(&tc).await;
+                }
+
+                tc.copy_previous();
+                Some(tc)
+            }
+        })
     }
 
     /// # Example usage
@@ -42,7 +70,6 @@ impl Plugin for Artifact {
                 p.define_child(last, "subject", Value::Symbol(content));
             }
         }));
-
 
         parser.add_custom(CustomAttribute::new_with("blob", |p, content| {
             

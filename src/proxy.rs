@@ -11,12 +11,15 @@ use poem::{
     EndpointExt, Request, Response, Route,
 };
 use serde::Deserialize;
-use std::{collections::HashMap, path::PathBuf};
+use std::collections::HashMap;
 use tracing::{event, Level};
 
 use crate::{
-    Authenticate, Continue, Discover, Download, Login, LoginACR, Mirror, Resolve, Teleport, Upload,
+    Authenticate, Continue, Discover, Download, Login, LoginACR, Mirror, Resolve, Teleport, Upload, Artifact,
 };
+
+mod proxy_target;
+pub use proxy_target::ProxyTarget;
 
 mod methods;
 use methods::Methods;
@@ -145,6 +148,7 @@ impl Project for Proxy {
         runtime.install_with_custom::<Teleport>("");
         runtime.install_with_custom::<Continue>("");
         runtime.install_with_custom::<Upload>("");
+        runtime.install_with_custom::<Artifact>("");
         runtime
     }
 
@@ -368,13 +372,11 @@ impl Proxy {
     pub fn into_response(context: &ThunkContext) -> Response {
         if let Some(body) = context.state().find_binary("body") {
             let content_type = context
-                .previous()
-                .unwrap()
+                .search()
                 .find_symbol("content-type")
                 .expect("A content type should've been provided");
             let digest = context
-                .previous()
-                .unwrap()
+                .search()
                 .find_symbol("digest")
                 .expect("A digest should've been provided");
 
@@ -383,7 +385,7 @@ impl Proxy {
                 .content_type(content_type)
                 .header("Docker-Content-Digest", digest);
 
-            if let Some(location) = context.previous().unwrap().find_symbol("location") {
+            if let Some(location) = context.search().find_symbol("location") {
                 response = response.header("Location", location);
             }
 

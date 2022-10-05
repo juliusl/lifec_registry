@@ -11,5 +11,6 @@ pub enum Resources {
     #[token("tags")]
     Tags,
     #[error]
+    #[regex(r"[ \t\n\f]+", logos::skip)]
     Error,
 }

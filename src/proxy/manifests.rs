@@ -67,6 +67,7 @@ pub async fn manifests_api(
 
     input
         .state_mut()
+        .with_symbol("name", name)
         .with_symbol("repo", name)
         .with_symbol("reference", reference)
         .with_symbol("ns", &ns)

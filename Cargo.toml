@@ -14,6 +14,7 @@ lifec = { git = "https://github.com/juliusl/lifec.git", branch = "pr/v2_api" }
 # lifec = { path = "../lifec" }
 lifec_poem = { git = "https://github.com/juliusl/lifec_poem.git", branch = "pr/v2_api" }
 logos = "0.12.1"
+native-tls = "0.2.10"
 poem = { version = "1.3.32", features = ["server", "static-files", "rustls", "test"] }
 rust-embed = "6.4.1"
 serde = "1.0"

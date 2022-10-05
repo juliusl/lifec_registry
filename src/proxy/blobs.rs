@@ -52,13 +52,11 @@ pub async fn blob_download_api(
 
     let mut input = context.clone();
 
-    eprintln!("{}", method.as_str().to_ascii_uppercase());
-
     input
         .state_mut()
         .with_symbol("name", name)
         .with_symbol("ns", &ns)
-        .with_symbol("method", method.as_str().to_string().to_uppercase())
+        .with_symbol("method", method)
         .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
         .with_symbol("digest", digest);
 
