@@ -36,7 +36,7 @@ impl Plugin for Resolve {
             async move {
                 if let Some(proxy_target) = ProxyTarget::try_from(&tc).ok() {
                     if let Some(manifests) = proxy_target.resolve().await {
-                        event!(Level::DEBUG, "{:#?}", manifests);
+                        // event!(Level::DEBUG, "{:#?}", manifests);
                     
                         manifests.copy_to_context(&mut tc);
                     }
