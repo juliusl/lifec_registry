@@ -70,7 +70,6 @@ impl Plugin for Discover {
                 }}
 
                 tc.copy_previous();
-
                 Some(tc)
             }
         })

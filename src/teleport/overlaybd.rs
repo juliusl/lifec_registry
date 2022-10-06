@@ -22,6 +22,7 @@ impl Plugin for FormatOverlayBD {
             let mut tc = context.clone();
             async move {
                 if !tc.is_enabled("requires-conversion") {
+                    event!(Level::DEBUG, "Skipping conversion");
                     tc.copy_previous();
                     return Some(tc);
                 }
@@ -29,6 +30,8 @@ impl Plugin for FormatOverlayBD {
                 Resources("")
                     .unpack_resource::<FormatOverlayBD>(&tc, &String::from("format-overlaybd.sh"))
                     .await;
+                
+                event!(Level::DEBUG, "Unpacked script");
 
                 if let (Some(user), Some(token), Some(registry_name), Some(registry_host), Some(repo), Some(reference)) = (
                     tc.search().find_symbol("user"),
