@@ -35,8 +35,8 @@ impl Plugin for FormatOverlayBD {
                 event!(Level::TRACE, "State {:?}", tc.previous().expect("should exist").values());
 
                 if let (Some(user), Some(token), Some(registry_name), Some(registry_host), Some(repo), Some(reference)) = (
-                    tc.search().find_symbol("user"),
-                    tc.search().find_symbol("token"),
+                    tc.search().find_text("user"),
+                    tc.search().find_text("token"),
                     tc.search().find_symbol("registry_name"),
                     tc.search().find_symbol("registry_host"),
                     tc.search().find_symbol("repo"),
