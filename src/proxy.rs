@@ -383,7 +383,7 @@ impl Proxy {
     }
 
     pub fn into_response(context: &ThunkContext) -> Response {
-        if let (Some(location), Some(301 | 308)) = (
+        if let (Some(location), Some(301 | 307 | 308)) = (
             context.find_symbol("location"),
             context.find_int("status_code"),
         ) {

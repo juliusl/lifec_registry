@@ -67,11 +67,11 @@ impl Plugin for Teleport {
                                 tc.search().find_symbol("to"),
                             ) {
                                 if let Some(digest) = tc.search().find_symbol("digest") {
-                                    event!(Level::DEBUG, "Manual teleport mode, swapping {from} -> {to}");
                                     if digest == from {
                                         if let Some(mut proxy_target) = ProxyTarget::try_from(&tc).ok() {
-                                            proxy_target.thunk_context = proxy_target.thunk_context.replace_symbol("digest", to);
+                                            proxy_target.thunk_context = proxy_target.thunk_context.replace_symbol("digest", &to);
                                             if let Some(manifests) = proxy_target.resolve().await {
+                                                event!(Level::DEBUG, "Manual teleport mode, swapping {from} -> {to}");
                                                 let mut swap = ThunkContext::default();
                                                 manifests.copy_to_context(&mut swap);
                                                 return Some(swap);
