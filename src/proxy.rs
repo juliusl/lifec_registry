@@ -185,6 +185,9 @@ impl WebApp for Proxy {
             .state()
             .find_text("proxy_src")
             .expect("should have src for proxy");
+        let registry_host = self.context.find_symbol("registry_host").expect("should have a registry host");
+        let registry_name = self.context.find_symbol("registry_name").expect("should have a registry name");
+
         if let Some(block) = self.context.block() {
             let context = self.context.clone();
             if let Some(i) = block.index().iter().find(|b| b.root().name() == "proxy") {
@@ -210,6 +213,8 @@ impl WebApp for Proxy {
                         context
                             .state_mut()
                             .with_bool("proxy_enabled", true)
+                            .with_symbol("registry_host", &registry_host)
+                            .with_symbol("registry_name", &registry_name)
                             .with_text("proxy_src", proxy_src.to_string());
 
                         if let Some(proxy_src_path) = graph.find_symbol("proxy_src_path") {
