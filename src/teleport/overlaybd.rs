@@ -21,7 +21,7 @@ impl Plugin for FormatOverlayBD {
         context.task(|cancel_source| {
             let mut tc = context.clone();
             async move {
-                if !tc.is_enabled("requires-conversion") {
+                if !tc.search().find_bool("requires-conversion").unwrap_or_default() {
                     event!(Level::DEBUG, "Skipping conversion");
                     tc.copy_previous();
                     return Some(tc);
