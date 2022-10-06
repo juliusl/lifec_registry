@@ -20,7 +20,7 @@ impl Manifests {
                         .state_mut()
                         .with_symbol("manifest", &desc.media_type)
                         .with_binary(&desc.media_type, bytes.to_vec())
-                        .with_binary("body", bytes)
+                        // .with_binary("body", bytes)
                         .with_symbol("content-type", &desc.media_type)
                         .with_symbol("digest", &desc.digest);
                 }
@@ -31,7 +31,7 @@ impl Manifests {
                         .state_mut()
                         .with_symbol("manifest", &desc.media_type)
                         .with_binary(&desc.media_type, bytes.to_vec())
-                        .with_binary("body", bytes)
+                        // .with_binary("body", bytes)
                         .with_symbol(
                             "artifact-type",
                             &desc
@@ -49,7 +49,7 @@ impl Manifests {
                         .state_mut()
                         .with_symbol("manifest", &desc.media_type)
                         .with_binary(&desc.media_type, bytes.to_vec())
-                        .with_binary("body", bytes)
+                        // .with_binary("body", bytes)
                         .with_symbol("content-type", &desc.media_type)
                         .with_symbol("digest", &desc.digest);
                 }

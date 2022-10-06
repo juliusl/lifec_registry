@@ -80,7 +80,7 @@ impl ProxyTarget {
 
     /// Transform target into a descriptor,
     ///
-    pub async fn resolve(&self) -> Option<Manifests> {
+    pub async fn resolve(&self) -> Option<(Manifests, Vec<u8>)> {
         match &self.media {
             Media::Accept(accept)
                 if matches!(self.thunk_context.search().find_symbol("digest"), Some(_)) =>
@@ -119,7 +119,7 @@ impl ProxyTarget {
         }
     }
 
-    pub async fn resolve_manifest(&self, request: Request) -> Option<Manifests> {
+    pub async fn resolve_manifest(&self, request: Request) -> Option<(Manifests, Vec<u8>)> {
         match self.send_request(request).await {
             Some(resp) if resp.status().is_success() => {
                 let digest = resp
@@ -136,7 +136,7 @@ impl ProxyTarget {
                     serde_json::from_slice::<ImageIndex>(body.as_slice()).ok()
                 {
                     let manifest = image_index.clone();
-                    Some(Manifests::Index(
+                    Some((Manifests::Index(
                         Descriptor {
                             media_type: image_index.media_type,
                             artifact_type: None,
@@ -148,12 +148,12 @@ impl ProxyTarget {
                             platform: None,
                         },
                         manifest,
-                    ))
+                    ), body))
                 } else if let Some(image_manifest) =
                     serde_json::from_slice::<ImageManifest>(body.as_slice()).ok()
                 {
                     let manifest = image_manifest.clone();
-                    Some(Manifests::Image(
+                    Some((Manifests::Image(
                         Descriptor {
                             media_type: image_manifest.media_type,
                             artifact_type: None,
@@ -165,12 +165,12 @@ impl ProxyTarget {
                             platform: None,
                         },
                         manifest,
-                    ))
+                    ), body))
                 } else if let Some(artifact_manifest) =
                     serde_json::from_slice::<ArtifactManifest>(body.as_slice()).ok()
                 {
                     let manifest = artifact_manifest.clone();
-                    Some(Manifests::Artifact(
+                    Some((Manifests::Artifact(
                         Descriptor {
                             media_type: artifact_manifest.media_type,
                             artifact_type: Some(artifact_manifest.artifact_type),
@@ -182,7 +182,7 @@ impl ProxyTarget {
                             platform: None,
                         },
                         manifest,
-                    ))
+                    ), body))
                 } else {
                     None
                 }

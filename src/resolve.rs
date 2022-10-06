@@ -1,4 +1,4 @@
-use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component, BlockObject, BlockProperties, Value};
+use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component, BlockObject, BlockProperties, Value, AttributeIndex};
 use tracing::{event, Level};
 
 use crate::proxy::ProxyTarget;
@@ -35,10 +35,11 @@ impl Plugin for Resolve {
             let mut tc = context.clone();
             async move {
                 if let Some(proxy_target) = ProxyTarget::try_from(&tc).ok() {
-                    if let Some(manifests) = proxy_target.resolve().await {
+                    if let Some((manifests, body)) = proxy_target.resolve().await {
                         // event!(Level::DEBUG, "{:#?}", manifests);
                     
                         manifests.copy_to_context(&mut tc);
+                        tc.state_mut().with_binary("body", body);
                     }
                 }
 
