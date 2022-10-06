@@ -1,0 +1,73 @@
+
+# ACR Mirror 
+- This file is generated per registry host
+- It provides a mirror server that facilitates the teleport feature on the host machine
+- This file can be edited to customize settings
+
+## Control Settings 
+- Engine sequence when the mirror starts
+
+``` mirror
++ .engine
+: .event install
+: .event start
+: .loop
+```
+
+## Install mirror components
+- Teleport's current provider is overlaybd, it requires sign in at `/opt/overlaybd/cred.json`
+
+``` install mirror
+: src_dir         .symbol .
+: work_dir        .symbol .world/azurecr.io/obddemo
+: file_src        .symbol .world/azurecr.io/obddemo/access_token
+
++ .runtime
+: .login-acr        obddemo
+: .login-overlaybd  /opt/overlaybd/cred.json
+: .registry         obddemo.azurecr.io
+```
+
+## Start the mirror server
+- When this event is called it will start a server that will operate indefinitely,
+- If an error occurs, it should restart the server after going through the setup process once more 
+
+<``` start mirror>
+: src_dir         .symbol .
+: work_dir        .symbol .world/azurecr.io/obddemo
+: file_src        .symbol .world/azurecr.io/obddemo/access_token
+
+# Uncomment below to skip checking the hosts dir, this is useful when testing with curl
+# : skip_hosts_dir_check .true
+
++ .runtime
+: .install   access_token
+: .mirror    obddemo.azurecr.io
+: .host      localhost:8578, resolve, pull
+
++ .proxy    localhost:8578
+# Resolve manifests sequence
+: .manifests      get, head
+:   .login        access_token
+:   .authn        oauth2
+# :   .resolve      application/vnd.oci.image.manifest.v1+json
+# You can update this to customize what formats to resolve
+: .resolve      application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, */*
+# : .discover     dadi.image.v1
+: .teleport     manual
+: .from         sha256:b4e56cd71c74e379198b66b3db4dc415f42e8151a18da68d1b61f55fcc7af3e0
+: .to           sha256:3f64a8179dbdcbd37a87c4187fe5614a1d9b6965eeae9bdb10f9454a724894f2
+
+# Download blob sequence
+: .blobs          get
+:   .login        access_token
+:   .authn        oauth2
+:   .continue
+
+# Push blobs example
+# : .blobs          post
+# : .login          access_token
+# : .authn          oauth2
+#  
+```
+
