@@ -58,7 +58,7 @@ impl Plugin for Teleport {
                                 }
                             } else {
                                 event!(Level::DEBUG, "Requires conversion");
-                                tc.add_bool_attr("requires-conversion", true);
+                                tc.state_mut().with_bool("requires-conversion", true);
                             }
                         }
                         "manual" => {
