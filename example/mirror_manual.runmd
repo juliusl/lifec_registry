@@ -55,8 +55,8 @@
 : .resolve      application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, */*
 # : .discover     dadi.image.v1
 : .teleport     manual
-: .from         sha256:b4e56cd71c74e379198b66b3db4dc415f42e8151a18da68d1b61f55fcc7af3e0
-: .to           sha256:3f64a8179dbdcbd37a87c4187fe5614a1d9b6965eeae9bdb10f9454a724894f2
+: .from         sha256:08e282682a708eb7f51b473516be222fff0251cdee5ef8f99f4441a795c335b6
+: .to           sha256:7ea9679794661ac65e7231ccc36ad08cb45d12ba4e0270affff393cc791d6f88
 
 # Download blob sequence
 : .blobs          get
