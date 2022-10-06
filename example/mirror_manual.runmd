@@ -33,6 +33,7 @@
 - When this event is called it will start a server that will operate indefinitely,
 - If an error occurs, it should restart the server after going through the setup process once more 
 
+```
 <``` start mirror>
 : src_dir         .symbol .
 : work_dir        .symbol .world/azurecr.io/obddemo
@@ -58,8 +59,8 @@
 : .resolve      application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, */*
 # : .discover     dadi.image.v1
 : .teleport     manual
-: .from         sha256:08e282682a708eb7f51b473516be222fff0251cdee5ef8f99f4441a795c335b6
-: .to           sha256:7ea9679794661ac65e7231ccc36ad08cb45d12ba4e0270affff393cc791d6f88
+: .from         sha256:820582b05253c2b968442b8af31d791ae64478bcc18e04826c5ce42f974d3272
+: .to           sha256:b0622f86e3d078425d9e2964e48952d2ffa8b5258b836b159405dbc77c2ac4aa
 
 # Download blob sequence
 : .blobs          get
