@@ -1,4 +1,10 @@
 #!/bin/sh
 
-ctr obdconv --user "$REGISTRY_USER:$REGISTRY_TOKEN" --push-artifact "$REGISTRY_NAME.$REGISTRY_HOST/$REPO:$OBJECT"
+user="$REGISTRY_USER:$REGISTRY_TOKEN"
+src="$REGISTRY_NAME.$REGISTRY_HOST/$REPO:$REFERENCE"
+dest="$REGISTRY_NAME.$REGISTRY_HOST/$REPO:$REFERENCE-obd"
+
+bin/ctr images pull --user "$user"
+bin/ctr obdconv --user "$user" "$src" "$dest"
+bin/ctr images push --user "$user" "$dest"
 

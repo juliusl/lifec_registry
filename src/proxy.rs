@@ -15,7 +15,8 @@ use std::collections::HashMap;
 use tracing::{event, Level};
 
 use crate::{
-    Authenticate, Continue, Discover, Download, Login, LoginACR, Mirror, Resolve, Teleport, Upload, Artifact, LoginOverlayBD,
+    Artifact, Authenticate, Continue, Discover, Download, FormatOverlayBD, Login, LoginACR,
+    LoginOverlayBD, Mirror, Resolve, Teleport, Upload,
 };
 
 mod proxy_target;
@@ -150,6 +151,7 @@ impl Project for Proxy {
         runtime.install_with_custom::<Upload>("");
         runtime.install_with_custom::<Artifact>("");
         runtime.install_with_custom::<LoginOverlayBD>("");
+        runtime.install_with_custom::<FormatOverlayBD>("");
         runtime
     }
 
@@ -211,7 +213,12 @@ impl WebApp for Proxy {
                             .with_text("proxy_src", proxy_src.to_string());
 
                         if let Some(proxy_src_path) = graph.find_symbol("proxy_src_path") {
-                            event!(Level::TRACE, "Adding proxy_src_path to {:?} {:?}", method, resource);
+                            event!(
+                                Level::TRACE,
+                                "Adding proxy_src_path to {:?} {:?}",
+                                method,
+                                resource
+                            );
                             context
                                 .state_mut()
                                 .with_symbol("proxy_src_path", proxy_src_path);
@@ -371,7 +378,26 @@ impl Proxy {
     }
 
     pub fn into_response(context: &ThunkContext) -> Response {
-        if let Some(body) = context.state().find_binary("body") {
+        if let (Some(location), Some(301 | 308)) = (
+            context.find_symbol("location"),
+            context.find_int("status_code"),
+        ) {
+            let content_type = context
+                .search()
+                .find_symbol("content-type")
+                .expect("A content type should've been provided");
+            let digest = context
+                .search()
+                .find_symbol("digest")
+                .expect("A digest should've been provided");
+
+            Response::builder()
+                .status(StatusCode::MOVED_PERMANENTLY)
+                .header("location", location)
+                .header("docker-content-digest", digest)
+                .header("content-type", content_type)
+                .finish()
+        } else if let Some(body) = context.state().find_binary("body") {
             let content_type = context
                 .search()
                 .find_symbol("content-type")

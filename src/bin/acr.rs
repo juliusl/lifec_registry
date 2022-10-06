@@ -6,7 +6,7 @@ use lifec::{
 use lifec::{Host, Project};
 use lifec_registry::{
     Artifact, Authenticate, Continue, Discover, Download, Login, LoginACR, Mirror, Proxy, Resolve,
-    Teleport, Upload, LoginOverlayBD,
+    Teleport, Upload, LoginOverlayBD, FormatOverlayBD,
 };
 use serde::Serialize;
 use std::path::PathBuf;
@@ -317,6 +317,7 @@ impl Project for ACR {
         runtime.install_with_custom::<Artifact>("");
         runtime.install_with_custom::<Continue>("");
         runtime.install_with_custom::<LoginOverlayBD>("");
+        runtime.install_with_custom::<FormatOverlayBD>("");
         runtime
     }
 

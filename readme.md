@@ -25,6 +25,7 @@ cargo install --git https://github.com/juliusl/lifec_registry --branch pr/v2_api
  
 This will install a binary called `acr` on your PATH. 
 
+
 ## (TODO) Install dependencies
 
 ## Setting up an environment for the mirror
@@ -41,6 +42,24 @@ This will output a `mirror.runmd` file which has all of the config. You can open
 Now to start the mirror, run this command, `acr --registry {your-registry-name} mirror start`, 
 
 (If you'd like to run this in the background, `acr --registry {your-registry-name} mirror start &`)
+
+
+## Try it out 
+
+If you'd like you can now use the `--hosts-dir` flag with `ctr` and pulling from the registry should be authenticated through the proxy. That being said, you can also try it out with jsut `curl`. For example, to get a manifest the format would be, 
+
+```sh
+curl 'localhost:{port}/v2/{repo}/manifests/{tag or digest}?ns={registry-name}.{registry-host}'
+```
+
+So it would look something like this, 
+
+```sh
+curl 'localhost:8578/v2/redis/manifests/example?ns=example.azurecr.io'
+```
+
+You can try out other parts of the registry too if you enable the proxy on other resources.
+
 
 ### Troubleshooting start
 

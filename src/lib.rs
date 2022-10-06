@@ -15,6 +15,7 @@ pub use discover::Discover;
 
 mod teleport;
 pub use teleport::Teleport;
+pub use teleport::FormatOverlayBD;
 
 mod authenticate;
 pub use authenticate::Authenticate;

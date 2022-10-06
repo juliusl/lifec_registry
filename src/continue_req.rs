@@ -145,23 +145,23 @@ impl Plugin for Continue {
                                         response.status().as_str()
                                     );
                                     tc.state_mut()
-                                        .add_symbol("status-code", response.status().as_str());
+                                        .add_int_attr("status_code", response.status().as_u16() as i32);
 
-                                    match hyper::body::to_bytes(response.into_body()).await {
-                                        Ok(data) => {
-                                            event!(
-                                                Level::DEBUG,
-                                                "Resolved blob, len: {}",
-                                                data.len()
-                                            );
-                                            event!(Level::TRACE, "{:#?}", data);
-
-                                            tc.state_mut().add_binary_attr("body", data);
+                                    if !response.status().is_redirection() {
+                                        match hyper::body::to_bytes(response.into_body()).await {
+                                            Ok(data) => {
+                                                event!(
+                                                    Level::DEBUG,
+                                                    "Resolved blob, len: {}",
+                                                    data.len()
+                                                );
+                                                event!(Level::TRACE, "{:#?}", data);
+    
+                                                tc.state_mut().add_binary_attr("body", data);
+                                            }
+                                            Err(err) => event!(Level::ERROR, "{err}"),
                                         }
-                                        Err(err) => event!(Level::ERROR, "{err}"),
                                     }
-
-                                    return Some(tc);
                                 }
                                 Err(err) => event!(Level::ERROR, "{err}"),
                             }
@@ -171,7 +171,6 @@ impl Plugin for Continue {
                 }
 
                 tc.copy_previous();
-
                 Some(tc)
             }
         })

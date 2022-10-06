@@ -6,6 +6,9 @@ use tracing::Level;
 use crate::content::{ArtifactManifest, Descriptor, ImageManifest, ReferrersList};
 use crate::proxy::ProxyTarget;
 
+mod overlaybd;
+pub use overlaybd::FormatOverlayBD;
+
 /// Plugin to handle swapping out the manifest resolution to a teleportable image
 ///
 #[derive(Default)]
@@ -53,6 +56,9 @@ impl Plugin for Teleport {
                                 } else {
                                     event!(Level::ERROR, "Could not parser referrer's response");
                                 }
+                            } else {
+                                event!(Level::DEBUG, "Requires conversion");
+                                tc.add_bool_attr("requires-conversion", true);
                             }
                         }
                         "manual" => {
@@ -60,7 +66,19 @@ impl Plugin for Teleport {
                                 tc.search().find_symbol("from"),
                                 tc.search().find_symbol("to"),
                             ) {
-
+                                if let Some(digest) = tc.search().find_symbol("digest") {
+                                    event!(Level::DEBUG, "Manual teleport mode, swapping {from} -> {to}");
+                                    if digest == from {
+                                        if let Some(mut proxy_target) = ProxyTarget::try_from(&tc).ok() {
+                                            proxy_target.thunk_context = proxy_target.thunk_context.replace_symbol("digest", to);
+                                            if let Some(manifests) = proxy_target.resolve().await {
+                                                let mut swap = ThunkContext::default();
+                                                manifests.copy_to_context(&mut swap);
+                                                return Some(swap);
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                         _ => {
