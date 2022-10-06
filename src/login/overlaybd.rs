@@ -30,16 +30,14 @@ impl Plugin for LoginOverlayBD {
                                 .and_then(|a| a.as_object_mut())
                             {
                                 for registry in tc.search().find_symbol_values("registry") {
-                                    if !auths.contains_key(&registry) {
-                                        if let Some(cred) = tc.search().find_symbol(&registry) {
-                                            let user_name = tc.search().find_symbol(format!("{registry}.username")).expect("should have a username");
-                                            let creds = json!({
-                                                "username": user_name,
-                                                "password": cred
-                                            });
+                                    if let Some(cred) = tc.search().find_symbol(&registry) {
+                                        let user_name = tc.search().find_symbol(format!("{registry}.username")).expect("should have a username");
+                                        let creds = json!({
+                                            "username": user_name,
+                                            "password": cred
+                                        });
 
-                                            auths.insert(registry, creds);
-                                        }
+                                        auths.insert(registry, creds);
                                     }
                                 }
                             }
