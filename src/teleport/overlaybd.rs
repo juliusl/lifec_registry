@@ -32,6 +32,7 @@ impl Plugin for FormatOverlayBD {
                     .await;
                 
                 event!(Level::DEBUG, "Unpacked script");
+                event!(Level::TRACE, "State {:?}", tc.previous().expect("should exist").values());
 
                 if let (Some(user), Some(token), Some(registry_name), Some(registry_host), Some(repo), Some(reference)) = (
                     tc.search().find_symbol("user"),
@@ -75,6 +76,7 @@ impl Plugin for FormatOverlayBD {
                         }
                 }
 
+                tc.copy_previous();
                 Some(tc)
             }
         })
