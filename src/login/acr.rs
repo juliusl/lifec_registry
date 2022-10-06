@@ -75,7 +75,7 @@ impl Plugin for LoginACR {
                                         .with_symbol(username, &registry_name)
                                         .with_symbol(
                                             format!("{registry_name}.{registry_host}"), 
-                                            tokio::fs::read_to_string("admin_pass").await.expect("a file should have been created").trim()
+                                            tokio::fs::read_to_string("admin_pass").await.expect("a file should have been created").trim().trim_matches('"')
                                     );
                                 } else {
                                     let registry = format!("{registry_name}.{registry_host}");
