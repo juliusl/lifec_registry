@@ -15,23 +15,23 @@ impl Manifests {
     pub fn copy_to_context(&self, context: &mut ThunkContext) {
         match &self {
             Manifests::Image(desc, manifest) => {
-                if let Some(bytes) = serde_json::to_vec(manifest).ok() {
+                if let Some(bytes) = serde_json::to_vec_pretty(manifest).ok() {
                     context
                         .state_mut()
                         .with_symbol("manifest", &desc.media_type)
                         .with_binary(&desc.media_type, bytes.to_vec())
-                        .with_binary("body", bytes)
+                        // .with_binary("body", bytes)
                         .with_symbol("content-type", &desc.media_type)
                         .with_symbol("digest", &desc.digest);
                 }
             }
             Manifests::Artifact(desc, manifest) => {
-                if let Some(bytes) = serde_json::to_vec(manifest).ok() {
+                if let Some(bytes) = serde_json::to_vec_pretty(manifest).ok() {
                     context
                         .state_mut()
                         .with_symbol("manifest", &desc.media_type)
                         .with_binary(&desc.media_type, bytes.to_vec())
-                        .with_binary("body", bytes)
+                        // .with_binary("body", bytes)
                         .with_symbol(
                             "artifact-type",
                             &desc
@@ -44,12 +44,12 @@ impl Manifests {
                 }
             }
             Manifests::Index(desc, manifest) => {
-                if let Some(bytes) = serde_json::to_vec(manifest).ok() {
+                if let Some(bytes) = serde_json::to_vec_pretty(manifest).ok() {
                     context
                         .state_mut()
                         .with_symbol("manifest", &desc.media_type)
                         .with_binary(&desc.media_type, bytes.to_vec())
-                        .with_binary("body", bytes)
+                        // .with_binary("body", bytes)
                         .with_symbol("content-type", &desc.media_type)
                         .with_symbol("digest", &desc.digest);
                 }
