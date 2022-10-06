@@ -30,6 +30,7 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 
 + .runtime
 : .login-acr        {registry_name}
+: .admin
 : .login-overlaybd  /opt/overlaybd/cred.json
 : .registry         {registry_name}.{registry_host}
 ```
@@ -42,11 +43,14 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : src_dir         .symbol .
 : work_dir        .symbol .world/{registry_host}/{registry_name}
 : file_src        .symbol .world/{registry_host}/{registry_name}/access_token
+: registry_host   .symbol {registry_host}
+: registry_name   .symbol {registry_name}
 
 # Uncomment below to skip checking the hosts dir, this is useful when testing with curl
 # : skip_hosts_dir_check .true
 
 + .runtime
+: .login-acr {registry_name}
 : .install   access_token
 : .mirror    {registry_name}.{registry_host}
 : .host      {mirror_address}, resolve, pull
@@ -54,13 +58,14 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 + .proxy    {mirror_address}
 # Resolve manifests sequence
 : .manifests      get, head
-:   .login        access_token
-:   .authn        oauth2
-:   .resolve      application/vnd.oci.image.manifest.v1+json
+: .login        access_token
+: .authn        oauth2
+: .resolve            application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, */*
+
 # You can update this to customize what formats to resolve
-# : .resolve      application/vnd.docker.distribution.manifest.list.v2+json
-# : .discover     {artifact_type}
-# : .teleport     {teleport_format}
+# : .discover           {artifact_type}
+# : .teleport           {teleport_format}
+# : .format-overlaybd
 
 # Download blob sequence
 : .blobs          get

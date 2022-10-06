@@ -24,6 +24,7 @@
 
 + .runtime
 : .login-acr        obddemo
+: .admin
 : .login-overlaybd  /opt/overlaybd/cred.json
 : .registry         obddemo.azurecr.io
 ```
@@ -36,6 +37,8 @@
 : src_dir         .symbol .
 : work_dir        .symbol .world/azurecr.io/obddemo
 : file_src        .symbol .world/azurecr.io/obddemo/access_token
+: registry_host   .symbol {registry_host}
+: registry_name   .symbol {registry_name}
 
 # Uncomment below to skip checking the hosts dir, this is useful when testing with curl
 # : skip_hosts_dir_check .true

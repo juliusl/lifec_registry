@@ -32,8 +32,9 @@ impl Plugin for LoginOverlayBD {
                                 for registry in tc.search().find_symbol_values("registry") {
                                     if !auths.contains_key(&registry) {
                                         if let Some(cred) = tc.search().find_symbol(&registry) {
+                                            let user_name = tc.search().find_symbol(format!("{registry}.username")).expect("should have a username");
                                             let creds = json!({
-                                                "username": "00000000-0000-0000-0000-000000000000",
+                                                "username": user_name,
                                                 "password": cred
                                             });
 
@@ -73,7 +74,7 @@ impl Plugin for LoginOverlayBD {
             if let Some(last_entity) = p.last_child_entity() {
                 p.define_child(last_entity, "registry", Value::Symbol(content));
             }
-        })
+        });
     }
 }
 
