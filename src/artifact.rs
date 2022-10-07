@@ -160,7 +160,7 @@ impl Plugin for Artifact {
                             let body = serde_json::to_vec_pretty(&artifact_manifest)
                                 .expect("should be serializable");
                             
-                            let artifact_uri = proxy_target.manifest_with(format!("{}-link", proxy_target.repo));
+                            let artifact_uri = format!("{}-link", proxy_target.manifest_url());
 
                             let put = proxy_target.start_request()
                                 .expect("should be able to start request")
