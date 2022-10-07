@@ -341,6 +341,7 @@ enum Resource {
     ///
     #[token("application/vnd.oci.image.manifest.v1+json")]
     #[token("application/vnd.oci.artifact.manifest.v1+json")]
+    #[token("application/vnd.cncf.oras.artifact.manifest.v1+json")]
     #[token("application/vnd.docker.distribution.manifest.v1+json")]
     #[token("application/vnd.docker.distribution.manifest.v2+json")]
     #[token("application/vnd.docker.distribution.manifest.list.v2+json")]
