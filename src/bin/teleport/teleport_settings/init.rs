@@ -147,6 +147,7 @@ pub const FORMAT_TELEPORT_TEMPLATE: &'static str = r#"
 : accept        .symbol application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, */*
 
 + .runtime
+: .login-acr    {registry_name}
 : .login        access_token
 : .authn        oauth2
 : .artifact     teleport.link.v1
