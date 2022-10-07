@@ -1,3 +1,5 @@
+use std::str::from_utf8;
+
 use lifec::BlockObject;
 use poem::{Request, web::headers::Authorization};
 use lifec::Plugin;
@@ -56,10 +58,12 @@ impl Plugin for Discover {
                         match client.request(req.into()).await {
                             Ok(response) => { 
                                 match hyper::body::to_bytes(response.into_body()).await {
-                                    Ok(data) => tc.state_mut().add_binary_attr(
+                                    Ok(data) => { 
+                                        event!(Level::TRACE, "{:#?}", from_utf8(&data).ok());
+                                        tc.state_mut().add_binary_attr(
                                         artifact_type, 
                                         data
-                                    ),
+                                    )},
                                     Err(err) =>  event!(Level::ERROR, "Could not read referrers response body {err}")
                                 }
                             }
