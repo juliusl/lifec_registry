@@ -129,6 +129,7 @@ pub const FORMAT_TELEPORT_TEMPLATE: &'static str = r#"
 : work_dir          .symbol .world/{registry_host}/{registry_name}
 : registry_host     .symbol {registry_host}
 : registry_name     .symbol {registry_name}
+: reference         .symbol {tag}
 
 + .runtime
 : .login-acr            {registry_name}
@@ -151,6 +152,7 @@ pub const FORMAT_TELEPORT_TEMPLATE: &'static str = r#"
 : work_dir          .symbol .world/{registry_host}/{registry_name}
 : registry_host     .symbol {registry_host}
 : registry_name     .symbol {registry_name}
+: reference         .symbol {tag}
 
 + .runtime
 : .login-acr            {registry_name}
