@@ -139,12 +139,18 @@ pub const FORMAT_TELEPORT_TEMPLATE: &'static str = r#"
 : repo          .symbol {repo}
 : ns            .symbol {registry_name}.{registry_host}
 : api           .symbol https://{registry_name}.{registry_host}/v2/{repo}/manifests/{tag}
+: file_src      .symbol .world/{registry_host}/{registry_name}/access_token
+: src_dir       .symbol .
+: work_dir      .symbol .world/{registry_host}/{registry_name}
+: method        .symbol PUT
+: reference     .symbol {tag}
+: accept        .symbol application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, */*
 
 + .runtime
 : .login        access_token
 : .authn        oauth2
 : .artifact     teleport.link.v1
 : .subject      {registry_name}.{registry_host}/{repo}/{tag}
-: .blob         {registry_name}.{registry_host}/{repo}/{tag}-obd
+: .blob         {registry_name}.{registry_host}/{repo}/{tag}-{format}
 ```
 "#;
