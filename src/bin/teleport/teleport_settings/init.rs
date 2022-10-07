@@ -148,10 +148,11 @@ pub const FORMAT_TELEPORT_TEMPLATE: &'static str = r#"
 
 + .runtime
 : .login-acr    {registry_name}
+: .install      access_token
 : .login        access_token
 : .authn        oauth2
 : .artifact     teleport.link.v1
-: .subject      {registry_name}.{registry_host}/{repo}/{tag}
-: .blob         {registry_name}.{registry_host}/{repo}/{tag}-{format}
+: .subject      https://{registry_name}.{registry_host}/v2/{repo}/manifests/{tag}
+: .blob         https://{registry_name}.{registry_host}/v2/{repo}/manifests/{tag}-{format}
 ```
 "#;
