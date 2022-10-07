@@ -36,7 +36,7 @@ impl Plugin for Teleport {
 
                     match teleport_format.as_str() {
                         "overlaybd" => {
-                            if let Some(artifact) = tc.search().find_binary("dadi.image.v1") {
+                            if let Some(artifact) = tc.search().find_binary("teleport.link.v1") {
                                 if let Some(response) =
                                     serde_json::from_slice::<ReferrersList>(artifact.as_slice())
                                         .ok()

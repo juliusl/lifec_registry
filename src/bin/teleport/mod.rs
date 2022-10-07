@@ -76,7 +76,7 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : .login          access_token
 : .authn          oauth2
 : .resolve        application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, */*     
-: .discover       dadi.image.v1
+: .discover       teleport.link.v1
 : .teleport       overlaybd
 
 ## Example of a "manual" teleport
