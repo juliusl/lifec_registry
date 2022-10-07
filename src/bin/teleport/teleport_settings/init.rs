@@ -123,6 +123,7 @@ pub const FORMAT_TELEPORT_TEMPLATE: &'static str = r#"
 : repo              .symbol {repo}
 : ns                .symbol {registry_name}.{registry_host}
 : api               .symbol https://{registry_name}.{registry_host}/v2/{repo}/manifests/{tag}
+: method            .symbol PUT
 : file_src          .symbol .world/{registry_host}/{registry_name}/access_token
 : src_dir           .symbol .
 : work_dir          .symbol .world/{registry_host}/{registry_name}
@@ -144,6 +145,7 @@ pub const FORMAT_TELEPORT_TEMPLATE: &'static str = r#"
 : repo              .symbol {repo}
 : ns                .symbol {registry_name}.{registry_host}
 : api               .symbol https://{registry_name}.{registry_host}/v2/{repo}/manifests/{tag}
+: method            .symbol PUT
 : file_src          .symbol .world/{registry_host}/{registry_name}/access_token
 : src_dir           .symbol .
 : work_dir          .symbol .world/{registry_host}/{registry_name}
