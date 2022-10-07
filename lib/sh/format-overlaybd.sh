@@ -2,7 +2,7 @@
 
 user="$REGISTRY_USER:$REGISTRY_TOKEN"
 src="$REGISTRY_NAME.$REGISTRY_HOST/$REPO:$REFERENCE"
-dest="$REGISTRY_NAME.$REGISTRY_HOST/$REPO:$REFERENCE-obd"
+dest="$REGISTRY_NAME.$REGISTRY_HOST/$REPO:$REFERENCE-overlaybd"
 
 bin/ctr images pull --user "$user" "$src"
 bin/ctr obdconv --user "$user" "$src" "$dest"

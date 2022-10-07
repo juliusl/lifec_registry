@@ -16,7 +16,7 @@ use tracing::{event, Level};
 
 use crate::{
     Artifact, Authenticate, Continue, Discover, FormatOverlayBD, Login, LoginACR, LoginOverlayBD,
-    Mirror, Resolve, Teleport,
+    Mirror, Resolve, Teleport, Import,
 };
 
 mod proxy_target;
@@ -149,6 +149,7 @@ impl Project for Proxy {
         runtime.install_with_custom::<Teleport>("");
         runtime.install_with_custom::<Continue>("");
         runtime.install_with_custom::<Artifact>("");
+        runtime.install_with_custom::<Import>("");
         runtime.install_with_custom::<LoginOverlayBD>("");
         runtime.install_with_custom::<FormatOverlayBD>("");
         runtime

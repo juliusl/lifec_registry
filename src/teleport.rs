@@ -6,8 +6,8 @@ use tracing::Level;
 use crate::content::{ArtifactManifest, Descriptor, ImageManifest, ReferrersList};
 use crate::proxy::ProxyTarget;
 
-mod overlaybd;
-pub use overlaybd::FormatOverlayBD;
+mod format_overlaybd;
+pub use format_overlaybd::FormatOverlayBD;
 
 /// Plugin to handle swapping out the manifest resolution to a teleportable image
 ///

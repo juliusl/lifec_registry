@@ -105,7 +105,7 @@ pub const FORMAT_TELEPORT_TEMPLATE: &'static str = r#"
 + .engine
 : .event    setup
 : .event    import
-: .event    format
+: .event    convert
 : .event    link
 : .exit
 ```
@@ -117,23 +117,49 @@ pub const FORMAT_TELEPORT_TEMPLATE: &'static str = r#"
 ```
 
 ## Import the images from repo
+- Will import the image {source}:{tag} and push to {registry_name}.{registry_host}/{repo}:{tag}
 
 ``` import {format}
-+ .runtime
-: .login            access_token
-: .authn            oauth2
-: .import           {source}/{tag}
-```
+: repo              .symbol {repo}
+: ns                .symbol {registry_name}.{registry_host}
+: api               .symbol https://{registry_name}.{registry_host}/v2/{repo}/manifests/{tag}
+: file_src          .symbol .world/{registry_host}/{registry_name}/access_token
+: src_dir           .symbol .
+: work_dir          .symbol .world/{registry_host}/{registry_name}
+: registry_host     .symbol {registry_host}
+: registry_name     .symbol {registry_name}
 
-## Format the images into a streamable format
-``` format {format}
 + .runtime
+: .login-acr            {registry_name}
+: .install              access_token
 : .login                access_token
 : .authn                oauth2
-: .format_{format}      {registry_name}.{registry_host}/{repo}/{tag}
+: .import               {source}:{tag}
 ```
 
-## Create links from the original images to their streamable format 
+## Convert an image to a streamable format
+- Will convert the image and push to {registry_name}.{registry_host}/{repo}:{tag}-{format}
+
+``` convert {format}
+: repo              .symbol {repo}
+: ns                .symbol {registry_name}.{registry_host}
+: api               .symbol https://{registry_name}.{registry_host}/v2/{repo}/manifests/{tag}
+: file_src          .symbol .world/{registry_host}/{registry_name}/access_token
+: src_dir           .symbol .
+: work_dir          .symbol .world/{registry_host}/{registry_name}
+: registry_host     .symbol {registry_host}
+: registry_name     .symbol {registry_name}
+
++ .runtime
+: .login-acr            {registry_name}
+: .install              access_token
+: .login                access_token
+: .authn                oauth2
+: .format_{format}      
+```
+
+## Create links from the original images to their streamable format
+- Will create a link between {registry_name}.{registry_host}/{repo}:{tag} and {registry_name}.{registry_host}/{repo}:{tag}-{format}
 
 ``` link {format}
 : repo          .symbol {repo}

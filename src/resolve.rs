@@ -1,5 +1,4 @@
-use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component, BlockObject, BlockProperties, Value, AttributeIndex};
-use tracing::{event, Level};
+use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component, BlockObject, BlockProperties, AttributeIndex};
 
 use crate::proxy::ProxyTarget;
 
