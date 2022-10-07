@@ -13,17 +13,21 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 ## Control Settings 
 - Engine sequence when the mirror starts
 
-``` mirror
-+ .engine
-: .event install
-: .event start
-: .loop
+```md
+<``` mirror>
++ .engine           <This is the engine definition for the mirror server>
+: .event install    <This first step will login to acr and setup credentials>
+: .event start      <This will start the mirror server>
+: .event recover    <If the mirror crashes for some reason, this step will attempt to recover>
+: .loop             <If a step crashes, this ensures the engine loops>
 ```
 
 ## Install mirror components
-- Teleport's current provider is overlaybd, it requires sign in at `/opt/overlaybd/cred.json`
+- This will login to acr as an admin user, then
+- Copy credentials over to overlaybd's credential file
 
-``` install mirror
+```md
+<``` install mirror>
 : src_dir         .symbol .
 : work_dir        .symbol .world/{registry_host}/{registry_name}
 : file_src        .symbol .world/{registry_host}/{registry_name}/access_token
@@ -32,14 +36,15 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : .login-acr        {registry_name}
 : .admin
 : .login-overlaybd  /opt/overlaybd/cred.json
-: .registry         {registry_name}.{registry_host}
+: .registry         {registry_name}.azurecr.io
 ```
 
 ## Start the mirror server
 - When this event is called it will start a server that will operate indefinitely,
 - If an error occurs, it should restart the server after going through the setup process once more 
 
-``` start mirror
+```md
+<``` start mirror>
 : src_dir         .symbol .
 : work_dir        .symbol .world/{registry_host}/{registry_name}
 : file_src        .symbol .world/{registry_host}/{registry_name}/access_token
@@ -53,30 +58,48 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : .login-acr {registry_name}
 : .install   access_token
 : .mirror    {registry_name}.{registry_host}
-: .host      {mirror_address}, resolve, pull
+: .host      localhost:8578, resolve, pull
 
-+ .proxy    {mirror_address}
-# Resolve manifests sequence
+# Proxy settings 
+- The below is the config for how the mirror will handle incoming requests
+
++ .proxy  localhost:8578 <The proxy server will be listening on this address>
+
+## Resolve manifest handler (/v2/../manifests/..)
+- This handler will resolve the requested reference with the upstream server, 
+- Subsequent plugins will noww have the digest and manifest for the original image
+- Using the resolved digest, we call the referrer's api to `.discover` links to streamable formats
+
 : .manifests      get, head
-: .login        access_token
-: .authn        oauth2
-: .resolve            application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, */*
+: .login          access_token
+: .authn          oauth2
+: .resolve        application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, */*     
+: .discover       dadi.image.v1
+: .teleport       overlaybd
 
-# You can update this to customize what formats to resolve
-# : .discover           {artifact_type}
-# : .teleport           {teleport_format}
-# : .format-overlaybd
+## Example of a "manual" teleport
+- This configures the handler to swap a specific digest
 
-# Download blob sequence
+# : .teleport     manual
+# : .from         sha256:820582b05253c2b968442b8af31d791ae64478bcc18e04826c5ce42f974d3272
+# : .to           sha256:b0622f86e3d078425d9e2964e48952d2ffa8b5258b836b159405dbc77c2ac4aa
+
+# Download blob handler (/v2/../blobs/..)
 : .blobs          get
-:   .login        access_token
-:   .authn        oauth2
-:   .continue
+: .login          access_token
+: .authn          oauth2
+: .continue      
 
-# Push blobs example
-# : .blobs          post
-# : .login          access_token
-# : .authn          oauth2
-#  
+```
+
+## Recovery Settings 
+- This is a really simple stage designed to handle intermittent network issues that may stop the server,
+
+```md
+<``` recover mirror> 
++ .runtime
+: .println  Waiting for 10 seconds
+: .timer    10 s
+: .println  Looping back to the start of the engine 
 ```
 "#;

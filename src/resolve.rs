@@ -50,9 +50,9 @@ impl Plugin for Resolve {
     }
 
     // fn compile(parser: &mut lifec::AttributeParser) {
-    //     parser.add_custom_with("import", |p, content| {
+    //     parser.add_custom_with("media_type", |p, content| {
     //         if let Some(last_entity) = p.last_child_entity() {
-    //             p.define_child(last_entity, "import", Value::Symbol(content));
+    //             p.define_child(last_entity, "media_type", Value::Symbol(content));
     //         }
     //     })
     // }

@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use crate::Proxy;
 use hyper::{http::StatusCode, Method};
-use lifec::{AttributeIndex, ThunkContext};
+use lifec::{AttributeIndex, ThunkContext, Host};
 use poem::{
     handler,
     web::{Data, Path, Query},
@@ -33,6 +35,7 @@ pub async fn manifests_api(
     Path((name, reference)): Path<(String, String)>,
     Query(ManifestAPIParams { ns }): Query<ManifestAPIParams>,
     context: Data<&ThunkContext>,
+    host: Data<&Arc<Host>>,
 ) -> Response {
     if !context.is_enabled("proxy_enabled") {
         return Response::builder()
@@ -75,5 +78,5 @@ pub async fn manifests_api(
         .with_symbol("accept", request.header("accept").unwrap_or_default())
         .with_symbol("method", method);
 
-    Proxy::handle(&input).await
+    Proxy::handle(&host, &input).await
 }

@@ -28,12 +28,6 @@ pub use login::LoginOverlayBD;
 mod download;
 pub use download::Download;
 
-mod upload;
-pub use upload::Upload;
-
-mod list_tags;
-pub use list_tags::ListTags;
-
 mod resolve;
 pub use resolve::Resolve;
 

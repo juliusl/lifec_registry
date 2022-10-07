@@ -11,12 +11,12 @@ use poem::{
     EndpointExt, Request, Response, Route,
 };
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 use tracing::{event, Level};
 
 use crate::{
-    Artifact, Authenticate, Continue, Discover, Download, FormatOverlayBD, Login, LoginACR,
-    LoginOverlayBD, Mirror, Resolve, Teleport, Upload,
+    Artifact, Authenticate, Continue, Discover, FormatOverlayBD, Login, LoginACR, LoginOverlayBD,
+    Mirror, Resolve, Teleport,
 };
 
 mod proxy_target;
@@ -87,6 +87,7 @@ use tags::tags_api;
 #[derive(Default)]
 pub struct Proxy {
     context: ThunkContext,
+    host: Arc<Host>,
 }
 
 impl Proxy {
@@ -145,10 +146,8 @@ impl Project for Proxy {
         runtime.install_with_custom::<Login>("");
         runtime.install_with_custom::<Resolve>("");
         runtime.install_with_custom::<Discover>("");
-        runtime.install_with_custom::<Download>("");
         runtime.install_with_custom::<Teleport>("");
         runtime.install_with_custom::<Continue>("");
-        runtime.install_with_custom::<Upload>("");
         runtime.install_with_custom::<Artifact>("");
         runtime.install_with_custom::<LoginOverlayBD>("");
         runtime.install_with_custom::<FormatOverlayBD>("");
@@ -185,8 +184,14 @@ impl WebApp for Proxy {
             .state()
             .find_text("proxy_src")
             .expect("should have src for proxy");
-        let registry_host = self.context.find_symbol("registry_host").expect("should have a registry host");
-        let registry_name = self.context.find_symbol("registry_name").expect("should have a registry name");
+        let registry_host = self
+            .context
+            .find_symbol("registry_host")
+            .expect("should have a registry host");
+        let registry_name = self
+            .context
+            .find_symbol("registry_name")
+            .expect("should have a registry name");
 
         if let Some(block) = self.context.block() {
             let context = self.context.clone();
@@ -257,10 +262,24 @@ impl WebApp for Proxy {
 
                 route = route.at(
                     "/:name<[a-zA-Z0-9/_-]+(?:manifests)>/:reference",
-                    get(manifests_api.data(get_manifests_settings))
-                        .head(manifests_api.data(head_manifests_settings))
-                        .put(manifests_api.data(put_manifests_settings))
-                        .delete(manifests_api.data(delete_manifests_settings)),
+                    get(manifests_api
+                        .data(get_manifests_settings)
+                        .data(self.host.clone()))
+                    .head(
+                        manifests_api
+                            .data(head_manifests_settings)
+                            .data(self.host.clone()),
+                    )
+                    .put(
+                        manifests_api
+                            .data(put_manifests_settings)
+                            .data(self.host.clone()),
+                    )
+                    .delete(
+                        manifests_api
+                            .data(delete_manifests_settings)
+                            .data(self.host.clone()),
+                    ),
                 );
 
                 // Resolve blob settings
@@ -287,18 +306,30 @@ impl WebApp for Proxy {
 
                 route = route.at(
                     "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/:digest",
-                    get(blob_download_api.data(get_blobs_settings)),
+                    get(blob_download_api
+                        .data(get_blobs_settings)
+                        .data(self.host.clone())),
                 );
 
                 route = route.at(
                     "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads",
-                    post(blob_upload_api.data(post_blobs_settings)),
+                    post(
+                        blob_upload_api
+                            .data(post_blobs_settings)
+                            .data(self.host.clone()),
+                    ),
                 );
 
                 route = route.at(
                     "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads/:reference",
-                    put(blob_chunk_upload_api.data(put_blobs_settings))
-                        .patch(blob_chunk_upload_api.data(patch_blobs_settings)),
+                    put(blob_chunk_upload_api
+                        .data(put_blobs_settings)
+                        .data(self.host.clone()))
+                    .patch(
+                        blob_chunk_upload_api
+                            .data(patch_blobs_settings)
+                            .data(self.host.clone()),
+                    ),
                 );
 
                 // Resolve tags settings
@@ -310,15 +341,15 @@ impl WebApp for Proxy {
 
                 route = route.at(
                     "/:name<[a-zA-Z0-9/_-]+(?:tags)>/list",
-                    get(tags_api.data(get_tags_settings)),
+                    get(tags_api.data(get_tags_settings).data(self.host.clone())),
                 );
 
                 let route = Route::new().nest(
                     "/v2",
                     route.at(
                         "/",
-                        get(index.data(self.context.clone()))
-                            .head(index.data(self.context.clone())),
+                        get(index.data(self.context.clone()).data(self.host.clone()))
+                            .head(index.data(self.context.clone()).data(self.host.clone())),
                     ),
                 );
 
@@ -339,6 +370,7 @@ async fn index(
     request: &Request,
     Query(IndexParams { ns }): Query<IndexParams>,
     context: Data<&ThunkContext>,
+    host: Data<&Host>,
 ) -> Response {
     event!(Level::DEBUG, "Got /v2 request");
     event!(Level::TRACE, "{:#?}", request);
@@ -355,23 +387,30 @@ async fn index(
 
 impl From<ThunkContext> for Proxy {
     fn from(context: ThunkContext) -> Self {
-        Self { context }
+        let proxy_src = context
+            .search()
+            .find_text("proxy_src")
+            .expect("should have a proxy src");
+        Self {
+            context,
+            host: Arc::new(Host::load_content::<Proxy>(proxy_src)),
+        }
     }
 }
 
 impl Proxy {
     /// Handles executing the proxy sequence
     ///
-    pub async fn handle(input: &ThunkContext) -> Response {
-        let mut host = if let Some(proxy_src_path) = input.search().find_symbol("proxy_src_path") {
-            Host::open::<Proxy>(proxy_src_path)
+    pub async fn handle(host: &Host, input: &ThunkContext) -> Response {
+        let (join, _) = if let Some(proxy_src_path) = input.search().find_symbol("proxy_src_path") {
+            let replace_host = Host::open::<Proxy>(proxy_src_path)
                 .await
-                .expect("should open")
-        } else {
-            Host::load_content::<Proxy>(input.state().find_text("proxy_src").unwrap())
-        };
+                .expect("should open");
 
-        let (join, _) = host.execute(&input);
+            replace_host.execute(&input)
+        } else {
+            host.execute(&input)
+        };
 
         match join.await {
             Ok(result) => Proxy::into_response(&result),

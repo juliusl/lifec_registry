@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use crate::Proxy;
 use hyper::http::StatusCode;
-use lifec::{AttributeIndex, ThunkContext};
+use lifec::{AttributeIndex, ThunkContext, Host};
 use poem::{
     handler,
     web::{Data, Path, Query},
@@ -20,6 +22,7 @@ pub async fn tags_api(
     Path(name): Path<String>,
     Query(TagsAPIParams { ns }): Query<TagsAPIParams>,
     context: Data<&ThunkContext>,
+    host: Data<&Arc<Host>>,
 ) -> Response {
     if !context.is_enabled("proxy_enabled") {
         return Response::builder()
@@ -39,5 +42,5 @@ pub async fn tags_api(
         .with_symbol("method", method)
         .with_symbol("name", name);
 
-    Proxy::handle(&input).await
+    Proxy::handle(&host, &input).await
 }

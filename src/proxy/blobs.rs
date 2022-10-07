@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use crate::Proxy;
 use hyper::http::StatusCode;
-use lifec::{AttributeIndex, ThunkContext};
+use lifec::{AttributeIndex, ThunkContext, Host};
 use poem::{
     handler,
     web::{Data, Path, Query},
@@ -41,6 +43,7 @@ pub async fn blob_download_api(
     Path((name, digest)): Path<(String, String)>,
     Query(BlobDownloadParams { ns }): Query<BlobDownloadParams>,
     context: Data<&ThunkContext>,
+    host: Data<&Arc<Host>>,
 ) -> Response {
     if !context.is_enabled("proxy_enabled") {
         return Proxy::soft_fail();
@@ -64,7 +67,7 @@ pub async fn blob_download_api(
         input.state_mut().add_symbol("accept", accept)
     }
 
-    Proxy::handle(&input).await
+    Proxy::handle(&host, &input).await
 }
 
 /// API handler for end-4a, end-4b, end-11
@@ -89,6 +92,7 @@ pub async fn blob_upload_api(
         ns,
     }): Query<ImportParameters>,
     context: Data<&ThunkContext>,
+    host: Data<&Arc<Host>>,
 ) -> Response {
     if !context.is_enabled("proxy_enabled") {
         return Response::builder()
@@ -125,7 +129,7 @@ pub async fn blob_upload_api(
             .with_symbol("method", method)
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
-        Proxy::handle(&input).await
+        Proxy::handle(&host, &input).await
     } else if let Some(digest) = digest {
         event!(
             Level::DEBUG,
@@ -139,7 +143,7 @@ pub async fn blob_upload_api(
             .with_symbol("method", method)
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
-        Proxy::handle(&input).await
+        Proxy::handle(&host, &input).await
     } else if let None = digest {
         event!(Level::DEBUG, "Got blob_upload_session_id request, {name}");
         event!(Level::TRACE, "{:#?}", request);
@@ -149,7 +153,7 @@ pub async fn blob_upload_api(
             .with_symbol("method", method)
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
-        Proxy::handle(&input).await
+        Proxy::handle(&host, &input).await
     } else {
         return Response::builder()
             .status(StatusCode::SERVICE_UNAVAILABLE)
@@ -172,6 +176,7 @@ pub async fn blob_chunk_upload_api(
     Path((name, reference)): Path<(String, String)>,
     Query(UploadParameters { digest, ns }): Query<UploadParameters>,
     context: Data<&ThunkContext>,
+    host: Data<&Arc<Host>>,
 ) -> Response {
     if !context.is_enabled("proxy_enabled") {
         return Response::builder()
@@ -208,5 +213,5 @@ pub async fn blob_chunk_upload_api(
         .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
         .with_symbol("digest", digest.unwrap_or_default());
 
-    Proxy::handle(&input).await
+    Proxy::handle(&host, &input).await
 }
