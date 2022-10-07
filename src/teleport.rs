@@ -68,10 +68,19 @@ impl Plugin for Teleport {
                             ) {
                                 if let Some(digest) = tc.search().find_symbol("digest") {
                                     if digest == from {
-                                        if let Some(mut proxy_target) = ProxyTarget::try_from(&tc).ok() {
-                                            proxy_target.thunk_context = proxy_target.thunk_context.replace_symbol("digest", &to);
-                                            if let Some((manifests, body)) = proxy_target.resolve().await {
-                                                event!(Level::DEBUG, "Manual teleport mode, swapping {from} -> {to}");
+                                        if let Some(mut proxy_target) =
+                                            ProxyTarget::try_from(&tc).ok()
+                                        {
+                                            proxy_target.thunk_context = proxy_target
+                                                .thunk_context
+                                                .replace_symbol("digest", &to);
+                                            if let Some((manifests, body)) =
+                                                proxy_target.resolve().await
+                                            {
+                                                event!(
+                                                    Level::DEBUG,
+                                                    "Manual teleport mode, swapping {from} -> {to}"
+                                                );
                                                 let mut swap = ThunkContext::default();
                                                 manifests.copy_to_context(&mut swap);
                                                 swap.state_mut().with_binary("body", body);
@@ -143,7 +152,7 @@ impl Teleport {
                                         "application/vnd.docker.distribution.manifest.v2+json",
                                     )
                                     .with_symbol("digest", streamable_manifest.digest.to_string())
-                                    .with_symbol("status-code", "200");
+                                    .with_int("status-code", 200);
 
                                 return Some(tc);
                             }
