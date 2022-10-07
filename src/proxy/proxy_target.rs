@@ -278,6 +278,7 @@ impl ProxyTarget {
     ///
     pub async fn send_request(&self, request: Request) -> Option<Response<Body>> {
         if let Some(client) = self.thunk_context.client() {
+            event!(Level::TRACE, "Sending request, {:#?}", &request);
             match client.request(request.into()).await {
                 Ok(response) => {
                     event!(Level::TRACE, "Received response, {:#?}", response);
