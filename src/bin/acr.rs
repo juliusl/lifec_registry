@@ -1,14 +1,16 @@
 use clap::{Args, Parser, Subcommand};
 use lifec::{
-    default_parser, default_runtime, AttributeGraph, AttributeIndex, Block, BlockProperties, Event,
-    Inspector, Interpreter, Source, Start, ThunkContext, Value, WorldExt,
+    default_parser, default_runtime, AttributeGraph, AttributeIndex, Block, BlockProperties,
+    Engine, Event, Executor, Inspector, Interpreter, SecureClient, Sequence, Source, Start,
+    ThunkContext, Value, WorldExt,
 };
 use lifec::{Host, Project};
 use lifec_registry::{
-    Artifact, Authenticate, Continue, Discover, Download, Login, LoginACR, Mirror, Proxy, Resolve,
-    Teleport, LoginOverlayBD, FormatOverlayBD,
+    Artifact, Authenticate, Continue, Discover, Download, FormatOverlayBD, Login, LoginACR,
+    LoginOverlayBD, Mirror, Proxy, Resolve, Teleport,
 };
 use serde::Serialize;
+use std::ops::Deref;
 use std::path::PathBuf;
 use tinytemplate::TinyTemplate;
 use tracing::event;
@@ -90,9 +92,105 @@ async fn main() {
                         panic!("Could not create/start host");
                     }
                 }
-                Commands::Teleport(_) => {
-                    todo!("teleport")
-                }
+                Commands::Teleport(teleport) => match teleport {
+                    TeleportSettings {
+                        format,
+                        repo,
+                        command: teleport::Commands::Info,
+                    } => {}
+                    TeleportSettings {
+                        format,
+                        repo,
+                        command: teleport::Commands::Init(mut init),
+                    } => {
+                        init.registry_host = registry_host;
+                        init.registry_name = registry;
+                        init.repo = repo;
+                        init.format = format;
+                        init.init().await;
+                    }
+                    TeleportSettings {
+                        format,
+                        repo,
+                        command: teleport::Commands::Format,
+                    } => {
+                        let repo_dir =
+                            PathBuf::from(format!(".world/{registry_host}/{registry}/{repo}"));
+                    }
+                    TeleportSettings {
+                        format,
+                        repo,
+                        command: teleport::Commands::Link,
+                    } => {
+                        let repo_dir =
+                            PathBuf::from(format!(".world/{registry_host}/{registry}/{repo}"));
+
+                        let mut read_dir = tokio::fs::read_dir(repo_dir)
+                            .await
+                            .expect("should be able to read dir");
+
+                        while let Ok(Some(dir_entry)) = read_dir.next_entry().await {
+                            if dir_entry.file_type().await.unwrap().is_dir() {
+                                let format_runmd = dir_entry.path().join(".runmd");
+                                let mut host = Host::open::<ACR>(format_runmd)
+                                    .await
+                                    .expect("should be a host");
+                                host.world_mut().insert(MirrorSettings {
+                                    registry_host: registry_host.to_string(),
+                                    registry_name: Some(registry.to_string()),
+                                    teleport_format: format.to_string(),
+                                    login_script: String::default(),
+                                    artifact_type: None,
+                                    operating_system: String::default(),
+                                    mirror_address: String::default(),
+                                });
+                                let start =
+                                    Engine::find_block(host.world(), format!("link {format}"))
+                                        .expect("should be the start");
+
+                                let mut disp = Host::dispatcher_builder().build();
+                                disp.setup(host.world_mut());
+
+                                {
+                                    let blocks = host.world().read_component::<Block>();
+                                    let runtime = host.world().fetch::<tokio::runtime::Runtime>();
+                                    let client = host.world().fetch::<SecureClient>();
+                                    let block = blocks.get(start).expect("should have a block");
+
+                                    let index = block
+                                        .index()
+                                        .iter()
+                                        .find(|i| i.root().name() == "runtime")
+                                        .expect("should have an index")
+                                        .clone();
+                                    let graph = AttributeGraph::new(index.clone());
+
+                                    let context = ThunkContext::default();
+                                    let mut context =
+                                        context.enable_async(start, runtime.handle().clone());
+                                    context.enable_https_client(client.deref().clone());
+
+                                    let (join, _) =
+                                        host.execute(&context.with_state(graph.clone()));
+                                    match join.await {
+                                        Ok(_) => {
+                                            
+                                        }
+                                        Err(err) => {
+                                            event!(
+                                                Level::ERROR,
+                                                "Error handling call sequence, {err}"
+                                            );
+                                        }
+                                    }
+                                }
+
+                                host.exit();
+                            }
+                        }
+                    }
+                    _ => {}
+                },
                 Commands::Init(mut mirror_settings) => {
                     if mirror_runmd.exists() {
                         event!(Level::WARN, "Overwriting existing file {:?}", mirror_runmd);
@@ -172,7 +270,7 @@ async fn main() {
                                         (events.get(i), props.get(i))
                                     {
                                         print!("\t{:2}:\t{}", i.id(), event);
-                                        if let Some(prop) = properties.property(event.1.0) {
+                                        if let Some(prop) = properties.property(event.1 .0) {
                                             print!(" {prop}");
                                         }
                                         println!();
@@ -294,6 +392,23 @@ impl Project for ACR {
                     if let Some(graph) = world.write_component::<AttributeGraph>().get_mut(child) {
                         graph.add_text_attr("proxy_src", source.0.to_string());
                     }
+                }
+            }
+        }
+
+        for index in block.index().iter().filter(|b| b.root().name() == "proxy") {
+            for (child, _) in index.iter_children() {
+                let child = world.entities().entity(*child);
+                if let Some(graph) = world.write_component::<AttributeGraph>().get_mut(child) {
+                    // graph
+                    //     .with_symbol("registry_host", &mirror_settings.registry_host)
+                    //     .with_symbol(
+                    //         "registry_name",
+                    //         mirror_settings
+                    //             .registry_name
+                    //             .as_ref()
+                    //             .expect("should have a registry name"),
+                    //     );
                 }
             }
         }

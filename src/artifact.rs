@@ -1,14 +1,14 @@
-use lifec::{Plugin, BlockObject, BlockProperties, CustomAttribute, Value};
-use logos::{Logos, Lexer};
-use serde_json::json;
-use crate::{proxy::ProxyTarget, content::{OverlaybdArtifact, Descriptor}};
-
+use crate::{
+    content::Descriptor, proxy::ProxyTarget, ArtifactManifest, ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE,
+};
+use hyper::Method;
+use lifec::{AttributeIndex, BlockObject, BlockProperties, Plugin, Value};
+use tracing::{event, Level};
 
 /// This plugin is for adding artifacts to a registry,
-/// 
+///
 #[derive(Default)]
 pub struct Artifact;
-
 
 impl Plugin for Artifact {
     fn symbol() -> &'static str {
@@ -23,24 +23,164 @@ impl Plugin for Artifact {
         context.task(|_| {
             let mut tc = context.clone();
             async {
+                // 1) Need to resolve the digest for the subject
+                // 2) And then the digest for the blob
+                // 3) Luckily these should both be tagged
                 if let Some(proxy_target) = ProxyTarget::try_from(&tc).ok() {
-                    let subject = json!({
-                        "digest":"sha256:ed8cba11c09451dbb3495f15951e4afb4f1ba72a4a13e135c6da06c6346e0333",
-                        "mediaType":"application/vnd.docker.distribution.manifest.list.v2+json",
-                        "size":1862
-                    });
-                    let subject = serde_json::from_value::<Descriptor>(subject).expect("should be a descriptor");
-                
-                    let artifact = json!({
-                        "digest":"sha256:20ac9fbb5ae6000b78f7e825bef3b7f01710048d939fe6571248b435b01ff8ba",
-                        "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
-                        "size": 3363
-                    });
-                    let artifact = serde_json::from_value::<Descriptor>(artifact).expect("should be a descriptor");
+                    match (
+                        tc.search().find_symbol("subject"),
+                        tc.search().find_symbol("blob"),
+                    ) {
+                        (Some(subject), Some(blob)) => {
+                            let accept = tc
+                                .search()
+                                .find_symbol("accept")
+                                .expect("should have accept");
 
-                    let overlaybd = OverlaybdArtifact::new(subject, artifact);
-                
-                    overlaybd.artifact().upload(&tc).await;
+                            let subject_digest = proxy_target
+                                .start_request()
+                                .expect("should be able to start a request")
+                                .uri_str(&subject)
+                                .header("accept", &accept)
+                                .finish();
+
+                            let blob_digest = proxy_target
+                                .start_request()
+                                .expect("should be able to start request")
+                                .uri_str(blob)
+                                .header("accept", &accept)
+                                .finish();
+
+                            let subject_desc = proxy_target
+                                .send_request(subject_digest)
+                                .await
+                                .and_then(|resp| {
+                                    if resp.status().is_success() {
+                                        let digest = resp
+                                            .headers()
+                                            .get("docker-content-digest")
+                                            .expect("should have a digest")
+                                            .to_str()
+                                            .expect("should be a string");
+
+                                        let content_lengtth = resp
+                                            .headers()
+                                            .get("content-length")
+                                            .expect("should have a content length")
+                                            .to_str()
+                                            .expect("should be a string")
+                                            .parse::<u64>()
+                                            .expect("should be an integer");
+
+                                        let content_type = resp
+                                            .headers()
+                                            .get("content-type")
+                                            .expect("should have a content tyype")
+                                            .to_str()
+                                            .expect("should be a string");
+
+                                        let desc = Descriptor {
+                                            media_type: content_type.to_string(),
+                                            artifact_type: None,
+                                            digest: digest.to_string(),
+                                            size: content_lengtth,
+                                            annotations: None,
+                                            urls: None,
+                                            data: None,
+                                            platform: None,
+                                        };
+
+                                        Some(desc)
+                                    } else {
+                                        None
+                                    }
+                                });
+
+                            let blob_desc =
+                                proxy_target
+                                    .send_request(blob_digest)
+                                    .await
+                                    .and_then(|resp| {
+                                        if resp.status().is_success() {
+                                            let digest = resp
+                                                .headers()
+                                                .get("docker-content-digest")
+                                                .expect("should have a digest")
+                                                .to_str()
+                                                .expect("should be a string");
+
+                                            let content_lengtth = resp
+                                                .headers()
+                                                .get("content-length")
+                                                .expect("should have a content length")
+                                                .to_str()
+                                                .expect("should be a string")
+                                                .parse::<u64>()
+                                                .expect("should be an integer");
+
+                                            let content_type = resp
+                                                .headers()
+                                                .get("content-type")
+                                                .expect("should have a content tyype")
+                                                .to_str()
+                                                .expect("should be a string");
+
+                                            let desc = Descriptor {
+                                                media_type: content_type.to_string(),
+                                                artifact_type: None,
+                                                digest: digest.to_string(),
+                                                size: content_lengtth,
+                                                annotations: None,
+                                                urls: None,
+                                                data: None,
+                                                platform: None,
+                                            };
+
+                                            Some(desc)
+                                        } else {
+                                            None
+                                        }
+                                    });
+
+                            let blob_desc = blob_desc.expect("Should be a desc");
+                            let subject_desc = subject_desc.expect("should be a desc");
+
+                            let artifact_manifest = ArtifactManifest {
+                                media_type: ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE.to_string(),
+                                artifact_type: "teleport.link.v1".to_string(),
+                                blobs: vec![blob_desc],
+                                subject: subject_desc,
+                                annotations: None,
+                            };
+
+                            event!(Level::DEBUG, "Artifact Manifest\n{:#?}", artifact_manifest);
+
+                            // TODO: check for export 
+                            
+                            let body = serde_json::to_vec_pretty(&artifact_manifest)
+                                .expect("should be serializable");
+
+                            let put = proxy_target.start_request()
+                                .expect("should be able to start request")
+                                .uri_str(subject)
+                                .content_type(&artifact_manifest.media_type)
+                                .method(Method::PUT)
+                                .body(body);
+
+                            match proxy_target.send_request(put).await {
+                                Some(resp) => {
+                                    event!(Level::INFO, "Put artifact manifest result {}", resp.status());
+                                },
+                                None => {
+                                    event!(Level::ERROR, "Could not put manifest");
+                                    
+                                },
+                            }
+                        }
+                        (None, None) => event!(Level::ERROR, "Missing subject and blob"),
+                        (None, Some(_)) => event!(Level::ERROR, "Missing subject"),
+                        (Some(_), None) => event!(Level::ERROR, "Missing blob"),
+                    }
                 }
 
                 tc.copy_previous();
@@ -49,31 +189,18 @@ impl Plugin for Artifact {
         })
     }
 
-    /// # Example usage
-    /// 
-    /// ```md
-    /// .process sh convert.sh
-    /// 
-    /// .artifact artifact.example.v1
-    /// - This will get resolved when the plugin is called
-    /// 
-    /// .subject {registry-name}.{registry-host}/{repo}:{reference}
-    /// .blob    world://{subject}/sbom.json, application/json
-    /// .blob    world://{subject}/output.txt, text/utf8
-    /// .blob    registry://{registry-name}.{registry-host}/{repo}:{reference}-obd, application/vnd.oci.image.manifest.v1+json
-    /// 
-    /// ```
-    /// 
     fn compile(parser: &mut lifec::AttributeParser) {
-        parser.add_custom(CustomAttribute::new_with("subject", |p, content| {
+        parser.add_custom_with("subject", |p, content| {
             if let Some(last) = p.last_child_entity() {
                 p.define_child(last, "subject", Value::Symbol(content));
             }
-        }));
+        });
 
-        parser.add_custom(CustomAttribute::new_with("blob", |p, content| {
-            
-        }));
+        parser.add_custom_with("blob", |p, content| {
+            if let Some(last) = p.last_child_entity() {
+                p.define_child(last, "blob", Value::Symbol(content));
+            }
+        });
     }
 }
 
@@ -88,37 +215,4 @@ impl BlockObject for Artifact {
     fn parser(&self) -> Option<lifec::CustomAttribute> {
         Some(Self::as_custom_attr())
     }
-}
-
-/// Enumeration of blob tokens to help parse a .blob attr
-/// 
-#[derive(Logos)]
-enum BlobTokens {
-    /// File that will exist in the world_dir
-    /// 
-    #[token("world://", on_world_file)]
-    WorldFile(String),
-    /// Image reference that must be resolved
-    /// 
-    #[token("registry://", on_image_reference)]
-    ImageReference(String),
-    /// Media type
-    /// 
-    #[token("application/", on_media_type)]
-    MediaType(String),
-    #[error]
-    #[regex(r"[ ,\t\n\f]+", logos::skip)]
-    Error,
-}
-
-fn on_world_file(lexer: &mut Lexer<BlobTokens>) -> Option<String> { 
-    None 
-}
-
-fn on_image_reference(lexer: &mut Lexer<BlobTokens>) -> Option<String> { 
-    None 
-}
-
-fn on_media_type(lexer: &mut Lexer<BlobTokens>) -> Option<String> { 
-    None 
 }

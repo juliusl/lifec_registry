@@ -25,7 +25,7 @@ pub struct ProxyTarget {
     pub repo: String,
     /// Proxied api
     ///
-    pub api: String,
+    pub api: Option<String>,
     /// Proxied method
     ///
     pub method: String,
@@ -44,12 +44,16 @@ impl ProxyTarget {
     /// Continues the request, if successful returns self, otherwise returns None
     ///
     pub async fn continue_request(&self) -> Option<Response<Body>> {
+        if self.api.is_none() {
+            return None;
+        }
+
         if let Some(request) = self.start_request() {
             match &self.media {
                 Media::Accept(accept) => {
                     let request = request
                         .header("accept", accept)
-                        .uri_str(self.api.as_str())
+                        .uri_str(self.api.as_ref().expect("should have a value"))
                         .finish();
 
                     self.send_request(request).await
@@ -455,13 +459,13 @@ impl TryFrom<&ThunkContext> for ProxyTarget {
     fn try_from(tc: &ThunkContext) -> Result<Self, Self::Error> {
         if let (Some(namespace), Some(repo), Some(api)) = (
             tc.search().find_symbol("ns"),
-            tc.search().find_symbol("name"),
+            tc.search().find_symbol("repo"),
             tc.search().find_symbol("api"),
         ) {
             Ok(Self {
                 namespace,
                 repo,
-                api,
+                api: Some(api),
                 object: {
                     if let Some(digest) = tc.search().find_symbol("digest") {
                         Object::Digest(digest)
