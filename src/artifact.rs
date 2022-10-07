@@ -164,14 +164,18 @@ impl Plugin for Artifact {
 
                             let put = proxy_target.start_request()
                                 .expect("should be able to start request")
-                                .uri_str(artifact_uri)
+                                .uri_str(&artifact_uri)
                                 .content_type(&artifact_manifest.media_type)
                                 .method(Method::PUT)
                                 .body(body);
 
                             match proxy_target.send_request(put).await {
                                 Some(resp) => {
-                                    event!(Level::INFO, "Put artifact manifest result {}", resp.status());
+                                    if !resp.status().is_success() {
+                                        event!(Level::ERROR, "Could not put manifest {}", artifact_uri);
+                                    } else {
+                                        event!(Level::INFO, "Put artifact manifest result {}", resp.status());
+                                    }
                                 },
                                 None => {
                                     event!(Level::ERROR, "Could not put manifest");
