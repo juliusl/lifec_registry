@@ -24,6 +24,7 @@ pub use proxy_target::ProxyTarget;
 
 mod methods;
 use methods::Methods;
+
 mod resources;
 use resources::Resources;
 

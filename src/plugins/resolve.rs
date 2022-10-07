@@ -1,8 +1,8 @@
 use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component, BlockObject, BlockProperties, AttributeIndex};
 
-use crate::proxy::ProxyTarget;
+use crate::plugins::ProxyTarget;
 
-/// Plugin that mirrors image resolution api's, based on OCI spec endpoints -
+/// Plugin that mirrors image resolution api's, based on OCI spec endpoints,
 /// 
 /// ```markdown
 /// | ID     | Method         | API Endpoint                                                 | Success     | Failure           |
@@ -35,8 +35,6 @@ impl Plugin for Resolve {
             async move {
                 if let Some(proxy_target) = ProxyTarget::try_from(&tc).ok() {
                     if let Some((manifests, body)) = proxy_target.resolve().await {
-                        // event!(Level::DEBUG, "{:#?}", manifests);
-                    
                         manifests.copy_to_context(&mut tc);
                         tc.state_mut().with_binary("body", body);
                     }
@@ -47,14 +45,6 @@ impl Plugin for Resolve {
             }
         })
     }
-
-    // fn compile(parser: &mut lifec::AttributeParser) {
-    //     parser.add_custom_with("media_type", |p, content| {
-    //         if let Some(last_entity) = p.last_child_entity() {
-    //             p.define_child(last_entity, "media_type", Value::Symbol(content));
-    //         }
-    //     })
-    // }
 }
 
 impl BlockObject for Resolve {

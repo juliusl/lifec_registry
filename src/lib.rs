@@ -1,40 +1,7 @@
-mod mirror;
-pub use mirror::Mirror;
-
-mod continue_req;
-pub use continue_req::Continue;
-
-mod artifact;
-pub use artifact::Artifact;
-
-mod proxy;
-pub use proxy::Proxy;
-
-mod discover;
-pub use discover::Discover;
-
-mod teleport;
-pub use teleport::Teleport;
-pub use teleport::FormatOverlayBD;
-
-mod authenticate;
-pub use authenticate::Authenticate;
-
-mod login;
-pub use login::Login;
-pub use login::LoginACR;
-pub use login::LoginOverlayBD;
-
-mod import;
-pub use import::Import;
-
-mod resolve;
-pub use resolve::Resolve;
 
 mod content;
 pub use content::Platform;
 pub use content::ReferrersList;
-pub use content::OverlaybdArtifact;
 pub use content::Descriptor;
 pub use content::ArtifactManifest;
 pub use content::ImageIndex;
@@ -42,4 +9,18 @@ pub use content::ImageManifest;
 pub use content::OCI_ARTIFACTS_MANIFEST_MEDIA_TYPE;
 pub use content::ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE;
 
-// Manifest -> World ? 
+mod plugins;
+pub use plugins::Mirror;
+pub use plugins::Proxy;
+pub use plugins::Artifact;
+pub use plugins::Authenticate;
+pub use plugins::Continue;
+pub use plugins::FormatOverlayBD;
+pub use plugins::Login;
+pub use plugins::LoginACR;
+pub use plugins::LoginOverlayBD;
+pub use plugins::Discover;
+pub use plugins::Import;
+pub use plugins::Teleport;
+pub use plugins::Resolve;
+

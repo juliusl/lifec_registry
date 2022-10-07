@@ -4,7 +4,7 @@ use tracing::event;
 use tracing::Level;
 
 use crate::content::{ArtifactManifest, Descriptor, ImageManifest, ReferrersList};
-use crate::proxy::ProxyTarget;
+use crate::plugins::ProxyTarget;
 
 mod format_overlaybd;
 pub use format_overlaybd::FormatOverlayBD;

@@ -59,7 +59,8 @@ async fn main() {
                 Commands::Init(_) => {}
                 _ => {
                     if !mirror_runmd.exists() {
-                        panic!("mirror_runmd not found, run `acr --registry {registry} init`")
+                        event!(Level::ERROR, "mirror_runmd not found, run `acr --registry {registry} init`");
+                        panic!("Uninitialized directory");
                     }
                 }
             }

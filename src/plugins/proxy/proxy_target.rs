@@ -1,7 +1,7 @@
 use std::{fmt::Display, str::FromStr};
 
 use hyper::{Body, Method, Response};
-use lifec::{AttributeIndex, MemoryBlobSource, ThunkContext};
+use lifec::{AttributeIndex, ThunkContext};
 use logos::{Lexer, Logos};
 use poem::{web::headers::Authorization, Request, RequestBuilder};
 use tracing::{event, Level};
@@ -54,6 +54,9 @@ impl ProxyTarget {
                     let request = request
                         .header("accept", accept)
                         .uri_str(self.api.as_ref().expect("should have a value"))
+                        .method(
+                            Method::from_bytes(self.method.to_uppercase().as_bytes()).expect("should be valid method"),
+                        )
                         .finish();
 
                     self.send_request(request).await
@@ -62,7 +65,7 @@ impl ProxyTarget {
                     let request = request
                         .content_type(content_type)
                         .method(
-                            Method::from_str(self.method.as_str()).expect("should be valid method"),
+                            Method::from_bytes(self.method.to_uppercase().as_bytes()).expect("should be valid method"),
                         )
                         .body(body.to_vec());
 
@@ -140,53 +143,62 @@ impl ProxyTarget {
                     serde_json::from_slice::<ImageIndex>(body.as_slice()).ok()
                 {
                     let manifest = image_index.clone();
-                    Some((Manifests::Index(
-                        Descriptor {
-                            media_type: image_index.media_type,
-                            artifact_type: None,
-                            digest: digest.to_string(),
-                            size: body.len() as u64,
-                            annotations: None,
-                            urls: None,
-                            data: None,
-                            platform: None,
-                        },
-                        manifest,
-                    ), body))
+                    Some((
+                        Manifests::Index(
+                            Descriptor {
+                                media_type: image_index.media_type,
+                                artifact_type: None,
+                                digest: digest.to_string(),
+                                size: body.len() as u64,
+                                annotations: None,
+                                urls: None,
+                                data: None,
+                                platform: None,
+                            },
+                            manifest,
+                        ),
+                        body,
+                    ))
                 } else if let Some(image_manifest) =
                     serde_json::from_slice::<ImageManifest>(body.as_slice()).ok()
                 {
                     let manifest = image_manifest.clone();
-                    Some((Manifests::Image(
-                        Descriptor {
-                            media_type: image_manifest.media_type,
-                            artifact_type: None,
-                            digest: digest.to_string(),
-                            size: body.len() as u64,
-                            annotations: image_manifest.annotations,
-                            urls: None,
-                            data: None,
-                            platform: None,
-                        },
-                        manifest,
-                    ), body))
+                    Some((
+                        Manifests::Image(
+                            Descriptor {
+                                media_type: image_manifest.media_type,
+                                artifact_type: None,
+                                digest: digest.to_string(),
+                                size: body.len() as u64,
+                                annotations: image_manifest.annotations,
+                                urls: None,
+                                data: None,
+                                platform: None,
+                            },
+                            manifest,
+                        ),
+                        body,
+                    ))
                 } else if let Some(artifact_manifest) =
                     serde_json::from_slice::<ArtifactManifest>(body.as_slice()).ok()
                 {
                     let manifest = artifact_manifest.clone();
-                    Some((Manifests::Artifact(
-                        Descriptor {
-                            media_type: artifact_manifest.media_type,
-                            artifact_type: Some(artifact_manifest.artifact_type),
-                            digest: digest.to_string(),
-                            size: body.len() as u64,
-                            annotations: artifact_manifest.annotations,
-                            urls: None,
-                            data: None,
-                            platform: None,
-                        },
-                        manifest,
-                    ), body))
+                    Some((
+                        Manifests::Artifact(
+                            Descriptor {
+                                media_type: artifact_manifest.media_type,
+                                artifact_type: Some(artifact_manifest.artifact_type),
+                                digest: digest.to_string(),
+                                size: body.len() as u64,
+                                annotations: artifact_manifest.annotations,
+                                urls: None,
+                                data: None,
+                                platform: None,
+                            },
+                            manifest,
+                        ),
+                        body,
+                    ))
                 } else {
                     None
                 }
@@ -260,6 +272,72 @@ impl ProxyTarget {
         }
     }
 
+    /// Resolves a descriptor from a uri,
+    /// 
+    pub async fn resolve_desc_from_uri(&self, uri: impl AsRef<str>) -> Option<Descriptor> {
+        let url = hyper::Uri::from_str(uri.as_ref()).expect("should be a valid uri");
+
+        // Check the uri we're passed has the same host as the upstream server we're targeting
+        if url.host().unwrap_or_default() != self.namespace {
+            panic!("Uri passed is a different host then the current proxy target");
+        }
+
+        let accept = self
+            .thunk_context
+            .search()
+            .find_symbol("accept")
+            .expect("should have accept");
+
+        let request = self
+            .start_request()
+            .expect("should be able to start a request")
+            .uri_str(uri.as_ref())
+            .header("accept", &accept)
+            .finish();
+
+        self.send_request(request).await.and_then(|resp| {
+            if resp.status().is_success() {
+                let digest = resp
+                    .headers()
+                    .get("docker-content-digest")
+                    .expect("should have a digest")
+                    .to_str()
+                    .expect("should be a string");
+
+                let content_lengtth = resp
+                    .headers()
+                    .get("content-length")
+                    .expect("should have a content length")
+                    .to_str()
+                    .expect("should be a string")
+                    .parse::<u64>()
+                    .expect("should be an integer");
+
+                let content_type = resp
+                    .headers()
+                    .get("content-type")
+                    .expect("should have a content tyype")
+                    .to_str()
+                    .expect("should be a string");
+
+                let desc = Descriptor {
+                    media_type: content_type.to_string(),
+                    artifact_type: None,
+                    digest: digest.to_string(),
+                    size: content_lengtth,
+                    annotations: None,
+                    urls: None,
+                    data: None,
+                    platform: None,
+                };
+
+                Some(desc)
+            } else {
+                None
+            }
+        })
+    }
+
     /// Starts an authenticated requets to the proxy target,
     ///
     pub fn start_request(&self) -> Option<RequestBuilder> {
@@ -327,9 +405,7 @@ impl ProxyTarget {
 
     pub fn manifest_with(&self, object: impl AsRef<str>) -> String {
         let Self {
-            namespace,
-            repo,
-            ..
+            namespace, repo, ..
         } = self;
 
         format!(

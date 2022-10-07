@@ -6,7 +6,9 @@ use tracing::{event, Level};
 
 use super::resources::Resources;
 
-/// Enumeration of methods to proxy
+/// Enumeration of methods to proxy,
+/// 
+/// This is a lexer to read input from .host attributes,
 ///
 #[derive(Logos, Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Methods {
@@ -28,6 +30,8 @@ pub enum Methods {
 }
 
 impl Methods {
+    /// Returns a function for parsing a proxy route handler definition for a specified resource (manifests, blobs, tags, etc),
+    ///  
     pub fn parse_methods(resource: Resources) -> impl Fn(&mut AttributeParser, String) {
         move |parser: &mut AttributeParser, content: String| {
             let mut lexer = Methods::lexer(content.as_ref());

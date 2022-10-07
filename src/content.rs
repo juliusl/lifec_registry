@@ -16,9 +16,6 @@ pub use referrers_response::ReferrersList;
 mod image_manifest;
 pub use image_manifest::ImageManifest;
 
-mod overlaybd_artifact;
-pub use overlaybd_artifact::OverlaybdArtifact;
-
 mod image_index;
 pub use image_index::ImageIndex;
 

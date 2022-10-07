@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use crate::proxy::ProxyTarget;
+use crate::plugins::ProxyTarget;
 use hyper::Method;
 use lifec::{BlobSource, ContentBroker, MemoryBlobSource, Sha256Digester, ThunkContext, Component, DefaultVecStorage};
 use tracing::{event, Level};
