@@ -1,7 +1,13 @@
-use lifec::{Plugin, BlockObject, BlockProperties, AttributeIndex, Process, Resources};
+
+
+use lifec::{Plugin, BlockObject, BlockProperties, AttributeIndex, Process, Resources, Value};
+use logos::Logos;
+use poem::Request;
 use rust_embed::RustEmbed;
 use tokio::select;
 use tracing::{event, Level};
+
+use crate::{proxy::ProxyTarget, Platform, ImageIndex};
 
 
 /// Plugin to handle importing a public source image to a private repo
@@ -50,8 +56,61 @@ impl Plugin for Import {
                         .with_symbol("REGISTRY_USER", &user)
                         .with_symbol("REGISTRY_TOKEN", &token)
                         .with_symbol("REPO", &repo)
-                        .with_symbol("SOURCE", &import)
                         .with_symbol("REFERENCE", &reference);
+
+                        if let Some(platform) = tc.search().find_symbol("platform") {
+                            if platform != "all" {
+                                // 1) resolve the manifest list
+                                if let Some(client) = tc.client() {
+                                    
+                                    if let Some((ns, reference)) = import.split_once(":") {
+                                        if let Some((host, repo)) = ns.split_once("/") {
+                                            let manifest_uri = format!("{host}/v2/{repo}/{reference}");
+                                            event!(Level::DEBUG, "Checking to see if {manifest_uri} is a manifest list"); 
+    
+                                            let req = Request::builder()
+                                                .uri_str(manifest_uri)
+                                                .header("accept", "application/vnd.docker.distribution.manifest.list.v2+json")
+                                                .finish();
+                                            
+                                            if let Some(resp) = client.request(req.into()).await.ok() {
+                                                event!(Level::DEBUG, "Received response, checking");
+    
+                                                if let Some((_os, _arch)) = platform.split_once("/") {
+                                                    match hyper::body::to_bytes(resp.into_body()).await {
+                                                        Ok(bytes) => {
+                                                            if let Some(manifest_list) = serde_json::from_slice::<ImageIndex>(&bytes).ok() {
+                                                                if let Some(desc) = manifest_list.manifests.iter().find(|d| match &d.platform {
+                                                                    Some(Platform{ 
+                                                                        os,
+                                                                        architecture,
+                                                                        ..
+                                                                    }) if os == _os && architecture == _arch => {
+                                                                        true
+                                                                    }
+                                                                    _ => false,
+                                                                }) {
+                                                                    let true_source = format!("{host}/{repo}@{}", desc.digest);
+                                                                    event!(Level::DEBUG, "Found true source {true_source}");
+                                                                    tc.state_mut().with_symbol("SOURCE", &true_source);
+                                                                }
+                                                            } 
+                                                        },
+                                                        Err(err) => {
+                                                            event!(Level::ERROR, "Could not read body {err}");
+                                                        },
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                tc.state_mut().with_symbol("SOURCE", &import);
+                            }
+                        } else {
+                            tc.state_mut().with_symbol("SOURCE", &import);
+                        }
 
                         let (task, cancel) = Process::call(&tc).expect("Should start");
                         select! {
@@ -76,7 +135,16 @@ impl Plugin for Import {
             }
         })
     }
+
+    fn compile(parser: &mut lifec::AttributeParser) {
+        parser.add_custom_with("platform", |p, content|{ 
+            if let Some(last_child_entity) = p.last_child_entity() {
+                p.define_child(last_child_entity, "platform", Value::Symbol(content))
+            }
+        })
+    }
 }
+
 
 impl BlockObject for Import {
     fn query(&self) -> lifec::BlockProperties {
