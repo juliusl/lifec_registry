@@ -35,8 +35,9 @@ impl Plugin for Discover {
                             .unwrap_or("_oras/artifacts/referrers".to_string());
 
                         let referrers_api = format!(
-                            "https://{}/{api}?digest={digest}&artifactType={artifact_type}",
+                            "https://{}/v2/{}/{api}?digest={digest}&artifactType={artifact_type}",
                             proxy_target.namespace,
+                            proxy_target.repo,
                         );
                         event!(
                             Level::DEBUG,

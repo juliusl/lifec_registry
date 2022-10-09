@@ -54,7 +54,7 @@ impl Plugin for Teleport {
                                         .await;
                                     }
                                 } else {
-                                    event!(Level::ERROR, "Could not parser referrer's response");
+                                    event!(Level::ERROR, "Could not parse referrer's response");
                                 }
                             } else {
                                 event!(Level::DEBUG, "Requires conversion");
