@@ -11,7 +11,6 @@ pub use content::ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE;
 
 mod plugins;
 pub use plugins::Mirror;
-pub use plugins::Proxy;
 pub use plugins::Artifact;
 pub use plugins::Authenticate;
 pub use plugins::Continue;
@@ -23,4 +22,8 @@ pub use plugins::Discover;
 pub use plugins::Import;
 pub use plugins::Teleport;
 pub use plugins::Resolve;
+
+mod proxy;
+pub use proxy::Proxy;
+pub use proxy::ProxyTarget;
 

@@ -1,6 +1,6 @@
 use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component, BlockObject, BlockProperties, AttributeIndex};
 
-use crate::plugins::ProxyTarget;
+use crate::ProxyTarget;
 
 /// Plugin that mirrors image resolution api's, based on OCI spec endpoints,
 /// 

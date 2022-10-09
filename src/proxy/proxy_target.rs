@@ -1,9 +1,9 @@
-use std::{fmt::Display, str::FromStr};
+use std::{fmt::Display, path::PathBuf, str::FromStr};
 
-use hyper::{Body, Method, Response};
+use hyper::{Method, Response};
 use lifec::{AttributeIndex, ThunkContext};
 use logos::{Lexer, Logos};
-use poem::{web::headers::Authorization, Request, RequestBuilder};
+use poem::{web::headers::Authorization, Body, Request, RequestBuilder};
 use tracing::{event, Level};
 
 use crate::{
@@ -31,7 +31,10 @@ pub struct ProxyTarget {
     pub method: String,
     /// Parent thunk context this struct was created from,
     ///
-    pub thunk_context: ThunkContext,
+    pub context: ThunkContext,
+    /// Original body from the request,
+    ///
+    body: Option<Body>,
     /// This is the object portion of the proxied request, typically a reference (tag) or digest
     ///
     object: Object,
@@ -41,9 +44,9 @@ pub struct ProxyTarget {
 }
 
 impl ProxyTarget {
-    /// Continues the request, if successful returns self, otherwise returns None
+    /// Consumes state and continues the proxied request,
     ///
-    pub async fn continue_request(&self) -> Option<Response<Body>> {
+    pub async fn continue_request(mut self) -> Option<Response<hyper::Body>> {
         if self.api.is_none() {
             return None;
         }
@@ -55,21 +58,26 @@ impl ProxyTarget {
                         .header("accept", accept)
                         .uri_str(self.api.as_ref().expect("should have a value"))
                         .method(
-                            Method::from_bytes(self.method.to_uppercase().as_bytes()).expect("should be valid method"),
+                            Method::from_bytes(self.method.to_uppercase().as_bytes())
+                                .expect("should be valid method"),
                         )
                         .finish();
 
                     self.send_request(request).await
                 }
-                Media::ContentType { content_type, body } => {
-                    let request = request
-                        .content_type(content_type)
-                        .method(
-                            Method::from_bytes(self.method.to_uppercase().as_bytes()).expect("should be valid method"),
-                        )
-                        .body(body.to_vec());
+                Media::ContentType(content_type) => {
+                    let request = request.content_type(content_type).method(
+                        Method::from_bytes(self.method.to_uppercase().as_bytes())
+                            .expect("should be valid method"),
+                    );
 
-                    self.send_request(request).await
+                    let request = if let Some(body) = self.body.take() {
+                        request.body(body)
+                    } else {
+                        request.finish()
+                    };
+
+                    self.send_request(request.into()).await
                 }
                 Media::None => {
                     event!(Level::WARN, "No media to continue request w/");
@@ -85,15 +93,15 @@ impl ProxyTarget {
         }
     }
 
-    /// Transform target into a descriptor,
+    /// Resolves the manifest given the current request,
     ///
     pub async fn resolve(&self) -> Option<(Manifests, Vec<u8>)> {
         match &self.media {
             Media::Accept(accept)
-                if matches!(self.thunk_context.search().find_symbol("digest"), Some(_)) =>
+                if matches!(self.context.search().find_symbol("digest"), Some(_)) =>
             {
                 let digest = self
-                    .thunk_context
+                    .context
                     .search()
                     .find_symbol("digest")
                     .expect("should have a digest");
@@ -121,13 +129,45 @@ impl ProxyTarget {
 
                 self.resolve_manifest(request).await
             }
-            Media::ContentType { content_type, body } => todo!(),
+            Media::ContentType(content_type) => match Resource::lexer(content_type).next() {
+                Some(resource_type) => match resource_type {
+                    Resource::Manifest => {
+                        let request = self
+                            .start_request()
+                            .expect("should be able to start a request")
+                            .header("accept", content_type)
+                            .method(Method::GET)
+                            .uri_str(self.manifest_url().as_str())
+                            .finish();
+
+                        self.resolve_manifest(request).await
+                    }
+                    Resource::Blobs | Resource::Error => {
+                        let request = self
+                            .start_request()
+                            .expect("should be able to start a request")
+                            .header("accept", content_type)
+                            .method(Method::GET)
+                            .uri_str(self.referrers_url().as_str())
+                            .finish();
+
+                            self.resolve_manifest(request).await
+                    },
+                },
+
+                None => None,
+            },
             Media::None => None,
         }
     }
 
-    pub async fn resolve_manifest(&self, request: Request) -> Option<(Manifests, Vec<u8>)> {
-        match self.send_request(request).await {
+    /// Resolves a manifest, returns a deserialized manifest as well as the exact bytes received,
+    ///
+    pub async fn resolve_manifest(
+        &self,
+        manifest_request: Request,
+    ) -> Option<(Manifests, Vec<u8>)> {
+        match self.send_request(manifest_request).await {
             Some(resp) if resp.status().is_success() => {
                 let digest = resp
                     .headers()
@@ -215,11 +255,18 @@ impl ProxyTarget {
         }
     }
 
+    /// Resolves a referrer's request to a manifest,
+    /// 
+    pub async fn resolve_referrers(&self, referrers_request: Request) -> Option<(Manifests, Vec<u8>)> {
+
+        None
+    }
+
     /// Request content w/ a descriptor from the proxy target,
     ///
     pub async fn request_content(&self, descriptor: &Descriptor) -> Option<Vec<u8>> {
         let client = self
-            .thunk_context
+            .context
             .client()
             .expect("should have a client to make requests");
 
@@ -259,7 +306,9 @@ impl ProxyTarget {
         }
     }
 
-    pub async fn parse_body(response: Response<Body>) -> Option<Vec<u8>> {
+    /// Reads the body from a response and returns the bytes,
+    ///
+    pub async fn parse_body(response: Response<hyper::Body>) -> Option<Vec<u8>> {
         match hyper::body::to_bytes(response.into_body()).await {
             Ok(data) => {
                 event!(Level::DEBUG, "Resolved blob, len: {}", data.len());
@@ -273,8 +322,8 @@ impl ProxyTarget {
     }
 
     /// Resolves a descriptor from a uri,
-    /// 
-    pub async fn resolve_desc_from_uri(&self, uri: impl AsRef<str>) -> Option<Descriptor> {
+    ///
+    pub async fn resolve_descriptor(&self, uri: impl AsRef<str>) -> Option<Descriptor> {
         let url = hyper::Uri::from_str(uri.as_ref()).expect("should be a valid uri");
 
         // Check the uri we're passed has the same host as the upstream server we're targeting
@@ -283,7 +332,7 @@ impl ProxyTarget {
         }
 
         let accept = self
-            .thunk_context
+            .context
             .search()
             .find_symbol("accept")
             .expect("should have accept");
@@ -293,6 +342,7 @@ impl ProxyTarget {
             .expect("should be able to start a request")
             .uri_str(uri.as_ref())
             .header("accept", &accept)
+            .method(Method::HEAD)
             .finish();
 
         self.send_request(request).await.and_then(|resp| {
@@ -342,7 +392,7 @@ impl ProxyTarget {
     ///
     pub fn start_request(&self) -> Option<RequestBuilder> {
         match Authorization::bearer(
-            self.thunk_context
+            self.context
                 .search()
                 .find_symbol("access_token")
                 .expect("should have an access token")
@@ -358,8 +408,8 @@ impl ProxyTarget {
 
     /// Sends a request (https only),
     ///
-    pub async fn send_request(&self, request: Request) -> Option<Response<Body>> {
-        if let Some(client) = self.thunk_context.client() {
+    pub async fn send_request(&self, request: Request) -> Option<Response<hyper::Body>> {
+        if let Some(client) = self.context.client() {
             event!(Level::TRACE, "Sending request, {:#?}", &request);
             match client.request(request.into()).await {
                 Ok(response) => {
@@ -376,7 +426,7 @@ impl ProxyTarget {
         }
     }
 
-    /// Returns a blob upload url,
+    /// Returns a blob upload url to the upstream target,
     ///
     pub fn blob_upload_url(&self) -> String {
         let Self {
@@ -386,6 +436,34 @@ impl ProxyTarget {
         format!("https://{namespace}/v2/{repo}/blobs/upload")
     }
 
+    /// Returns a blob url to the upstream target,
+    ///
+    pub fn blob_url(&self) -> String {
+        let Self {
+            namespace,
+            repo,
+            object,
+            ..
+        } = self;
+
+        format!("https://{namespace}/v2/{repo}/blobs/{object}")
+    }
+
+    /// Returns a referrers url, does not filter artifact_type
+    /// 
+    pub fn referrers_url(&self) -> String {
+        let Self {
+            namespace,
+            repo,
+            object,
+            ..
+        } = self;
+
+        format!("https://{namespace}/v2/{repo}/_oras/artifacts/referrers?digest={object}")
+    }
+
+    /// Returns a manifest url to the upstream target,
+    ///
     pub fn manifest_url(&self) -> String {
         let Self {
             namespace,
@@ -394,7 +472,7 @@ impl ProxyTarget {
             ..
         } = self;
 
-        let repo = if let Some(import) = self.thunk_context.search().find_symbol("import") {
+        let repo = if let Some(import) = self.context.search().find_symbol("import") {
             import
         } else {
             repo.to_string()
@@ -403,6 +481,8 @@ impl ProxyTarget {
         format!("https://{namespace}/v2/{repo}/manifests/{object}")
     }
 
+    /// Returns a manifest url with a specific object to the upstream target,
+    ///
     pub fn manifest_with(&self, object: impl AsRef<str>) -> String {
         let Self {
             namespace, repo, ..
@@ -413,11 +493,35 @@ impl ProxyTarget {
             object.as_ref()
         )
     }
+
+    /// Returns an image reference for this target,
+    ///
+    pub fn image_reference(&self) -> String {
+        let Self {
+            namespace,
+            repo,
+            object,
+            ..
+        } = self;
+
+        format!("{namespace}/{repo}{:#}", object)
+    }
+
+    /// Returns an image reference for this target w/ a different object,
+    ///
+    pub fn image_reference_with(&self, object: impl Into<Object>) -> String {
+        let ob = object.into();
+        let Self {
+            namespace, repo, ..
+        } = self;
+
+        format!("{namespace}/{repo}{:#}", ob)
+    }
 }
 
 #[derive(Logos)]
 enum Resource {
-    /// Manifests
+    /// Known supported manifest types,
     ///
     #[token("application/vnd.oci.image.manifest.v1+json")]
     #[token("application/vnd.oci.artifact.manifest.v1+json")]
@@ -457,7 +561,7 @@ impl Display for Resource {
 }
 
 #[derive(Logos, Debug, PartialEq, Eq)]
-enum Object {
+pub enum Object {
     /// From OCI documentation,
     ///
     /// ```quote
@@ -480,8 +584,20 @@ enum Object {
 impl Display for Object {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Object::Reference(reference) => write!(f, "{reference}"),
-            Object::Digest(digest) => write!(f, "{digest}"),
+            Object::Reference(reference) => {
+                if f.alternate() {
+                    write!(f, ":{reference}")
+                } else {
+                    write!(f, "{reference}")
+                }
+            }
+            Object::Digest(digest) => {
+                if f.alternate() {
+                    write!(f, "@{digest}")
+                } else {
+                    write!(f, "{digest}")
+                }
+            }
             Object::Error => panic!("Is nto a valid object for display"),
         }
     }
@@ -500,10 +616,7 @@ enum Media {
     ///
     /// Then this tuple is the content-type and body
     ///
-    ContentType {
-        content_type: String,
-        body: Vec<u8>,
-    },
+    ContentType(String),
     None,
 }
 
@@ -527,6 +640,56 @@ fn on_digest(lexer: &mut Lexer<Object>) -> Option<String> {
     }
 
     Some(format!("{}{}", lexer.slice(), digest))
+}
+
+impl From<&Request> for ProxyTarget {
+    fn from(req: &Request) -> Self {
+        let ns = req.uri().host().expect("should have a host");
+        let path = req
+            .uri()
+            .path()
+            .parse::<PathBuf>()
+            .ok()
+            .expect("should parse to a path buf");
+
+        let reference = path
+            .file_name()
+            .expect("should have a reference")
+            .to_str()
+            .expect("should be a string")
+            .to_string();
+        let repo = path
+            .parent()
+            .expect("should have a repo component")
+            .to_str()
+            .expect("should be a string")
+            .to_string();
+
+        Self {
+            namespace: ns.to_string(),
+            repo,
+            api: Some(req.uri().to_string()),
+            method: req.method().to_string(),
+            context: ThunkContext::default(),
+            body: None,
+            object: {
+                match Object::lexer(&reference).next() {
+                    Some(obj) => obj,
+                    None => panic!("A reference is required"),
+                }
+            },
+            media: {
+                match (req.header("content-type"), req.header("accept")) {
+                    (None, None) => Media::None,
+                    (None, Some(accept)) => Media::Accept(accept.to_string()),
+                    (Some(content_type), None) => Media::ContentType(content_type.to_string()),
+                    (Some(_), Some(_)) => {
+                        panic!("An accept and content-type were set")
+                    }
+                }
+            },
+        }
+    }
 }
 
 impl TryFrom<&ThunkContext> for ProxyTarget {
@@ -566,7 +729,7 @@ impl TryFrom<&ThunkContext> for ProxyTarget {
                             .search()
                             .find_symbol("content-type")
                             .expect("should have a content_type if there's a body");
-                        Media::ContentType { content_type, body }
+                        Media::ContentType(content_type.to_string())
                     } else {
                         Media::None
                     }
@@ -578,7 +741,8 @@ impl TryFrom<&ThunkContext> for ProxyTarget {
                         String::from("GET")
                     }
                 },
-                thunk_context: tc.clone(),
+                body: None,
+                context: tc.clone(),
             })
         } else {
             Err(())
@@ -632,4 +796,10 @@ fn test_object_parser() {
         lexer.next(),
         Some(Object::Reference("_9demo_.thats-reall8y_cool".to_string()))
     );
+}
+
+impl From<(&Request, Body)> for ProxyTarget {
+    fn from((request, body): (&Request, Body)) -> Self {
+        todo!()
+    }
 }

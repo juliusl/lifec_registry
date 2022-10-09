@@ -7,10 +7,6 @@ pub use continue_req::Continue;
 mod artifact;
 pub use artifact::Artifact;
 
-mod proxy;
-pub use proxy::Proxy;
-pub use proxy::ProxyTarget;
-
 mod discover;
 pub use discover::Discover;
 

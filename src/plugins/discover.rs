@@ -3,7 +3,7 @@ use lifec::{BlockObject, Plugin, AttributeIndex};
 use tracing::event;
 use tracing::Level;
 
-use crate::plugins::ProxyTarget;
+use crate::ProxyTarget;
 
 /// Plugin for calling the referrer's api and adding the result to state,
 ///

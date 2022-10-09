@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use std::{sync::Arc, path::PathBuf};
 
 use crate::Proxy;
 use hyper::{http::StatusCode, Method};
-use lifec::{AttributeIndex, ThunkContext, Host};
+use lifec::{AttributeIndex, ThunkContext, Host, AttributeGraph};
 use poem::{
     handler,
     web::{Data, Path, Query},
@@ -30,7 +30,6 @@ pub struct ManifestAPIParams {
 #[handler]
 pub async fn manifests_api(
     request: &Request,
-    method: poem::http::Method,
     body: poem::Body,
     Path((name, reference)): Path<(String, String)>,
     Query(ManifestAPIParams { ns }): Query<ManifestAPIParams>,
@@ -51,7 +50,7 @@ pub async fn manifests_api(
 
     let mut input = context.clone();
 
-    match method {
+    match *request.method() {
         Method::PUT => {
             if !body.is_empty() {
                 match body.into_bytes().await.ok() {
@@ -76,7 +75,9 @@ pub async fn manifests_api(
         .with_symbol("ns", &ns)
         .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
         .with_symbol("accept", request.header("accept").unwrap_or_default())
-        .with_symbol("method", method);
+        .with_symbol("method", request.method());
+
+    let graph = AttributeGraph::default();
 
     Proxy::handle(&host, &input).await
 }

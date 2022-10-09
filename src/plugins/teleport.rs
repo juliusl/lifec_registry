@@ -4,7 +4,7 @@ use tracing::event;
 use tracing::Level;
 
 use crate::content::{ArtifactManifest, Descriptor, ImageManifest, ReferrersList};
-use crate::plugins::ProxyTarget;
+use crate::ProxyTarget;
 
 mod format_overlaybd;
 pub use format_overlaybd::FormatOverlayBD;
@@ -71,8 +71,8 @@ impl Plugin for Teleport {
                                         if let Some(mut proxy_target) =
                                             ProxyTarget::try_from(&tc).ok()
                                         {
-                                            proxy_target.thunk_context = proxy_target
-                                                .thunk_context
+                                            proxy_target.context = proxy_target
+                                                .context
                                                 .replace_symbol("digest", &to);
                                             if let Some((manifests, body)) =
                                                 proxy_target.resolve().await

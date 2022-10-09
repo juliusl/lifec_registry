@@ -1,5 +1,5 @@
 use crate::{
-    plugins::ProxyTarget, ArtifactManifest, ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE,
+    ProxyTarget, ArtifactManifest, ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE,
 };
 use hyper::Method;
 use lifec::{AttributeIndex, BlockObject, BlockProperties, Plugin, Value};
@@ -29,11 +29,11 @@ impl Plugin for Artifact {
                         tc.search().find_symbol("blob"),
                     ) {
                         (Some(subject), Some(blob)) => {
-                            let subject_desc = proxy_target.resolve_desc_from_uri(&subject).await;
+                            let subject_desc = proxy_target.resolve_descriptor(&subject).await;
                             let subject_desc = subject_desc.expect("should be a desc");
 
                             // TODO - handle list of blobs
-                            let blob_desc = proxy_target.resolve_desc_from_uri(&blob).await;
+                            let blob_desc = proxy_target.resolve_descriptor(&blob).await;
                             let blob_desc = blob_desc.expect("Should be a desc");
 
                             let artifact_manifest = ArtifactManifest {
