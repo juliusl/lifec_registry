@@ -23,6 +23,9 @@ pub struct Init {
     ///
     #[clap(long)]
     pub source: String,
+
+    #[clap(long, default_value_t=String::from("all"))]
+    pub platform: String, 
     #[clap(skip)]
     pub format: String,
     #[clap(skip)]
@@ -130,6 +133,7 @@ pub const FORMAT_TELEPORT_TEMPLATE: &'static str = r#"
 : registry_host     .symbol {registry_host}
 : registry_name     .symbol {registry_name}
 : reference         .symbol {tag}
+: accept            .symbol application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, */*
 
 + .runtime
 : .login-acr            {registry_name}
@@ -137,6 +141,7 @@ pub const FORMAT_TELEPORT_TEMPLATE: &'static str = r#"
 : .login                access_token
 : .authn                oauth2
 : .import               {source}:{tag}
+: .platform             {platform}
 ```
 
 ## Convert an image to a streamable format

@@ -4,8 +4,8 @@ use serde::{Serialize, Deserialize};
 /// 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Platform {
-    architecture: String,
-    os: String,
+    pub architecture: String,
+    pub os: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     variant: Option<String>,
 }
