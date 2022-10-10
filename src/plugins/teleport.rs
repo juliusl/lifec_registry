@@ -9,6 +9,9 @@ use crate::ProxyTarget;
 mod format_overlaybd;
 pub use format_overlaybd::FormatOverlayBD;
 
+mod format_nydus;
+pub use format_nydus::FormatNydus;
+
 /// Plugin to handle swapping out the manifest resolution to a teleportable image
 ///
 #[derive(Default)]
@@ -35,7 +38,7 @@ impl Plugin for Teleport {
                     event!(Level::DEBUG, "Teleport format {teleport_format}");
 
                     match teleport_format.as_str() {
-                        "overlaybd" => {
+                        "nydus" | "overlaybd" => {
                             if let Some(artifact) = tc.search().find_binary("teleport.link.v1") {
                                 if let Some(response) =
                                     serde_json::from_slice::<ReferrersList>(artifact.as_slice())
@@ -71,9 +74,8 @@ impl Plugin for Teleport {
                                         if let Some(mut proxy_target) =
                                             ProxyTarget::try_from(&tc).ok()
                                         {
-                                            proxy_target.context = proxy_target
-                                                .context
-                                                .replace_symbol("digest", &to);
+                                            proxy_target.context =
+                                                proxy_target.context.replace_symbol("digest", &to);
                                             if let Some((manifests, body)) =
                                                 proxy_target.resolve().await
                                             {
@@ -134,8 +136,12 @@ impl Teleport {
                 if let Some(artifact_manifest) =
                     serde_json::from_slice::<ArtifactManifest>(artifact.as_slice()).ok()
                 {
+                    // TODO -- Check env variable for what snapshotter is being used at the moment
                     if let Some(streamable_manifest) = artifact_manifest.blobs.iter().find(|b| {
-                        b.media_type == "application/vnd.docker.distribution.manifest.v2+json"
+                            // Converted overlaybd is this type
+                            b.media_type == "application/vnd.docker.distribution.manifest.v2+json"
+                            // Converted nydus is this type
+                            || b.media_type == "application/vnd.oci.image.manifest.v1+json"
                     }) {
                         if let Some(response) =
                             proxy_target.request_content(streamable_manifest).await
@@ -147,10 +153,7 @@ impl Teleport {
                                 let mut tc = tc.commit();
 
                                 tc.with_binary("body", response)
-                                    .with_symbol(
-                                        "content-type",
-                                        "application/vnd.docker.distribution.manifest.v2+json",
-                                    )
+                                    .with_symbol("content-type", streamable_manifest.media_type.to_string())
                                     .with_symbol("digest", streamable_manifest.digest.to_string())
                                     .with_int("status-code", 200);
 
