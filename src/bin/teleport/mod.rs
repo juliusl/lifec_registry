@@ -75,7 +75,7 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : .manifests      get, head
 : .login          access_token
 : .authn          oauth2
-: .resolve        application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, */*     
+: .resolve        application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json, */*     
 : .discover       teleport.link.v1
 : .teleport       overlaybd
 
