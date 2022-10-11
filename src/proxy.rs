@@ -195,7 +195,7 @@ impl WebApp for Proxy {
             .find_symbol("registry_name")
             .expect("should have a registry name");
 
-        if let Some(block) = self.context.block() {
+        let block = self.context.block();
             let context = self.context.clone();
             if let Some(i) = block.index().iter().find(|b| b.root().name() == "proxy") {
                 let mut context_map = HashMap::<(Methods, Resources), ThunkContext>::default();
@@ -357,7 +357,6 @@ impl WebApp for Proxy {
 
                 return route;
             }
-        }
 
         panic!("Could not create routes")
     }
