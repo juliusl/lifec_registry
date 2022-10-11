@@ -15,8 +15,8 @@ use std::{collections::HashMap, sync::Arc};
 use tracing::{event, Level};
 
 use crate::{
-    Artifact, Authenticate, Continue, Discover, FormatOverlayBD, Login, LoginACR, LoginOverlayBD,
-    Mirror, Resolve, Teleport, Import,
+    Artifact, Authenticate, Continue, Discover, FormatOverlayBD, Import, Login, LoginACR,
+    LoginOverlayBD, Mirror, Resolve, Teleport,
 };
 
 mod proxy_target;
@@ -196,167 +196,167 @@ impl WebApp for Proxy {
             .expect("should have a registry name");
 
         let block = self.context.block();
-            let context = self.context.clone();
-            if let Some(i) = block.index().iter().find(|b| b.root().name() == "proxy") {
-                let mut context_map = HashMap::<(Methods, Resources), ThunkContext>::default();
+        let context = self.context.clone();
+        if let Some(i) = block.index().iter().find(|b| b.root().name() == "proxy") {
+            let mut context_map = HashMap::<(Methods, Resources), ThunkContext>::default();
 
-                let mut route = Route::new();
-                let graphs = Proxy::extract_routes(i);
+            let mut route = Route::new();
+            let graphs = Proxy::extract_routes(i);
 
-                for graph in graphs {
-                    let methods = graph
-                        .find_symbol_values("method")
-                        .iter()
-                        .filter_map(|m| Methods::lexer(m).next())
-                        .collect::<Vec<_>>();
-                    let resources = graph
-                        .find_symbol_values("resource")
-                        .iter()
-                        .filter_map(|r| Resources::lexer(r).next())
-                        .collect::<Vec<_>>();
+            for graph in graphs {
+                let methods = graph
+                    .find_symbol_values("method")
+                    .iter()
+                    .filter_map(|m| Methods::lexer(m).next())
+                    .collect::<Vec<_>>();
+                let resources = graph
+                    .find_symbol_values("resource")
+                    .iter()
+                    .filter_map(|r| Resources::lexer(r).next())
+                    .collect::<Vec<_>>();
 
-                    for (method, resource) in methods.iter().zip(resources) {
-                        let mut context = context.with_state(graph.clone());
+                for (method, resource) in methods.iter().zip(resources) {
+                    let mut context = context.with_state(graph.clone());
+                    context
+                        .state_mut()
+                        .with_bool("proxy_enabled", true)
+                        .with_symbol("registry_host", &registry_host)
+                        .with_symbol("registry_name", &registry_name)
+                        .with_text("proxy_src", proxy_src.to_string());
+
+                    if let Some(proxy_src_path) = graph.find_symbol("proxy_src_path") {
+                        event!(
+                            Level::TRACE,
+                            "Adding proxy_src_path to {:?} {:?}",
+                            method,
+                            resource
+                        );
                         context
                             .state_mut()
-                            .with_bool("proxy_enabled", true)
-                            .with_symbol("registry_host", &registry_host)
-                            .with_symbol("registry_name", &registry_name)
-                            .with_text("proxy_src", proxy_src.to_string());
-
-                        if let Some(proxy_src_path) = graph.find_symbol("proxy_src_path") {
-                            event!(
-                                Level::TRACE,
-                                "Adding proxy_src_path to {:?} {:?}",
-                                method,
-                                resource
-                            );
-                            context
-                                .state_mut()
-                                .with_symbol("proxy_src_path", proxy_src_path);
-                        }
-
-                        context_map.insert((method.clone(), resource), context);
+                            .with_symbol("proxy_src_path", proxy_src_path);
                     }
+
+                    context_map.insert((method.clone(), resource), context);
                 }
-
-                // Resolve manifest settings
-                //
-                let get_manifests_settings = context_map
-                    .get(&(Methods::Get, Resources::Manifests))
-                    .cloned()
-                    .unwrap_or_default();
-
-                let head_manifests_settings = context_map
-                    .get(&(Methods::Head, Resources::Manifests))
-                    .cloned()
-                    .unwrap_or_default();
-
-                let put_manifests_settings = context_map
-                    .get(&(Methods::Put, Resources::Manifests))
-                    .cloned()
-                    .unwrap_or_default();
-
-                let delete_manifests_settings = context_map
-                    .get(&(Methods::Delete, Resources::Manifests))
-                    .cloned()
-                    .unwrap_or_default();
-
-                route = route.at(
-                    "/:name<[a-zA-Z0-9/_-]+(?:manifests)>/:reference",
-                    get(manifests_api
-                        .data(get_manifests_settings)
-                        .data(self.host.clone()))
-                    .head(
-                        manifests_api
-                            .data(head_manifests_settings)
-                            .data(self.host.clone()),
-                    )
-                    .put(
-                        manifests_api
-                            .data(put_manifests_settings)
-                            .data(self.host.clone()),
-                    )
-                    .delete(
-                        manifests_api
-                            .data(delete_manifests_settings)
-                            .data(self.host.clone()),
-                    ),
-                );
-
-                // Resolve blob settings
-                //
-                let get_blobs_settings = context_map
-                    .get(&(Methods::Get, Resources::Blobs))
-                    .cloned()
-                    .unwrap_or_default();
-
-                let post_blobs_settings = context_map
-                    .get(&(Methods::Post, Resources::Blobs))
-                    .cloned()
-                    .unwrap_or_default();
-
-                let put_blobs_settings = context_map
-                    .get(&(Methods::Put, Resources::Blobs))
-                    .cloned()
-                    .unwrap_or_default();
-
-                let patch_blobs_settings = context_map
-                    .get(&(Methods::Patch, Resources::Blobs))
-                    .cloned()
-                    .unwrap_or_default();
-
-                route = route.at(
-                    "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/:digest",
-                    get(blob_download_api
-                        .data(get_blobs_settings)
-                        .data(self.host.clone())),
-                );
-
-                route = route.at(
-                    "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads",
-                    post(
-                        blob_upload_api
-                            .data(post_blobs_settings)
-                            .data(self.host.clone()),
-                    ),
-                );
-
-                route = route.at(
-                    "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads/:reference",
-                    put(blob_chunk_upload_api
-                        .data(put_blobs_settings)
-                        .data(self.host.clone()))
-                    .patch(
-                        blob_chunk_upload_api
-                            .data(patch_blobs_settings)
-                            .data(self.host.clone()),
-                    ),
-                );
-
-                // Resolve tags settings
-                //
-                let get_tags_settings = context_map
-                    .get(&(Methods::Get, Resources::Tags))
-                    .cloned()
-                    .unwrap_or_default();
-
-                route = route.at(
-                    "/:name<[a-zA-Z0-9/_-]+(?:tags)>/list",
-                    get(tags_api.data(get_tags_settings).data(self.host.clone())),
-                );
-
-                let route = Route::new().nest(
-                    "/v2",
-                    route.at(
-                        "/",
-                        get(index.data(self.context.clone()).data(self.host.clone()))
-                            .head(index.data(self.context.clone()).data(self.host.clone())),
-                    ),
-                );
-
-                return route;
             }
+
+            // Resolve manifest settings
+            //
+            let get_manifests_settings = context_map
+                .get(&(Methods::Get, Resources::Manifests))
+                .cloned()
+                .unwrap_or_default();
+
+            let head_manifests_settings = context_map
+                .get(&(Methods::Head, Resources::Manifests))
+                .cloned()
+                .unwrap_or_default();
+
+            let put_manifests_settings = context_map
+                .get(&(Methods::Put, Resources::Manifests))
+                .cloned()
+                .unwrap_or_default();
+
+            let delete_manifests_settings = context_map
+                .get(&(Methods::Delete, Resources::Manifests))
+                .cloned()
+                .unwrap_or_default();
+
+            route = route.at(
+                "/:name<[a-zA-Z0-9/_-]+(?:manifests)>/:reference",
+                get(manifests_api
+                    .data(get_manifests_settings)
+                    .data(self.host.clone()))
+                .head(
+                    manifests_api
+                        .data(head_manifests_settings)
+                        .data(self.host.clone()),
+                )
+                .put(
+                    manifests_api
+                        .data(put_manifests_settings)
+                        .data(self.host.clone()),
+                )
+                .delete(
+                    manifests_api
+                        .data(delete_manifests_settings)
+                        .data(self.host.clone()),
+                ),
+            );
+
+            // Resolve blob settings
+            //
+            let get_blobs_settings = context_map
+                .get(&(Methods::Get, Resources::Blobs))
+                .cloned()
+                .unwrap_or_default();
+
+            let post_blobs_settings = context_map
+                .get(&(Methods::Post, Resources::Blobs))
+                .cloned()
+                .unwrap_or_default();
+
+            let put_blobs_settings = context_map
+                .get(&(Methods::Put, Resources::Blobs))
+                .cloned()
+                .unwrap_or_default();
+
+            let patch_blobs_settings = context_map
+                .get(&(Methods::Patch, Resources::Blobs))
+                .cloned()
+                .unwrap_or_default();
+
+            route = route.at(
+                "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/:digest",
+                get(blob_download_api
+                    .data(get_blobs_settings)
+                    .data(self.host.clone())),
+            );
+
+            route = route.at(
+                "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads",
+                post(
+                    blob_upload_api
+                        .data(post_blobs_settings)
+                        .data(self.host.clone()),
+                ),
+            );
+
+            route = route.at(
+                "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads/:reference",
+                put(blob_chunk_upload_api
+                    .data(put_blobs_settings)
+                    .data(self.host.clone()))
+                .patch(
+                    blob_chunk_upload_api
+                        .data(patch_blobs_settings)
+                        .data(self.host.clone()),
+                ),
+            );
+
+            // Resolve tags settings
+            //
+            let get_tags_settings = context_map
+                .get(&(Methods::Get, Resources::Tags))
+                .cloned()
+                .unwrap_or_default();
+
+            route = route.at(
+                "/:name<[a-zA-Z0-9/_-]+(?:tags)>/list",
+                get(tags_api.data(get_tags_settings).data(self.host.clone())),
+            );
+
+            let route = Route::new().nest(
+                "/v2",
+                route.at(
+                    "/",
+                    get(index.data(self.context.clone()).data(self.host.clone()))
+                        .head(index.data(self.context.clone()).data(self.host.clone())),
+                ),
+            );
+
+            return route;
+        }
 
         panic!("Could not create routes")
     }
