@@ -74,8 +74,7 @@ impl Plugin for Teleport {
                                         if let Some(mut proxy_target) =
                                             ProxyTarget::try_from(&tc).ok()
                                         {
-                                            proxy_target.context =
-                                                proxy_target.context.replace_symbol("digest", &to);
+                                            proxy_target.context.replace_symbol("digest", &to);
                                             if let Some((manifests, body)) =
                                                 proxy_target.resolve().await
                                             {
