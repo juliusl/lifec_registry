@@ -17,12 +17,6 @@ pub struct Init {
     ///
     #[arg(last = true)]
     pub tags: Vec<String>,
-    /// The source repo that images will be imported from,
-    /// 
-    /// The listed tags must also be present in the source,
-    ///
-    #[clap(long)]
-    pub source: String,
 
     #[clap(long, default_value_t=String::from("all"))]
     pub platform: String, 
