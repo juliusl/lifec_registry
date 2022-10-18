@@ -78,7 +78,7 @@ impl Init {
 
         tokio::fs::create_dir_all(&tag_dir).await.expect("should be able to create dirs");
         
-        let format_file = tag_dir.join(".runmd");
+        let format_file = tag_dir.join(format!("{}.runmd", self.format));
 
         if format_file.exists() {
             event!(Level::WARN, "Overwriting existing file {:?}", format_file);
@@ -98,89 +98,58 @@ impl Init {
     }
 }
 
+/// Engine template for formatting an image to a teleportable format
+/// 
 pub const FORMAT_TELEPORT_TEMPLATE: &'static str = r#"
 # Format {repo} for {format}
 - This files defines an engine for formatting {repo} into a streamable image
 
 ## Control Settings 
+- These are the control settings for the below engine,
 
 ``` {format}
+: registry_host     .symbol {registry_host}
+: registry_name     .symbol {registry_name}
+: repo              .symbol {repo}
+: reference         .symbol {tag}
+: ns                .symbol {registry_name}.{registry_host}
+: api               .symbol https://{registry_name}.{registry_host}/v2/{repo}/manifests/{tag}
+: method            .symbol PUT
+: file_src          .symbol .world/{registry_host}/{registry_name}/access_token
+: work_dir          .symbol .world/{registry_host}/{registry_name}
+: src_dir           .symbol .
+
+
 + .engine
-: .event    setup
-: .event    import
-: .event    convert
-: .event    link
+: .event    setup       <Login to ACR and setup login info for {format}>
+: .event    convert     <Convert an image in registry to {format}>
+: .event    link        <Link {format} image to source image in registry>
 : .exit
 ```
 
 ## Setup the environment
 ``` setup {format}
 + .runtime
-: .login-acr    {registry_name}
-```
-
-## Import the images from repo
-- Will import the image {source}:{tag} and push to {registry_name}.{registry_host}/{repo}:{tag}
-
-``` import {format}
-: repo              .symbol {repo}
-: ns                .symbol {registry_name}.{registry_host}
-: api               .symbol https://{registry_name}.{registry_host}/v2/{repo}/manifests/{tag}
-: method            .symbol PUT
-: file_src          .symbol .world/{registry_host}/{registry_name}/access_token
-: src_dir           .symbol .
-: work_dir          .symbol .world/{registry_host}/{registry_name}
-: registry_host     .symbol {registry_host}
-: registry_name     .symbol {registry_name}
-: reference         .symbol {tag}
-: accept            .symbol application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, */*
-
-+ .runtime
-: .login-acr            {registry_name}
-: .install              access_token
-: .login                access_token
-: .authn                oauth2
-: .import               {source}:{tag}
-: .platform             {platform}
+: .login-acr        {registry_name}
+: .login-{format}   
 ```
 
 ## Convert an image to a streamable format
 - Will convert the image and push to {registry_name}.{registry_host}/{repo}:{tag}-{format}
 
 ``` convert {format}
-: repo              .symbol {repo}
-: ns                .symbol {registry_name}.{registry_host}
-: api               .symbol https://{registry_name}.{registry_host}/v2/{repo}/manifests/{tag}
-: method            .symbol PUT
-: file_src          .symbol .world/{registry_host}/{registry_name}/access_token
-: src_dir           .symbol .
-: work_dir          .symbol .world/{registry_host}/{registry_name}
-: registry_host     .symbol {registry_host}
-: registry_name     .symbol {registry_name}
-: reference         .symbol {tag}
-
 + .runtime
 : .login-acr            {registry_name}
 : .install              access_token
 : .login                access_token
 : .authn                oauth2
-: .format_{format}      
+: .format-{format}      
 ```
 
 ## Create links from the original images to their streamable format
 - Will create a link between {registry_name}.{registry_host}/{repo}:{tag} and {registry_name}.{registry_host}/{repo}:{tag}-{format}
 
 ``` link {format}
-: repo          .symbol {repo}
-: ns            .symbol {registry_name}.{registry_host}
-: api           .symbol https://{registry_name}.{registry_host}/v2/{repo}/manifests/{tag}
-: file_src      .symbol .world/{registry_host}/{registry_name}/access_token
-: src_dir       .symbol .
-: work_dir      .symbol .world/{registry_host}/{registry_name}
-: method        .symbol PUT
-: reference     .symbol {tag}
-: accept        .symbol application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, */*
-
 + .runtime
 : .login-acr    {registry_name}
 : .install      access_token
