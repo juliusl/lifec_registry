@@ -10,9 +10,9 @@ clap = { version = "4.0.4", features = [ "derive" ] }
 hyper = "0.14.20"
 hyper-tls = "0.5.0"
 imgui = "0.8.2"
-lifec = { git = "https://github.com/juliusl/lifec.git", branch = "pr/v2/project" }
+lifec = { git = "https://github.com/juliusl/lifec.git", branch = "pr/v2_api" }
 # lifec = { path = "../lifec" }
-lifec_poem = { git = "https://github.com/juliusl/lifec_poem.git", branch = "pr/v2/project" }
+lifec_poem = { git = "https://github.com/juliusl/lifec_poem.git", branch = "pr/v2_api" }
 logos = "0.12.1"
 native-tls = "0.2.10"
 poem = { version = "1.3.32", features = ["server", "static-files", "rustls", "test"] }
