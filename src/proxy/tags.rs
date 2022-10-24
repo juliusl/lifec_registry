@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::Proxy;
 use hyper::http::StatusCode;
-use lifec::{AttributeIndex, ThunkContext, Host};
+use lifec::prelude::{AttributeIndex, ThunkContext, Host};
 use poem::{
     handler,
     web::{Data, Path, Query},

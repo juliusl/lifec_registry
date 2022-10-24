@@ -1,5 +1,6 @@
 use std::str::from_utf8;
-use lifec::{BlockObject, Plugin, AttributeIndex};
+use lifec::prelude::{AsyncContext, ThunkContext, BlockProperties, CustomAttribute};
+use lifec::prelude::{BlockObject, Plugin, AttributeIndex};
 use tracing::event;
 use tracing::Level;
 
@@ -19,7 +20,7 @@ impl Plugin for Discover {
         "Uses the registry referrer's api to find artifacts by type and subject digest"
     }
 
-    fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {
+    fn call(context: &ThunkContext) -> Option<AsyncContext> {
         context.task(|_| {
             let mut tc = context.clone();
             async move {
@@ -77,8 +78,8 @@ impl Plugin for Discover {
 }
 
 impl BlockObject for Discover {
-    fn query(&self) -> lifec::BlockProperties {
-        lifec::BlockProperties::default()
+    fn query(&self) -> BlockProperties {
+        BlockProperties::default()
             .require("discover")
             .require("digest")
             .require("repo")
@@ -86,7 +87,7 @@ impl BlockObject for Discover {
             .require("access_token")
     }
 
-    fn parser(&self) -> Option<lifec::CustomAttribute> {
+    fn parser(&self) -> Option<CustomAttribute> {
         Some(Self::as_custom_attr())
     }
 }

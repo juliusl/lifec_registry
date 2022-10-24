@@ -1,5 +1,5 @@
-use lifec::{BlockObject, BlockProperties};
-use lifec::{AttributeIndex, Plugin, Resources, Process};
+use lifec::prelude::{ThunkContext, AsyncContext, CustomAttribute};
+use lifec::prelude::{BlockObject, BlockProperties, AttributeIndex, Plugin, Resources, Process};
 use rust_embed::RustEmbed;
 use tokio::select;
 use tracing::event;
@@ -17,7 +17,7 @@ impl Plugin for FormatOverlayBD {
         "format-overlaybd"
     }
 
-    fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {
+    fn call(context: &ThunkContext) -> Option<AsyncContext> {
         context.task(|cancel_source| {
             let mut tc = context.clone();
             async move {
@@ -83,11 +83,11 @@ impl Plugin for FormatOverlayBD {
 }
 
 impl BlockObject for FormatOverlayBD {
-    fn query(&self) -> lifec::BlockProperties {
+    fn query(&self) -> BlockProperties {
         BlockProperties::default()
     }
 
-    fn parser(&self) -> Option<lifec::CustomAttribute> {
+    fn parser(&self) -> Option<CustomAttribute> {
         Some(Self::as_custom_attr())
     }
 }

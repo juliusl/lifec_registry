@@ -1,7 +1,7 @@
 use std::{fmt::Display, path::PathBuf, str::FromStr};
 
 use hyper::{Method, Response};
-use lifec::{AttributeIndex, ThunkContext};
+use lifec::prelude::{AttributeIndex, ThunkContext};
 use logos::{Lexer, Logos};
 use poem::{web::headers::Authorization, Body, Request, RequestBuilder};
 use tracing::{event, Level};

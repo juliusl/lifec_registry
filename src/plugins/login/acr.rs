@@ -1,5 +1,5 @@
-use lifec::{BlockObject, Value, ThunkContext, AsyncContext};
-use lifec::{AttributeIndex, Plugin, Resources, Process};
+use lifec::prelude::{AttributeParser, BlockProperties, CustomAttribute};
+use lifec::prelude::{BlockObject, Value, ThunkContext, AsyncContext, AttributeIndex, Plugin, Resources, Process};
 use rust_embed::RustEmbed;
 use tokio::select;
 use tracing::event;
@@ -42,7 +42,7 @@ impl Plugin for LoginACR {
         "Calls a login script, and outputs an access_token"
     }
 
-    fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {
+    fn call(context: &ThunkContext) -> Option<AsyncContext> {
         context.task(|cancel_source| {
             let mut tc = context.clone();
             async move {
@@ -105,7 +105,7 @@ impl Plugin for LoginACR {
         })
     }
 
-    fn compile(parser: &mut lifec::AttributeParser) {
+    fn compile(parser: &mut AttributeParser) {
         parser.add_custom_with("host", |p, content| {
             if let Some(last_entity) = p.last_child_entity() {
                 p.define_child(last_entity, "host", Value::Symbol(content));
@@ -121,13 +121,13 @@ impl Plugin for LoginACR {
 }
 
 impl BlockObject for LoginACR {
-    fn query(&self) -> lifec::BlockProperties {
-        lifec::BlockProperties::default()
+    fn query(&self) -> BlockProperties {
+        BlockProperties::default()
             .require("login-acr")
             .optional("windows")
     }
 
-    fn parser(&self) -> Option<lifec::CustomAttribute> {
+    fn parser(&self) -> Option<CustomAttribute> {
         Some(Self::as_custom_attr())
     }
 }

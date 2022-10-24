@@ -1,4 +1,4 @@
-use lifec::{Component, DefaultVecStorage};
+use lifec::prelude::{Component, DefaultVecStorage};
 use serde::{Deserialize, Serialize};
 
 use super::Descriptor;

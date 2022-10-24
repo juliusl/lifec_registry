@@ -1,6 +1,6 @@
 use std::{fmt::Display, path::PathBuf};
 
-use lifec::{AttributeParser, BlockIndex, Value, WorldExt, CustomAttribute};
+use lifec::prelude::{AttributeParser, BlockIndex, Value, WorldExt, CustomAttribute};
 use logos::Logos;
 use tracing::{event, Level};
 

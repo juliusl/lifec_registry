@@ -4,7 +4,7 @@ use clap::{Args, Subcommand};
 
 mod init;
 pub use init::Init;
-use lifec::{
+use lifec::prelude::{
     AttributeGraph, Block, Engine, Executor, Host, Inspector, SecureClient, ThunkContext, WorldExt,
 };
 use tracing::{event, Level};

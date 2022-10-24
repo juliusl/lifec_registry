@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::ProxyTarget;
 use hyper::Method;
-use lifec::{BlobSource, ContentBroker, MemoryBlobSource, Sha256Digester, ThunkContext, Component, DefaultVecStorage};
+use lifec::prelude::{BlobSource, ContentBroker, MemoryBlobSource, Sha256Digester, ThunkContext, Component, DefaultVecStorage};
 use tracing::{event, Level};
 use std::io::Write;
 use serde::{Deserialize, Serialize};

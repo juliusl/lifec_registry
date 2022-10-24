@@ -1,4 +1,4 @@
-use lifec::{Plugin, BlockObject, BlockProperties, AttributeIndex, Resources, Process};
+use lifec::prelude::{Plugin, BlockObject, BlockProperties, AttributeIndex, Resources, Process, AsyncContext, ThunkContext, CustomAttribute};
 use rust_embed::RustEmbed;
 use tokio::select;
 use tracing::{event, Level};
@@ -18,7 +18,7 @@ impl Plugin for FormatNydus {
         "format-nydus"
     }
 
-    fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {
+    fn call(context: &ThunkContext) -> Option<AsyncContext> {
         context.task(|cancel_source| {
             let mut tc = context.clone();
             async move {
@@ -82,11 +82,11 @@ impl Plugin for FormatNydus {
 }
 
 impl BlockObject for FormatNydus {
-    fn query(&self) -> lifec::BlockProperties {
+    fn query(&self) -> BlockProperties {
         BlockProperties::default()
     }
 
-    fn parser(&self) -> Option<lifec::CustomAttribute> {
+    fn parser(&self) -> Option<CustomAttribute> {
         Some(Self::as_custom_attr())
     }
 }

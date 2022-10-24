@@ -1,7 +1,7 @@
-use lifec::{
-    plugins::{Plugin, ThunkContext},
+use lifec::prelude::{
+    Plugin, ThunkContext,
     Component, DenseVecStorage,
-    AttributeIndex, BlockObject, BlockProperties,
+    AttributeIndex, BlockObject, BlockProperties, CustomAttribute,
 };
 use tracing::{event, Level};
 
@@ -64,14 +64,14 @@ impl Plugin for Login {
 }
 
 impl BlockObject for Login {
-    fn query(&self) -> lifec::BlockProperties {
+    fn query(&self) -> BlockProperties {
         BlockProperties::default()
             .require("file_src")
             .require("login")
             .optional("user")
     }
 
-    fn parser(&self) -> Option<lifec::CustomAttribute> {
+    fn parser(&self) -> Option<CustomAttribute> {
         Some(Login::as_custom_attr())
     }
 }

@@ -1,9 +1,12 @@
-use lifec::{plugins::{Plugin, ThunkContext}, DenseVecStorage, Component, BlockObject, BlockProperties, AttributeIndex};
+use lifec::prelude::{
+    AttributeIndex, BlockObject, BlockProperties, Component, CustomAttribute, DenseVecStorage,
+    Plugin, ThunkContext,
+};
 
 use crate::ProxyTarget;
 
 /// Plugin that mirrors image resolution api's, based on OCI spec endpoints,
-/// 
+///
 /// ```markdown
 /// | ID     | Method         | API Endpoint                                                 | Success     | Failure           |
 /// | ------ | -------------- | ------------------------------------------------------------ | ----------- | ----------------- |
@@ -11,7 +14,7 @@ use crate::ProxyTarget;
 /// | end-7  | `PUT`          | `/v2/<name>/manifests/<reference>`                           | `201`       | `404`             |
 /// | end-9  | `DELETE`       | `/v2/<name>/manifests/<reference>`                           | `202`       | `404`/`400`/`405` |
 /// ```
-/// 
+///
 #[derive(Component, Default)]
 #[storage(DenseVecStorage)]
 pub struct Resolve;
@@ -48,7 +51,7 @@ impl Plugin for Resolve {
 }
 
 impl BlockObject for Resolve {
-    fn query(&self) -> lifec::BlockProperties {
+    fn query(&self) -> BlockProperties {
         BlockProperties::default()
             .require("resolve")
             .require("ns")
@@ -60,7 +63,7 @@ impl BlockObject for Resolve {
             .optional("protocol")
     }
 
-    fn parser(&self) -> Option<lifec::CustomAttribute> {
+    fn parser(&self) -> Option<CustomAttribute> {
         Some(Resolve::as_custom_attr())
     }
 }

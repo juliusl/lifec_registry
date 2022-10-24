@@ -1,5 +1,7 @@
-use lifec::{AttributeIndex, BlockObject, Plugin};
-use lifec::{CustomAttribute, ThunkContext, Value};
+use lifec::prelude::{
+    AsyncContext, AttributeIndex, AttributeParser, BlockObject, BlockProperties, CustomAttribute,
+    Plugin, ThunkContext, Value,
+};
 use tracing::event;
 use tracing::Level;
 
@@ -30,7 +32,7 @@ impl Plugin for Teleport {
         "Expects that the calling snapshotter is capable of using the streamable format."
     }
 
-    fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {
+    fn call(context: &ThunkContext) -> Option<AsyncContext> {
         context.task(|_| {
             let mut tc = context.clone();
             async move {
@@ -108,7 +110,7 @@ impl Plugin for Teleport {
         })
     }
 
-    fn compile(parser: &mut lifec::AttributeParser) {
+    fn compile(parser: &mut AttributeParser) {
         parser.add_custom(CustomAttribute::new_with("from", |p, content| {
             if let Some(last_entity) = p.last_child_entity() {
                 p.define_child(last_entity, "from", Value::Symbol(content));
@@ -137,8 +139,8 @@ impl Teleport {
                 {
                     // TODO -- Check env variable for what snapshotter is being used at the moment
                     if let Some(streamable_manifest) = artifact_manifest.blobs.iter().find(|b| {
-                            // Converted overlaybd is this type
-                            b.media_type == "application/vnd.docker.distribution.manifest.v2+json"
+                        // Converted overlaybd is this type
+                        b.media_type == "application/vnd.docker.distribution.manifest.v2+json"
                             // Converted nydus is this type
                             || b.media_type == "application/vnd.oci.image.manifest.v1+json"
                     }) {
@@ -152,7 +154,10 @@ impl Teleport {
                                 let mut tc = tc.commit();
 
                                 tc.with_binary("body", response)
-                                    .with_symbol("content-type", streamable_manifest.media_type.to_string())
+                                    .with_symbol(
+                                        "content-type",
+                                        streamable_manifest.media_type.to_string(),
+                                    )
                                     .with_symbol("digest", streamable_manifest.digest.to_string())
                                     .with_int("status-code", 200);
 
@@ -168,11 +173,11 @@ impl Teleport {
 }
 
 impl BlockObject for Teleport {
-    fn query(&self) -> lifec::BlockProperties {
-        lifec::BlockProperties::default()
+    fn query(&self) -> BlockProperties {
+        BlockProperties::default()
     }
 
-    fn parser(&self) -> Option<lifec::CustomAttribute> {
+    fn parser(&self) -> Option<CustomAttribute> {
         Some(Teleport::as_custom_attr())
     }
 }

@@ -1,8 +1,5 @@
 use hyper::http::StatusCode;
-use lifec::{
-    default_parser, default_runtime, AttributeGraph, AttributeIndex, BlockIndex, CustomAttribute,
-    Executor, Host, Project, Runtime, SpecialAttribute, Start, ThunkContext, Value,
-};
+use lifec::prelude::*;
 use lifec_poem::WebApp;
 use logos::Logos;
 use poem::{
@@ -109,7 +106,7 @@ impl SpecialAttribute for Proxy {
     /// by the normal `.engine` interpreter. However, we still want access to the world's runtime
     /// on `parse()`
     ///
-    fn parse(parser: &mut lifec::AttributeParser, content: impl AsRef<str>) {
+    fn parse(parser: &mut AttributeParser, content: impl AsRef<str>) {
         parser.define("app_host", Value::Symbol(content.as_ref().to_string()));
 
         Runtime::parse(parser, &content);
@@ -132,13 +129,13 @@ impl SpecialAttribute for Proxy {
 }
 
 impl Project for Proxy {
-    fn interpret(_: &lifec::World, _: &lifec::Block) {}
+    fn interpret(_: &World, _: &Block) {}
 
-    fn parser() -> lifec::Parser {
+    fn parser() -> Parser {
         default_parser(Self::world()).with_special_attr::<Proxy>()
     }
 
-    fn runtime() -> lifec::Runtime {
+    fn runtime() -> Runtime {
         let mut runtime = default_runtime();
         // TODO -- Change login-acr to something more generic
         runtime.install_with_custom::<LoginACR>("");
@@ -156,27 +153,27 @@ impl Project for Proxy {
         runtime
     }
 
-    fn configure_dispatcher(
-        dispatcher_builder: &mut lifec::DispatcherBuilder,
-        context: Option<ThunkContext>,
-    ) {
-        if let Some(context) = context {
-            Host::add_start_command_listener::<Self>(context, dispatcher_builder);
-        }
-    }
+    // fn configure_dispatcher(
+    //     dispatcher_builder: &mut DispatcherBuilder,
+    //     context: Option<ThunkContext>,
+    // ) {
+    //     if let Some(context) = context {
+    //         Host::add_start_command_listener::<Self>(context, dispatcher_builder);
+    //     }
+    // }
 
-    fn on_start_command(&mut self, start_command: Start) {
-        let tc = self.context.clone();
-        if let Some(handle) = self.context.handle() {
-            handle.spawn(async move {
-                tc.dispatch_start_command(start_command).await;
-            });
-        }
-    }
+    // fn on_start_command(&mut self, start_command: Start) {
+    //     let tc = self.context.clone();
+    //     if let Some(handle) = self.context.handle() {
+    //         handle.spawn(async move {
+    //             tc.dispatch_start_command(start_command).await;
+    //         });
+    //     }
+    // }
 }
 
 impl WebApp for Proxy {
-    fn create(context: &mut lifec::ThunkContext) -> Self {
+    fn create(context: &mut ThunkContext) -> Self {
         Self::from(context.clone())
     }
 
@@ -507,9 +504,6 @@ mod tests {
         use hyper::StatusCode;
         use hyper_tls::HttpsConnector;
         use lifec::prelude::*;
-        use lifec::Source;
-        use lifec::ThunkContext;
-        use lifec::WorldExt;
         use lifec_poem::WebApp;
 
         use crate::Proxy;
@@ -553,7 +547,7 @@ mod tests {
         graph.add_text_attr("proxy_src", src.0.to_string());
 
         tokio::runtime::Runtime::new().unwrap().block_on(async {
-            let world = lifec::World::new();
+            let world = World::new();
             let entity = world.entities().create();
             let https = HttpsConnector::new();
             let client = Client::builder().build::<_, hyper::Body>(https);

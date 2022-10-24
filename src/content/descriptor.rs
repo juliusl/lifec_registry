@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use lifec::{AttributeIndex, Component, DefaultVecStorage, ThunkContext};
+use lifec::prelude::{AttributeIndex, Component, DefaultVecStorage, ThunkContext};
 use serde::{Deserialize, Serialize};
 
 use super::Platform;

@@ -1,11 +1,11 @@
-use std::{path::PathBuf, str::FromStr};
 use hyper::Uri;
-use lifec::{
-    plugins::{Plugin, ThunkContext},
-    BlockObject, BlockProperties, Component, CustomAttribute, HashMapStorage, Interpreter, Value, AttributeIndex,
+use lifec::prelude::{
+    AttributeIndex, BlockObject, BlockProperties, Component, CustomAttribute, HashMapStorage,
+    Interpreter, Plugin, ThunkContext, Value, World, Block, AttributeParser,
 };
 use lifec_poem::AppHost;
 use logos::Logos;
+use std::{path::PathBuf, str::FromStr};
 use toml::value::Map;
 use tracing::{event, Level};
 
@@ -163,7 +163,7 @@ Design of containerd registry mirror feature
     /// : .https    hosts.crt
     /// ```
     ///
-    fn compile(parser: &mut lifec::AttributeParser) {
+    fn compile(parser: &mut AttributeParser) {
         // This attribute handles setting the
         parser.add_custom(CustomAttribute::new_with(
             "server",
@@ -220,11 +220,11 @@ Design of containerd registry mirror feature
 }
 
 impl Interpreter for Mirror {
-    fn initialize(&self, _world: &mut lifec::World) {
+    fn initialize(&self, _world: &mut World) {
         // TODO
     }
 
-    fn interpret(&self, _world: &lifec::World, block: &lifec::Block) {
+    fn interpret(&self, _world: &World, block: &Block) {
         // Only interpret blocks with mirror symbol
         if block.symbol() == "mirror" && !block.name().is_empty() {
             let output_dir = PathBuf::from(".work/etc/containerd/certs.d");
@@ -324,8 +324,7 @@ impl BlockObject for Mirror {
         BlockProperties::default().require("mirror")
     }
 
-    fn parser(&self) -> Option<lifec::CustomAttribute> {
+    fn parser(&self) -> Option<CustomAttribute> {
         Some(Self::as_custom_attr())
     }
 }
-

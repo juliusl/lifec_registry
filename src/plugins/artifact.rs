@@ -2,7 +2,7 @@ use crate::{
     ProxyTarget, ArtifactManifest, ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE,
 };
 use hyper::Method;
-use lifec::{AttributeIndex, BlockObject, BlockProperties, Plugin, Value};
+use lifec::prelude::{AttributeIndex, BlockObject, BlockProperties, Plugin, Value, AsyncContext, ThunkContext, AttributeParser, CustomAttribute};
 use tracing::{event, Level};
 
 /// This plugin is for adding artifacts to a registry,
@@ -19,7 +19,7 @@ impl Plugin for Artifact {
         "Defines and adds an artifact manifest to the registry"
     }
 
-    fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {
+    fn call(context: &ThunkContext) -> Option<AsyncContext> {
         context.task(|_| {
             let mut tc = context.clone();
             async {
@@ -86,7 +86,7 @@ impl Plugin for Artifact {
         })
     }
 
-    fn compile(parser: &mut lifec::AttributeParser) {
+    fn compile(parser: &mut AttributeParser) {
         parser.add_custom_with("subject", |p, content| {
             if let Some(last) = p.last_child_entity() {
                 p.define_child(last, "subject", Value::Symbol(content));
@@ -102,14 +102,14 @@ impl Plugin for Artifact {
 }
 
 impl BlockObject for Artifact {
-    fn query(&self) -> lifec::BlockProperties {
+    fn query(&self) -> BlockProperties {
         BlockProperties::default()
             .require("artifact")
             .require("subject")
             .optional("blob")
     }
 
-    fn parser(&self) -> Option<lifec::CustomAttribute> {
+    fn parser(&self) -> Option<CustomAttribute> {
         Some(Self::as_custom_attr())
     }
 }

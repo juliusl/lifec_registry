@@ -1,4 +1,5 @@
-use lifec::{AttributeIndex, BlockObject, BlockProperties, Plugin, Value};
+use lifec::prelude::{AsyncContext, ThunkContext, AttributeParser, CustomAttribute};
+use lifec::prelude::{AttributeIndex, BlockObject, BlockProperties, Plugin, Value};
 use serde_json::json;
 use tracing::event;
 use tracing::Level;
@@ -13,7 +14,7 @@ impl Plugin for LoginOverlayBD {
         "login-overlaybd"
     }
 
-    fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {
+    fn call(context: &ThunkContext) -> Option<AsyncContext> {
         context.task(|_| {
             let tc = context.clone();
             async {
@@ -67,7 +68,7 @@ impl Plugin for LoginOverlayBD {
         })
     }
 
-    fn compile(parser: &mut lifec::AttributeParser) {
+    fn compile(parser: &mut AttributeParser) {
         parser.add_custom_with("registry", |p, content| {
             if let Some(last_entity) = p.last_child_entity() {
                 p.define_child(last_entity, "registry", Value::Symbol(content));
@@ -77,11 +78,11 @@ impl Plugin for LoginOverlayBD {
 }
 
 impl BlockObject for LoginOverlayBD {
-    fn query(&self) -> lifec::BlockProperties {
+    fn query(&self) -> BlockProperties {
         BlockProperties::default().require("login-overlaybd")
     }
 
-    fn parser(&self) -> Option<lifec::CustomAttribute> {
+    fn parser(&self) -> Option<CustomAttribute> {
         Some(Self::as_custom_attr())
     }
 }

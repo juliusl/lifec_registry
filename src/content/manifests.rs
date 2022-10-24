@@ -1,4 +1,4 @@
-use lifec::{AttributeIndex, ThunkContext};
+use lifec::prelude::{AttributeIndex, ThunkContext};
 
 use crate::{ArtifactManifest, Descriptor, ImageIndex, ImageManifest};
 

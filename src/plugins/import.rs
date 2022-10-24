@@ -1,6 +1,6 @@
 
 
-use lifec::{Plugin, BlockObject, BlockProperties, AttributeIndex, Process, Resources, Value};
+use lifec::prelude::{Plugin, BlockObject, BlockProperties, AttributeIndex, Process, Resources, Value, AsyncContext, ThunkContext, CustomAttribute, AttributeParser};
 use logos::Logos;
 use poem::Request;
 use rust_embed::RustEmbed;
@@ -22,7 +22,7 @@ impl Plugin for Import {
         "import"
     }
 
-    fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {
+    fn call(context: &ThunkContext) -> Option<AsyncContext> {
         context.task(|cancel_source|{
             let mut tc = context.clone();
             async {
@@ -136,7 +136,7 @@ impl Plugin for Import {
         })
     }
 
-    fn compile(parser: &mut lifec::AttributeParser) {
+    fn compile(parser: &mut AttributeParser) {
         parser.add_custom_with("platform", |p, content|{ 
             if let Some(last_child_entity) = p.last_child_entity() {
                 p.define_child(last_child_entity, "platform", Value::Symbol(content))
@@ -147,12 +147,12 @@ impl Plugin for Import {
 
 
 impl BlockObject for Import {
-    fn query(&self) -> lifec::BlockProperties {
+    fn query(&self) -> BlockProperties {
         BlockProperties::default()
             .require("import")
     }
 
-    fn parser(&self) -> Option<lifec::CustomAttribute> {
+    fn parser(&self) -> Option<CustomAttribute> {
         Some(Self::as_custom_attr())
     }
 }

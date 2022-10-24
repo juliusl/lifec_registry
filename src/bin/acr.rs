@@ -1,9 +1,5 @@
 use clap::{Args, Parser, Subcommand};
-use lifec::{
-    default_parser, default_runtime, AttributeGraph, AttributeIndex, Block, BlockProperties, Event,
-    Inspector, Interpreter, Start, ThunkContext, Value, WorldExt, Source,
-};
-use lifec::{Host, Project};
+use lifec::prelude::*;
 use lifec_registry::{
     Artifact, Authenticate, Continue, Discover, FormatOverlayBD, Import, Login, LoginACR,
     LoginOverlayBD, Mirror, Proxy, Resolve, Teleport,
@@ -59,7 +55,10 @@ async fn main() {
                 Commands::Init(_) => {}
                 _ => {
                     if !mirror_runmd.exists() {
-                        event!(Level::ERROR, "mirror_runmd not found, run `acr --registry {registry} init`");
+                        event!(
+                            Level::ERROR,
+                            "mirror_runmd not found, run `acr --registry {registry} init`"
+                        );
                         panic!("Uninitialized directory");
                     }
                 }
@@ -73,14 +72,14 @@ async fn main() {
                             .expect("should be able to create string"),
                     );
                     if let Some(mut host) = host.create_host::<ACR>().await.take() {
-                        if let Some(lifec::Commands::Start(start)) = host.command() {
+                        if let Some(lifec::host::Commands::Start(start)) = host.command() {
                             match start {
                                 Start {
                                     id: None,
                                     engine_name: None,
                                     ..
                                 } => {
-                                    host.set_command(lifec::Commands::start_engine("mirror"));
+                                    host.set_command(lifec::host::Commands::start_engine("mirror"));
                                 }
                                 _ => {}
                             }
@@ -215,9 +214,9 @@ async fn main() {
                                         (events.get(i), props.get(i))
                                     {
                                         print!("\t{:2}:\t{}", i.id(), event);
-                                        if let Some(prop) = properties.property(event.1 .0) {
-                                            print!(" {prop}");
-                                        }
+                                        // if let Some(prop) = properties.property(event.1 .0) {
+                                        //     print!(" {prop}");
+                                        // }
                                         println!();
                                     }
                                 }
@@ -322,7 +321,7 @@ struct MirrorSettings {
 }
 
 impl Project for ACR {
-    fn interpret(world: &lifec::World, block: &lifec::Block) {
+    fn interpret(world: &World, block: &Block) {
         Mirror::default().interpret(world, block);
 
         let source = world.fetch::<Source>();
@@ -359,11 +358,11 @@ impl Project for ACR {
         // }
     }
 
-    fn parser() -> lifec::Parser {
+    fn parser() -> lifec::prelude::Parser {
         default_parser(Self::world()).with_special_attr::<Proxy>()
     }
 
-    fn runtime() -> lifec::Runtime {
+    fn runtime() -> Runtime {
         let mut runtime = default_runtime();
         runtime.install_with_custom::<Authenticate>("");
         runtime.install_with_custom::<LoginACR>("");
@@ -380,32 +379,32 @@ impl Project for ACR {
         runtime
     }
 
-    fn configure_dispatcher(
-        _dispatcher_builder: &mut lifec::DispatcherBuilder,
-        _context: Option<lifec::ThunkContext>,
-    ) {
-        if let Some(_context) = _context {
-            Host::add_start_command_listener::<ACR>(_context, _dispatcher_builder);
-        }
-    }
+    // fn configure_dispatcher(
+    //     _dispatcher_builder: &mut DispatcherBuilder,
+    //     _context: Option<ThunkContext>,
+    // ) {
+    //     if let Some(_context) = _context {
+    //         Host::add_start_command_listener::<ACR>(_context, _dispatcher_builder);
+    //     }
+    // }
 
-    fn on_start_command(&mut self, start_command: lifec::Start) {
-        if let Start {
-            id: Some(id),
-            thunk_context: Some(tc),
-            ..
-        } = start_command
-        {
-            // This will create a new host and start the command
-            if let Self {
-                command: Some(Commands::Mirror(mut host)),
-                ..
-            } = ACR::from(tc.clone())
-            {
-                host.start::<ACR>(id, Some(tc));
-            }
-        }
-    }
+    // fn on_start_command(&mut self, start_command: lifec::Start) {
+    //     if let Start {
+    //         id: Some(id),
+    //         thunk_context: Some(tc),
+    //         ..
+    //     } = start_command
+    //     {
+    //         // This will create a new host and start the command
+    //         if let Self {
+    //             command: Some(Commands::Mirror(mut host)),
+    //             ..
+    //         } = ACR::from(tc.clone())
+    //         {
+    //             host.start::<ACR>(id, Some(tc));
+    //         }
+    //     }
+    // }
 }
 
 impl From<ThunkContext> for ACR {

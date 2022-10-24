@@ -1,5 +1,5 @@
 use hyper::Method;
-use lifec::{prelude::*, BlockObject, BlockProperties, CustomAttribute, Plugin, Value};
+use lifec::prelude::*;
 use poem::{web::headers::Authorization, Request};
 use tracing::{event, Level};
 
@@ -21,7 +21,7 @@ impl Plugin for Continue {
         "Useful if all you require is authn or response inspection"
     }
 
-    fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {
+    fn call(context: &ThunkContext) -> Option<AsyncContext> {
         context.task(|_| {
             let mut tc = context.clone();
             async move {
@@ -176,7 +176,7 @@ impl Plugin for Continue {
         })
     }
 
-    fn compile(parser: &mut lifec::AttributeParser) {
+    fn compile(parser: &mut AttributeParser) {
         parser.add_custom(CustomAttribute::new_with("accept", |p, content| {
             if let Some(last_entity) = p.last_child_entity() {
                 p.define_child(last_entity, "accept", Value::Symbol(content));
@@ -201,7 +201,7 @@ impl BlockObject for Continue {
             .optional("body")
     }
 
-    fn parser(&self) -> Option<lifec::CustomAttribute> {
+    fn parser(&self) -> Option<CustomAttribute> {
         Some(Self::as_custom_attr())
     }
 }

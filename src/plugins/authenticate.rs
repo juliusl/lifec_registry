@@ -1,7 +1,6 @@
 use hyper::{http, Method, Uri};
-use lifec::{
-    plugins::{Plugin, ThunkContext},
-    AttributeIndex, BlockObject, BlockProperties, Component, DenseVecStorage,
+use lifec::prelude::{
+    AttributeIndex, BlockObject, BlockProperties, Component, DenseVecStorage, Plugin, ThunkContext, CustomAttribute,
 };
 use poem::Request;
 use serde::{Deserialize, Serialize};
@@ -57,14 +56,14 @@ impl Plugin for Authenticate {
 }
 
 impl BlockObject for Authenticate {
-    fn query(&self) -> lifec::BlockProperties {
+    fn query(&self) -> BlockProperties {
         BlockProperties::default()
             .require("ns")
             .require("api")
             .require("token")
     }
 
-    fn parser(&self) -> Option<lifec::CustomAttribute> {
+    fn parser(&self) -> Option<CustomAttribute> {
         Some(Self::as_custom_attr())
     }
 }
@@ -147,10 +146,13 @@ impl Authenticate {
                     .find_symbol("method")
                     .expect("should have a method");
 
-                let request = Request::builder().uri(api).method(
-                    Method::from_bytes(method.to_string().to_uppercase().as_bytes())
-                        .expect("should be able to parse"),
-                ).finish();
+                let request = Request::builder()
+                    .uri(api)
+                    .method(
+                        Method::from_bytes(method.to_string().to_uppercase().as_bytes())
+                            .expect("should be able to parse"),
+                    )
+                    .finish();
 
                 if let Some(response) = client.request(request.into()).await.ok() {
                     if response.status().is_client_error() {
