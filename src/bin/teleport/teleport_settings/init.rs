@@ -115,9 +115,9 @@ pub const FORMAT_TELEPORT_TEMPLATE: &'static str = r#"
 
 
 + .engine
-: .event    setup       <Login to ACR and setup login info for {format}>
-: .event    convert     <Convert an image in registry to {format}>
-: .event    link        <Link {format} image to source image in registry>
+: .start    setup       <Login to ACR and setup login info for {format}>
+: .start    convert     <Convert an image in registry to {format}>
+: .start    link        <Link {format} image to source image in registry>
 : .exit
 ```
 

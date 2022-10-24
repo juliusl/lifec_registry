@@ -18,9 +18,9 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 ```md
 <``` mirror>
 + .engine           <This is the engine definition for the mirror server>
-: .event install    <This first step will login to acr and setup credentials>
-: .event start      <This will start the mirror server>
-: .event recover    <If the mirror crashes for some reason, this step will attempt to recover>
+: .start install    <This first step will login to acr and setup credentials>
+: .start start      <This will start the mirror server>
+: .start recover    <If the mirror crashes for some reason, this step will attempt to recover>
 : .loop             <If a step crashes, this ensures the engine loops>
 ```
 
