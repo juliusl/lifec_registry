@@ -39,7 +39,7 @@ impl Plugin for FormatNydus {
                 let host = workspace.get_host();
                 let tenant = workspace.get_tenant().expect("should have a tenant");
                 let repo = workspace.get_path().expect("should have a path/repo");
-                let tag = workspace.iter_tags().next().expect("should have a tag/reference");
+                let tag = workspace.tag().expect("should have a tag/reference");
 
                 event!(Level::DEBUG, "Preparing a registry-env for format process");
                 tc.state_mut()

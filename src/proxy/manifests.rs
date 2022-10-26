@@ -1,8 +1,6 @@
-use std::{sync::Arc, path::PathBuf};
-
-use crate::Proxy;
+use std::sync::Arc;
 use hyper::{http::StatusCode, Method};
-use lifec::prelude::{AttributeIndex, ThunkContext, Host, AttributeGraph};
+use lifec::prelude::{AttributeIndex, ThunkContext, Host};
 use poem::{
     handler,
     web::{Data, Path, Query},
@@ -77,7 +75,5 @@ pub async fn manifests_api(
         .with_symbol("accept", request.header("accept").unwrap_or_default())
         .with_symbol("method", request.method());
 
-    let graph = AttributeGraph::default();
-
-    Proxy::handle(&host, &input).await
+    crate::RegistryProxy::handle(&host, "manifests", "resolve", &input).await
 }

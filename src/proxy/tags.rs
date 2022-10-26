@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::Proxy;
+use crate::RegistryProxy;
 use hyper::http::StatusCode;
 use lifec::prelude::{AttributeIndex, ThunkContext, Host};
 use poem::{
@@ -42,5 +42,5 @@ pub async fn tags_api(
         .with_symbol("method", method)
         .with_symbol("name", name);
 
-    Proxy::handle(&host, &input).await
+    RegistryProxy::handle(&host, "tags", "list", &input).await
 }

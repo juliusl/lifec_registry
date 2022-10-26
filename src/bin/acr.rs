@@ -1,8 +1,10 @@
 use clap::{Args, Parser, Subcommand};
+use lifec::host::HostSettings;
 use lifec::prelude::*;
+use lifec_registry::RegistryProxy;
 use lifec_registry::{
     Artifact, Authenticate, Continue, Discover, FormatOverlayBD, Import, Login, LoginACR,
-    LoginOverlayBD, Mirror, Proxy, Resolve, Teleport,
+    LoginOverlayBD, Mirror, Resolve, Teleport,
 };
 use serde::Serialize;
 use std::path::PathBuf;
@@ -66,33 +68,15 @@ async fn main() {
 
             match command {
                 Commands::Open => {
-                    let mut host = Host::load_workspace::<ACR>(None, registry_host, registry, None::<String>);
-
-                    // TODO: fix later
-                    host.world_mut().insert(Source("".to_string()));
+                    let host = Host::load_workspace::<ACR>(None, registry_host, registry, None::<String>, None::<String>);
 
                     tokio::task::block_in_place(|| {
                         host.open_runtime_editor::<ACR>();
                     })
                 }
-                Commands::Mirror(mut host) => {
-                    // TODO: This can be simplified
-                    host.workspace = Some(format!("{registry}.{registry_host}"));
+                Commands::Mirror(host) => {
                     if let Some(mut host) = host.create_host::<ACR>().await.take() {
-                        if let Some(lifec::host::Commands::Start(start)) = host.command() {
-                            match start {
-                                Start {
-                                    id: None,
-                                    engine_name: None,
-                                    ..
-                                } => {
-                                    host.set_command(lifec::host::Commands::start_engine("mirror"));
-                                }
-                                _ => {}
-                            }
-                        }
-
-                        host.handle_start::<ACR>();
+                        host.start::<ACR>();
                     } else {
                         panic!("Could not create/start host");
                     }
@@ -203,7 +187,7 @@ async fn main() {
                             println!("Proxy routes:");
                             println!("This is the configuration for the proxy sub-engine hosted by the mirror");
                             println!();
-                            for route in Proxy::extract_routes(i) {
+                            for route in RegistryProxy::extract_routes(i) {
                                 let methods = route.find_symbol_values("method");
                                 let resources = route.find_symbol_values("resource");
 
@@ -266,7 +250,7 @@ struct ACR {
     /// Enable debug logging
     #[clap(long, short, action)]
     debug: bool,
-    /// Registry host, for example azurecr.io, or azurecr-test.io
+    /// Registry host, Ex. azurecr.io, or azurecr-test.io
     #[clap(long, default_value_t=String::from("azurecr.io"))]
     registry_host: String,
     #[clap(subcommand)]
@@ -280,7 +264,7 @@ enum Commands {
     Open,
     /// Host a mirror server that can extend ACR features,
     ///
-    Mirror(Host),
+    Mirror(HostSettings),
     /// Enable image streaming for an image in acr,
     ///
     /// ## Current Streaming Formats
@@ -344,7 +328,6 @@ impl Project for ACR {
     fn interpret(world: &World, block: &Block) {
         Mirror::default().interpret(world, block);
 
-        // let source = world.fetch::<Source>();
         for index in block
             .index()
             .iter()
@@ -359,27 +342,10 @@ impl Project for ACR {
                 }
             }
         }
-
-        // for index in block.index().iter().filter(|b| b.root().name() == "proxy") {
-        //     for (child, _) in index.iter_children() {
-        //         let child = world.entities().entity(*child);
-        //         if let Some(graph) = world.write_component::<AttributeGraph>().get_mut(child) {
-        //             // graph
-        //             //     .with_symbol("registry_host", &mirror_settings.registry_host)
-        //             //     .with_symbol(
-        //             //         "registry_name",
-        //             //         mirror_settings
-        //             //             .registry_name
-        //             //             .as_ref()
-        //             //             .expect("should have a registry name"),
-        //             //     );
-        //         }
-        //     }
-        // }
     }
 
     fn parser() -> lifec::prelude::Parser {
-        default_parser(Self::world()).with_special_attr::<Proxy>()
+        default_parser(Self::world()).with_special_attr::<RegistryProxy>()
     }
 
     fn runtime() -> Runtime {
@@ -399,52 +365,5 @@ impl Project for ACR {
         runtime.install_with_custom::<FormatOverlayBD>("");
         runtime
     }
-
-    // fn configure_dispatcher(
-    //     _dispatcher_builder: &mut DispatcherBuilder,
-    //     _context: Option<ThunkContext>,
-    // ) {
-    //     if let Some(_context) = _context {
-    //         Host::add_start_command_listener::<ACR>(_context, _dispatcher_builder);
-    //     }
-    // }
-
-    // fn on_start_command(&mut self, start_command: lifec::Start) {
-    //     if let Start {
-    //         id: Some(id),
-    //         thunk_context: Some(tc),
-    //         ..
-    //     } = start_command
-    //     {
-    //         // This will create a new host and start the command
-    //         if let Self {
-    //             command: Some(Commands::Mirror(mut host)),
-    //             ..
-    //         } = ACR::from(tc.clone())
-    //         {
-    //             host.start::<ACR>(id, Some(tc));
-    //         }
-    //     }
-    // }
 }
 
-impl From<ThunkContext> for ACR {
-    fn from(tc: ThunkContext) -> Self {
-        if let Some(proxy_src) = tc.state().find_text("proxy_src") {
-            Self {
-                registry: tc
-                    .state()
-                    .find_symbol("registry")
-                    .expect("should be in state"),
-                registry_host: tc
-                    .state()
-                    .find_symbol("registry_host")
-                    .expect("should be in state"),
-                debug: false,
-                command: Some(Commands::Mirror(Host::load_content::<ACR>(proxy_src))),
-            }
-        } else {
-            panic!("proxy_src was not included")
-        }
-    }
-}

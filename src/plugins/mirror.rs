@@ -8,11 +8,11 @@ use logos::Logos;
 use std::{path::PathBuf, str::FromStr};
 use toml::value::Map;
 use tracing::{event, Level};
+use crate::RegistryProxy;
 
 mod host_capabilities;
 use host_capabilities::HostCapability;
 
-use crate::Proxy;
 
 /// Designed to be used w/ containerd's registry config described here:
 /// https://github.com/containerd/containerd/blob/main/docs/hosts.md
@@ -133,7 +133,7 @@ Design of containerd registry mirror feature
                 }
 
                 // TODO: Handle multiple proxies
-                match AppHost::<Proxy>::call(&tc) {
+                match AppHost::<RegistryProxy>::call(&tc) {
                     Some((task, _)) => match task.await {
                         Ok(tc) => {
                             event!(Level::INFO, "Exiting");

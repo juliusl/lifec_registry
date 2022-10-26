@@ -1,13 +1,10 @@
-
-
 use lifec::prelude::{Plugin, BlockObject, BlockProperties, AttributeIndex, Process, Resources, Value, AsyncContext, ThunkContext, CustomAttribute, AttributeParser};
-use logos::Logos;
 use poem::Request;
 use rust_embed::RustEmbed;
 use tokio::select;
 use tracing::{event, Level};
 
-use crate::{proxy::ProxyTarget, Platform, ImageIndex};
+use crate::{Platform, ImageIndex};
 
 
 /// Plugin to handle importing a public source image to a private repo

@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use crate::Proxy;
+use crate::RegistryProxy;
 use hyper::http::StatusCode;
-use lifec::prelude::{AttributeIndex, ThunkContext, Host};
+use lifec::prelude::{AttributeIndex, Host, ThunkContext};
 use poem::{
     handler,
     web::{Data, Path, Query},
@@ -46,7 +46,7 @@ pub async fn blob_download_api(
     host: Data<&Arc<Host>>,
 ) -> Response {
     if !context.is_enabled("proxy_enabled") {
-        return Proxy::soft_fail();
+        return RegistryProxy::soft_fail();
     }
 
     let name = name.trim_end_matches("/blobs");
@@ -59,7 +59,7 @@ pub async fn blob_download_api(
         .state_mut()
         .with_symbol("name", name)
         .with_symbol("ns", &ns)
-        .with_symbol("method", method)
+        .with_symbol("method", &method)
         .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
         .with_symbol("digest", digest);
 
@@ -67,7 +67,7 @@ pub async fn blob_download_api(
         input.state_mut().add_symbol("accept", accept)
     }
 
-    Proxy::handle(&host, &input).await
+    RegistryProxy::handle(&host, "blobs", method.to_string(), &input).await
 }
 
 /// API handler for end-4a, end-4b, end-11
@@ -129,7 +129,7 @@ pub async fn blob_upload_api(
             .with_symbol("method", method)
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
-        Proxy::handle(&host, &input).await
+        RegistryProxy::handle(&host, "blobs", "import", &input).await
     } else if let Some(digest) = digest {
         event!(
             Level::DEBUG,
@@ -143,7 +143,7 @@ pub async fn blob_upload_api(
             .with_symbol("method", method)
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
-        Proxy::handle(&host, &input).await
+        RegistryProxy::handle(&host, "blobs", "upload_monolith", &input).await
     } else if let None = digest {
         event!(Level::DEBUG, "Got blob_upload_session_id request, {name}");
         event!(Level::TRACE, "{:#?}", request);
@@ -153,7 +153,7 @@ pub async fn blob_upload_api(
             .with_symbol("method", method)
             .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()));
 
-        Proxy::handle(&host, &input).await
+        RegistryProxy::handle(&host, "blobs", "upload_session_id", &input).await
     } else {
         return Response::builder()
             .status(StatusCode::SERVICE_UNAVAILABLE)
@@ -213,5 +213,5 @@ pub async fn blob_chunk_upload_api(
         .with_symbol("api", format!("https://{ns}/v2{}", request.uri().path()))
         .with_symbol("digest", digest.unwrap_or_default());
 
-    Proxy::handle(&host, &input).await
+    RegistryProxy::handle(&host, "blobs", "upload_chunks", &input).await
 }

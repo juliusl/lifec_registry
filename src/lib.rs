@@ -24,6 +24,6 @@ pub use plugins::Teleport;
 pub use plugins::Resolve;
 
 mod proxy;
-pub use proxy::Proxy;
+pub use proxy::RegistryProxy;
 pub use proxy::ProxyTarget;
 

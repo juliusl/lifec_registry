@@ -1,5 +1,13 @@
 use hyper::http::StatusCode;
-use lifec::prelude::*;
+use lifec::{
+    prelude::{
+        AttributeParser, Block, BlockIndex, CustomAttribute, Host, Parser, Run,
+        SpecialAttribute, ThunkContext, Value, World,
+    },
+    project::{default_parser, default_runtime, Operations, Project},
+    runtime::Runtime,
+    state::{AttributeGraph, AttributeIndex},
+};
 use lifec_poem::WebApp;
 use logos::Logos;
 use poem::{
@@ -83,12 +91,12 @@ use tags::tags_api;
 /// <```>  
 /// ```
 #[derive(Default)]
-pub struct Proxy {
+pub struct RegistryProxy {
     context: ThunkContext,
     host: Arc<Host>,
 }
 
-impl Proxy {
+impl RegistryProxy {
     /// Fails in a way that the runtime will fallback to the upstream server
     pub fn soft_fail() -> Response {
         Response::builder()
@@ -97,7 +105,7 @@ impl Proxy {
     }
 }
 
-impl SpecialAttribute for Proxy {
+impl SpecialAttribute for RegistryProxy {
     fn ident() -> &'static str {
         "proxy"
     }
@@ -128,16 +136,16 @@ impl SpecialAttribute for Proxy {
     }
 }
 
-impl Project for Proxy {
+impl Project for RegistryProxy {
     fn interpret(_: &World, _: &Block) {}
 
     fn parser() -> Parser {
-        default_parser(Self::world()).with_special_attr::<Proxy>()
+        default_parser(Self::world()).with_special_attr::<RegistryProxy>()
     }
 
     fn runtime() -> Runtime {
         let mut runtime = default_runtime();
-        runtime.install_with_custom::<Run<Proxy>>("");
+        runtime.install_with_custom::<Run<RegistryProxy>>("");
         runtime.install_with_custom::<LoginACR>("");
         runtime.install_with_custom::<Authenticate>("");
         runtime.install_with_custom::<Mirror>("");
@@ -152,27 +160,9 @@ impl Project for Proxy {
         runtime.install_with_custom::<FormatOverlayBD>("");
         runtime
     }
-
-    // fn configure_dispatcher(
-    //     dispatcher_builder: &mut DispatcherBuilder,
-    //     context: Option<ThunkContext>,
-    // ) {
-    //     if let Some(context) = context {
-    //         Host::add_start_command_listener::<Self>(context, dispatcher_builder);
-    //     }
-    // }
-
-    // fn on_start_command(&mut self, start_command: Start) {
-    //     let tc = self.context.clone();
-    //     if let Some(handle) = self.context.handle() {
-    //         handle.spawn(async move {
-    //             tc.dispatch_start_command(start_command).await;
-    //         });
-    //     }
-    // }
 }
 
-impl WebApp for Proxy {
+impl WebApp for RegistryProxy {
     fn create(context: &mut ThunkContext) -> Self {
         Self::from(context.clone())
     }
@@ -198,7 +188,7 @@ impl WebApp for Proxy {
             let mut context_map = HashMap::<(Methods, Resources), ThunkContext>::default();
 
             let mut route = Route::new();
-            let graphs = Proxy::extract_routes(i);
+            let graphs = RegistryProxy::extract_routes(i);
 
             for graph in graphs {
                 let methods = graph
@@ -383,19 +373,17 @@ async fn index(
     todo!()
 }
 
-impl From<ThunkContext> for Proxy {
+impl From<ThunkContext> for RegistryProxy {
     fn from(context: ThunkContext) -> Self {
         let workspace = context.workspace().expect("should have a work_dir");
         let host = workspace.get_host().to_string();
-        let tenant = workspace.get_tenant().expect("should have tenant").to_string();
-        let mut host = Host::load_workspace::<Proxy>(
-            None,
-            host,
-            tenant,
-            None::<String>,
-        );
-        host.prepare::<Proxy>();
-        
+        let tenant = workspace
+            .get_tenant()
+            .expect("should have tenant")
+            .to_string();
+        let mut host = Host::load_workspace::<RegistryProxy>(None, host, tenant, context.tag(),  None::<String>);
+        host.prepare::<RegistryProxy>();
+
         Self {
             context,
             host: Arc::new(host),
@@ -403,25 +391,25 @@ impl From<ThunkContext> for Proxy {
     }
 }
 
-impl Proxy {
+impl RegistryProxy {
     /// Handles executing the proxy sequence
     ///
-    pub async fn handle(host: &Host, input: &ThunkContext) -> Response {
-        let (join, _) = if let Some(proxy_src_path) = input.search().find_symbol("proxy_src_path") {
-            let replace_host = Host::open::<Proxy>(proxy_src_path)
-                .await
-                .expect("should open");
+    pub async fn handle(host: &Host, resource: impl AsRef<str>, method: impl AsRef<str>, input: &ThunkContext) -> Response {
+        let resource = resource.as_ref();
+        let method = method.as_ref();
+        
+        let mut operations = host.world().system_data::<Operations>();
+        let mut operation = operations
+                .execute_operation(format!("{resource}.{method}"), input.find_symbol("tag"), Some(input))
+                .expect("should have started an operation");
 
-            replace_host.execute(&input)
-        } else {
-            host.execute(&input)
-        };
+        let (_, rx) = tokio::sync::oneshot::channel();
 
-        match join.await {
-            Ok(result) => Proxy::into_response(&result),
-            Err(err) => {
-                event!(Level::ERROR, "Error handling call sequence, {err}");
-                Proxy::soft_fail()
+        match operation.task(rx).await {
+            Some(result) => RegistryProxy::into_response(&result),
+            None => {
+                event!(Level::ERROR, "Error handling call sequence");
+                RegistryProxy::soft_fail()
             }
         }
     }
@@ -507,14 +495,14 @@ mod tests {
     #[test]
     #[tracing_test::traced_test]
     fn test_proxy_parsing() {
+        use crate::RegistryProxy;
         use hyper::Client;
         use hyper::StatusCode;
         use hyper_tls::HttpsConnector;
         use lifec::prelude::*;
         use lifec_poem::WebApp;
 
-        use crate::Proxy;
-        let mut host = Host::load_content::<Proxy>(
+        let mut host = Host::load_content::<RegistryProxy>(
             r#"
         # Example proxy definition
         ``` start proxy
@@ -549,9 +537,7 @@ mod tests {
         };
 
         let index = block.index().first().expect("should exist").clone();
-        let src = host.world().fetch::<Source>();
-        let mut graph = AttributeGraph::new(index);
-        graph.add_text_attr("proxy_src", src.0.to_string());
+        let graph = AttributeGraph::new(index);
 
         tokio::runtime::Runtime::new().unwrap().block_on(async {
             let world = World::new();
@@ -567,7 +553,7 @@ mod tests {
                 .enable_https_client(client)
                 .enable_async(entity, handle.clone());
 
-            let app = Proxy::create(&mut tc).routes();
+            let app = RegistryProxy::create(&mut tc).routes();
             let cli = poem::test::TestClient::new(app);
 
             let resp = cli
