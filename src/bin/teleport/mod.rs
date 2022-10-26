@@ -16,7 +16,7 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 - Engine sequence when the mirror starts
 
 ```md
-<``` mirror>
+```
 + .engine           <This is the engine definition for the mirror server>
 : .start install    <This first step will login to acr and setup credentials>
 : .start start      <This will start the mirror server>
@@ -29,7 +29,7 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 - Copy credentials over to overlaybd's credential file
 
 ```md
-<``` install mirror>
+``` install
 : src_dir         .symbol .
 : work_dir        .symbol .world/{registry_host}/{registry_name}
 : file_src        .symbol .world/{registry_host}/{registry_name}/access_token
@@ -46,7 +46,7 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 - If an error occurs, it should restart the server after going through the setup process once more 
 
 ```md
-<``` start mirror>
+``` start
 : src_dir         .symbol .
 : work_dir        .symbol .world/{registry_host}/{registry_name}
 : file_src        .symbol .world/{registry_host}/{registry_name}/access_token
@@ -98,7 +98,7 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 - This is a really simple stage designed to handle intermittent network issues that may stop the server,
 
 ```md
-<``` recover mirror> 
+``` recover
 + .runtime
 : .println  Waiting for 10 seconds
 : .timer    10 s

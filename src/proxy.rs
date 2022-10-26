@@ -137,7 +137,7 @@ impl Project for Proxy {
 
     fn runtime() -> Runtime {
         let mut runtime = default_runtime();
-        // TODO -- Change login-acr to something more generic
+        runtime.install_with_custom::<Run<Proxy>>("");
         runtime.install_with_custom::<LoginACR>("");
         runtime.install_with_custom::<Authenticate>("");
         runtime.install_with_custom::<Mirror>("");
@@ -385,13 +385,20 @@ async fn index(
 
 impl From<ThunkContext> for Proxy {
     fn from(context: ThunkContext) -> Self {
-        let proxy_src = context
-            .search()
-            .find_text("proxy_src")
-            .expect("should have a proxy src");
+        let workspace = context.workspace().expect("should have a work_dir");
+        let host = workspace.get_host().to_string();
+        let tenant = workspace.get_tenant().expect("should have tenant").to_string();
+        let mut host = Host::load_workspace::<Proxy>(
+            None,
+            host,
+            tenant,
+            None::<String>,
+        );
+        host.prepare::<Proxy>();
+        
         Self {
             context,
-            host: Arc::new(Host::load_content::<Proxy>(proxy_src)),
+            host: Arc::new(host),
         }
     }
 }

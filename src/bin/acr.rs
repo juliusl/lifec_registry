@@ -77,11 +77,7 @@ async fn main() {
                 }
                 Commands::Mirror(mut host) => {
                     // TODO: This can be simplified
-                    host.set_path(
-                        mirror_runmd
-                            .to_str()
-                            .expect("should be able to create string"),
-                    );
+                    host.workspace = Some(format!("{registry}.{registry_host}"));
                     if let Some(mut host) = host.create_host::<ACR>().await.take() {
                         if let Some(lifec::host::Commands::Start(start)) = host.command() {
                             match start {
@@ -172,6 +168,18 @@ async fn main() {
                         Level::INFO,
                         "Wrote runmd file, recommend tracking the .world dir with source control"
                     );
+
+                    tokio::fs::write(&world_dir.join(".runmd"), 
+                    r#"
+                    ```
+                    ```
+                    "#)
+                    .await
+                    .expect("Should be able to write runmd to file");
+                event!(
+                    Level::INFO,
+                    "Wrote runmd file, recommend tracking the .world dir with source control"
+                );
                     println!(
                         "{}",
                         mirror_runmd
