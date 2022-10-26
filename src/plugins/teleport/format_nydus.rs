@@ -28,54 +28,51 @@ impl Plugin for FormatNydus {
                     return Some(tc);
                 }
 
-                Resources("")
+                {
+                    Resources("")
                     .unpack_resource::<FormatNydus>(&tc, &String::from("format-nydus.sh"))
                     .await;
+                }
                 
                 event!(Level::DEBUG, "Unpacked script");
+                let workspace = tc.workspace().cloned().expect("should have a workspace");
+                let host = workspace.get_host();
+                let tenant = workspace.get_tenant().expect("should have a tenant");
+                let repo = workspace.get_path().expect("should have a path/repo");
+                let tag = workspace.iter_tags().next().expect("should have a tag/reference");
 
-                if let (Some(registry_name), Some(registry_host), Some(repo), Some(reference)) = (
-                    tc.search().find_symbol("registry_name"),
-                    tc.search().find_symbol("registry_host"),
-                    tc.search().find_symbol("repo"),
-                    tc.search().find_symbol("reference")
-                ) {
-                    event!(Level::DEBUG, "Preparing a registry-env for format process");
-                    tc.state_mut()
-                        .with_symbol("process", "sh format-nydus.sh")
-                        .with_symbol("env", "REGISTRY_NAME")
-                        .with_symbol("env", "REGISTRY_HOST")
-                        .with_symbol("env", "REPO")
-                        .with_symbol("env", "REFERENCE")
-                        .with_symbol("env", "DOCKER_CONFIG")
-                        .with_symbol("env", "NYDUS_INSTALL_DIR")
-                        .with_symbol("REGISTRY_NAME", &registry_name)
-                        .with_symbol("REGISTRY_HOST", &registry_host)
-                        .with_symbol("DOCKER_CONFIG", format!(".world/{registry_host}/{registry_name}/.docker"))
-                        .with_symbol("REPO", &repo)
-                        .with_symbol("NYDUS_INSTALL_DIR", "/usr/local/bin")
-                        .with_symbol("REFERENCE", &reference);
+                event!(Level::DEBUG, "Preparing a registry-env for format process");
+                tc.state_mut()
+                    .with_symbol("process", "sh format-nydus.sh")
+                    .with_symbol("env", "REGISTRY_NAME")
+                    .with_symbol("env", "REGISTRY_HOST")
+                    .with_symbol("env", "REPO")
+                    .with_symbol("env", "REFERENCE")
+                    .with_symbol("env", "DOCKER_CONFIG")
+                    .with_symbol("env", "NYDUS_INSTALL_DIR")
+                    .with_symbol("REGISTRY_NAME", &tenant)
+                    .with_symbol("REGISTRY_HOST", &host)
+                    .with_symbol("DOCKER_CONFIG", format!(".world/{host}/{tenant}/.docker"))
+                    .with_symbol("REPO", &repo)
+                    .with_symbol("NYDUS_INSTALL_DIR", "/usr/local/bin")
+                    .with_symbol("REFERENCE", &tag);
 
-                        let (task, cancel) = Process::call(&tc).expect("Should start");
-                        select! {
-                            tc = task => {
-                                if let Some(mut tc) = tc.ok() {
-                                    event!(Level::DEBUG, "Finished formatting - {registry_name}.{registry_host}/{repo}:{reference} -> {reference}-nydus");
-                                    tc.copy_previous();
-                                    return Some(tc);
-                                } else {
-                                    return None;
-                                }
-                            }
-                            _ = cancel_source => {
-                                cancel.send(()).ok();
-                                return None;
-                            }
+                let (task, cancel) = Process::call(&tc).expect("Should start");
+                select! {
+                    tc = task => {
+                        if let Some(mut tc) = tc.ok() {
+                            event!(Level::DEBUG, "Finished formatting - {tenant}.{host}/{repo}:{tag} -> {tag}-nydus");
+                            tc.copy_previous();
+                            return Some(tc);
+                        } else {
+                            return None;
                         }
+                    }
+                    _ = cancel_source => {
+                        cancel.send(()).ok();
+                        return None;
+                    }
                 }
-
-                tc.copy_previous();
-                Some(tc)
             }
         })
     }

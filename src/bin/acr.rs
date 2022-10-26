@@ -65,7 +65,18 @@ async fn main() {
             }
 
             match command {
+                Commands::Open => {
+                    let mut host = Host::load_workspace::<ACR>(None, registry_host, registry, None::<String>);
+
+                    // TODO: fix later
+                    host.world_mut().insert(Source("".to_string()));
+
+                    tokio::task::block_in_place(|| {
+                        host.open_runtime_editor::<ACR>();
+                    })
+                }
                 Commands::Mirror(mut host) => {
+                    // TODO: This can be simplified
                     host.set_path(
                         mirror_runmd
                             .to_str()
@@ -258,6 +269,7 @@ struct ACR {
 ///
 #[derive(Subcommand)]
 enum Commands {
+    Open,
     /// Host a mirror server that can extend ACR features,
     ///
     Mirror(Host),
@@ -324,7 +336,7 @@ impl Project for ACR {
     fn interpret(world: &World, block: &Block) {
         Mirror::default().interpret(world, block);
 
-        let source = world.fetch::<Source>();
+        // let source = world.fetch::<Source>();
         for index in block
             .index()
             .iter()
@@ -334,7 +346,7 @@ impl Project for ACR {
                 if props.property("mirror").is_some() {
                     let child = world.entities().entity(*child);
                     if let Some(graph) = world.write_component::<AttributeGraph>().get_mut(child) {
-                        graph.add_text_attr("proxy_src", source.0.to_string());
+                        graph.add_text_attr("proxy_src", "");
                     }
                 }
             }
@@ -364,6 +376,7 @@ impl Project for ACR {
 
     fn runtime() -> Runtime {
         let mut runtime = default_runtime();
+        runtime.install_with_custom::<Run<Self>>("");
         runtime.install_with_custom::<Authenticate>("");
         runtime.install_with_custom::<LoginACR>("");
         runtime.install_with_custom::<Mirror>("");
