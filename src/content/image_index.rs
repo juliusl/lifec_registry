@@ -1,10 +1,12 @@
 use serde::{Deserialize, Serialize};
+use specs::{Component, VecStorage};
 
 use crate::Descriptor;
 
 /// Struct for an image manifest,
 /// 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Component, Debug, Default, Clone, Serialize, Deserialize)]
+#[storage(VecStorage)]
 pub struct ImageIndex {
     /// Schema version of this manifest
     /// 

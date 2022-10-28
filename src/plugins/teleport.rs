@@ -36,7 +36,7 @@ impl Plugin for Teleport {
         context.task(|_| {
             let mut tc = context.clone();
             async move {
-                if let Some(teleport_format) = tc.state().find_symbol("teleport") {
+                if let Some(teleport_format) = tc.search().find_symbol("teleport") {
                     event!(Level::DEBUG, "Teleport format {teleport_format}");
 
                     match teleport_format.as_str() {

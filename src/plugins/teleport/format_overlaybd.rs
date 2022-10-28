@@ -33,11 +33,12 @@ impl Plugin for FormatOverlayBD {
                 
                 event!(Level::DEBUG, "Unpacked script");
 
-                if let (Some(user), Some(token), Some(registry_name), Some(registry_host), Some(repo), Some(reference)) = (
+                let registry = tc.workspace().expect("should have a workspace").get_tenant().expect("should have a tenant").clone();
+                let registry_host = tc.workspace().expect("should have a workspace").get_host().clone();
+
+                if let (Some(user), Some(token), Some(repo), Some(reference)) = (
                     tc.search().find_text("user"),
                     tc.search().find_text("token"),
-                    tc.search().find_symbol("registry_name"),
-                    tc.search().find_symbol("registry_host"),
                     tc.search().find_symbol("repo"),
                     tc.search().find_symbol("reference")
                 ) {
@@ -50,7 +51,7 @@ impl Plugin for FormatOverlayBD {
                         .with_symbol("env", "REGISTRY_TOKEN")
                         .with_symbol("env", "REPO")
                         .with_symbol("env", "REFERENCE")
-                        .with_symbol("REGISTRY_NAME", &registry_name)
+                        .with_symbol("REGISTRY_NAME", &registry)
                         .with_symbol("REGISTRY_HOST", &registry_host)
                         .with_symbol("REGISTRY_USER", &user)
                         .with_symbol("REGISTRY_TOKEN", &token)
@@ -61,7 +62,7 @@ impl Plugin for FormatOverlayBD {
                         select! {
                             tc = task => {
                                 if let Some(mut tc) = tc.ok() {
-                                    event!(Level::DEBUG, "Finished formatting - {registry_name}.{registry_host}/{repo}:{reference} -> {reference}-overlaybd");
+                                    event!(Level::DEBUG, "Finished formatting - {registry}.{registry_host}/{repo}:{reference} -> {reference}-overlaybd");
                                     tc.copy_previous();
                                     return Some(tc);
                                 } else {

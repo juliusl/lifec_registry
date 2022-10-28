@@ -1,14 +1,14 @@
 use hyper::http::StatusCode;
 use lifec::{
     prelude::{
-        AttributeParser, Block, BlockIndex, CustomAttribute, Host, Parser, Run,
-        SpecialAttribute, ThunkContext, Value, World,
+        AttributeParser, Block, BlockIndex, Host, Parser, Run, SpecialAttribute,
+        ThunkContext, Value, World,
     },
-    project::{default_parser, default_runtime, Operations, Project},
+    project::{default_parser, default_runtime, Operations, Project, default_world},
     runtime::Runtime,
     state::{AttributeGraph, AttributeIndex},
 };
-use lifec_poem::WebApp;
+use lifec_poem::{WebApp, RoutePlugin};
 use logos::Logos;
 use poem::{
     get, handler, post, put,
@@ -16,6 +16,7 @@ use poem::{
     EndpointExt, Request, Response, Route,
 };
 use serde::Deserialize;
+use specs::{WorldExt, Join};
 use std::{collections::HashMap, sync::Arc};
 use tracing::{event, Level};
 
@@ -43,6 +44,9 @@ use manifests::manifests_api;
 
 mod tags;
 use tags::tags_api;
+
+mod resolve;
+pub use resolve::Manifests;
 
 /// Struct for creating a customizable registry proxy,
 ///
@@ -92,7 +96,6 @@ use tags::tags_api;
 /// ```
 #[derive(Default)]
 pub struct RegistryProxy {
-    context: ThunkContext,
     host: Arc<Host>,
 }
 
@@ -117,22 +120,7 @@ impl SpecialAttribute for RegistryProxy {
     fn parse(parser: &mut AttributeParser, content: impl AsRef<str>) {
         parser.define("app_host", Value::Symbol(content.as_ref().to_string()));
 
-        Runtime::parse(parser, &content);
-
-        // A new entity is created per resource/method being proxied
-        // When the below attributes are parsed, the context will be set to that entity
-        // So that subsequent plugin definitions will modify the "sequence" property
-        // of the proxied resource. This is how a call sequence can be built per resource
-        // without modifying external engine/runtime in the host.
-        parser.add_custom(CustomAttribute::new_with("manifests", |p, c| {
-            Methods::parse_methods(Resources::Manifests)(p, c);
-        }));
-        parser.add_custom(CustomAttribute::new_with("blobs", |p, c| {
-            Methods::parse_methods(Resources::Blobs)(p, c);
-        }));
-        parser.add_custom(CustomAttribute::new_with("tags", |p, c| {
-            Methods::parse_methods(Resources::Tags)(p, c);
-        }));
+        parser.with_custom::<Manifests>();
     }
 }
 
@@ -160,6 +148,13 @@ impl Project for RegistryProxy {
         runtime.install_with_custom::<FormatOverlayBD>("");
         runtime
     }
+
+    fn world() -> World {
+        let mut world = default_world();
+        world.insert(Self::runtime());
+        world.register::<Manifests>();
+        world
+    }
 }
 
 impl WebApp for RegistryProxy {
@@ -168,184 +163,19 @@ impl WebApp for RegistryProxy {
     }
 
     fn routes(&mut self) -> poem::Route {
-        let proxy_src = self
-            .context
-            .state()
-            .find_text("proxy_src")
-            .expect("should have src for proxy");
-        let registry_host = self
-            .context
-            .find_symbol("registry_host")
-            .expect("should have a registry host");
-        let registry_name = self
-            .context
-            .find_symbol("registry_name")
-            .expect("should have a registry name");
+        let mut route = Route::default();
 
-        let block = self.context.block();
-        let context = self.context.clone();
-        if let Some(i) = block.index().iter().find(|b| b.root().name() == "proxy") {
-            let mut context_map = HashMap::<(Methods, Resources), ThunkContext>::default();
+        for manifest in self.host.world().read_component::<Manifests>().join() {
+            if manifest.can_route() {
+                let mut manifest = manifest.clone();
+                manifest.set_host(self.host.clone());
 
-            let mut route = Route::new();
-            let graphs = RegistryProxy::extract_routes(i);
 
-            for graph in graphs {
-                let methods = graph
-                    .find_symbol_values("method")
-                    .iter()
-                    .filter_map(|m| Methods::lexer(m).next())
-                    .collect::<Vec<_>>();
-                let resources = graph
-                    .find_symbol_values("resource")
-                    .iter()
-                    .filter_map(|r| Resources::lexer(r).next())
-                    .collect::<Vec<_>>();
-
-                for (method, resource) in methods.iter().zip(resources) {
-                    let mut context = context.with_state(graph.clone());
-                    context
-                        .state_mut()
-                        .with_bool("proxy_enabled", true)
-                        .with_symbol("registry_host", &registry_host)
-                        .with_symbol("registry_name", &registry_name)
-                        .with_text("proxy_src", proxy_src.to_string());
-
-                    if let Some(proxy_src_path) = graph.find_symbol("proxy_src_path") {
-                        event!(
-                            Level::TRACE,
-                            "Adding proxy_src_path to {:?} {:?}",
-                            method,
-                            resource
-                        );
-                        context
-                            .state_mut()
-                            .with_symbol("proxy_src_path", proxy_src_path);
-                    }
-
-                    context_map.insert((method.clone(), resource), context);
-                }
+                route = route.nest("/v2", manifest.route());
             }
-
-            // Resolve manifest settings
-            //
-            let get_manifests_settings = context_map
-                .get(&(Methods::Get, Resources::Manifests))
-                .cloned()
-                .unwrap_or_default();
-
-            let head_manifests_settings = context_map
-                .get(&(Methods::Head, Resources::Manifests))
-                .cloned()
-                .unwrap_or_default();
-
-            let put_manifests_settings = context_map
-                .get(&(Methods::Put, Resources::Manifests))
-                .cloned()
-                .unwrap_or_default();
-
-            let delete_manifests_settings = context_map
-                .get(&(Methods::Delete, Resources::Manifests))
-                .cloned()
-                .unwrap_or_default();
-
-            route = route.at(
-                "/:name<[a-zA-Z0-9/_-]+(?:manifests)>/:reference",
-                get(manifests_api
-                    .data(get_manifests_settings)
-                    .data(self.host.clone()))
-                .head(
-                    manifests_api
-                        .data(head_manifests_settings)
-                        .data(self.host.clone()),
-                )
-                .put(
-                    manifests_api
-                        .data(put_manifests_settings)
-                        .data(self.host.clone()),
-                )
-                .delete(
-                    manifests_api
-                        .data(delete_manifests_settings)
-                        .data(self.host.clone()),
-                ),
-            );
-
-            // Resolve blob settings
-            //
-            let get_blobs_settings = context_map
-                .get(&(Methods::Get, Resources::Blobs))
-                .cloned()
-                .unwrap_or_default();
-
-            let post_blobs_settings = context_map
-                .get(&(Methods::Post, Resources::Blobs))
-                .cloned()
-                .unwrap_or_default();
-
-            let put_blobs_settings = context_map
-                .get(&(Methods::Put, Resources::Blobs))
-                .cloned()
-                .unwrap_or_default();
-
-            let patch_blobs_settings = context_map
-                .get(&(Methods::Patch, Resources::Blobs))
-                .cloned()
-                .unwrap_or_default();
-
-            route = route.at(
-                "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/:digest",
-                get(blob_download_api
-                    .data(get_blobs_settings)
-                    .data(self.host.clone())),
-            );
-
-            route = route.at(
-                "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads",
-                post(
-                    blob_upload_api
-                        .data(post_blobs_settings)
-                        .data(self.host.clone()),
-                ),
-            );
-
-            route = route.at(
-                "/:name<[a-zA-Z0-9/_-]+(?:blobs)>/uploads/:reference",
-                put(blob_chunk_upload_api
-                    .data(put_blobs_settings)
-                    .data(self.host.clone()))
-                .patch(
-                    blob_chunk_upload_api
-                        .data(patch_blobs_settings)
-                        .data(self.host.clone()),
-                ),
-            );
-
-            // Resolve tags settings
-            //
-            let get_tags_settings = context_map
-                .get(&(Methods::Get, Resources::Tags))
-                .cloned()
-                .unwrap_or_default();
-
-            route = route.at(
-                "/:name<[a-zA-Z0-9/_-]+(?:tags)>/list",
-                get(tags_api.data(get_tags_settings).data(self.host.clone())),
-            );
-
-            let route = Route::new().nest(
-                "/v2",
-                route.at(
-                    "/",
-                    get(index.data(self.context.clone()).data(self.host.clone()))
-                        .head(index.data(self.context.clone()).data(self.host.clone())),
-                ),
-            );
-
-            return route;
         }
 
-        panic!("Could not create routes")
+        route
     }
 }
 
@@ -376,16 +206,22 @@ async fn index(
 impl From<ThunkContext> for RegistryProxy {
     fn from(context: ThunkContext) -> Self {
         let workspace = context.workspace().expect("should have a work_dir");
-        let host = workspace.get_host().to_string();
-        let tenant = workspace
+        let registry_host = workspace.get_host().to_string();
+        let registry_tenant = workspace
             .get_tenant()
             .expect("should have tenant")
             .to_string();
-        let mut host = Host::load_workspace::<RegistryProxy>(None, host, tenant, context.tag(),  None::<String>);
+        
+        let mut host = Host::load_workspace::<RegistryProxy>(
+            None,
+            &registry_host,
+            &registry_tenant,
+            None::<String>,
+            context.tag(),
+        );
         host.prepare::<RegistryProxy>();
 
         Self {
-            context,
             host: Arc::new(host),
         }
     }
@@ -394,14 +230,23 @@ impl From<ThunkContext> for RegistryProxy {
 impl RegistryProxy {
     /// Handles executing the proxy sequence
     ///
-    pub async fn handle(host: &Host, resource: impl AsRef<str>, method: impl AsRef<str>, input: &ThunkContext) -> Response {
+    pub async fn handle(
+        host: &Host,
+        resource: impl AsRef<str>,
+        method: impl AsRef<str>,
+        input: &ThunkContext,
+    ) -> Response {
         let resource = resource.as_ref();
         let method = method.as_ref();
-        
+
         let mut operations = host.world().system_data::<Operations>();
         let mut operation = operations
-                .execute_operation(format!("{resource}.{method}"), input.find_symbol("tag"), Some(input))
-                .expect("should have started an operation");
+            .execute_operation(
+                format!("{resource}.{method}"),
+                input.find_symbol("tag"),
+                Some(input),
+            )
+            .expect("should have started an operation");
 
         let (_, rx) = tokio::sync::oneshot::channel();
 

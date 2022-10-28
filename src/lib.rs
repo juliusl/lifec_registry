@@ -8,6 +8,7 @@ pub use content::ImageIndex;
 pub use content::ImageManifest;
 pub use content::OCI_ARTIFACTS_MANIFEST_MEDIA_TYPE;
 pub use content::ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE;
+pub use content::Registry;
 
 mod plugins;
 pub use plugins::Mirror;
@@ -26,4 +27,5 @@ pub use plugins::Resolve;
 mod proxy;
 pub use proxy::RegistryProxy;
 pub use proxy::ProxyTarget;
+pub use proxy::Manifests;
 

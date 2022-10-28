@@ -8,13 +8,16 @@ use lifec_registry::{
 };
 use serde::Serialize;
 use std::path::PathBuf;
-use tinytemplate::TinyTemplate;
 use tracing::event;
 use tracing::Level;
 use tracing_subscriber::EnvFilter;
 
 mod teleport;
-use teleport::{TeleportSettings, MIRROR_TEMPLATE};
+use teleport::TeleportSettings;
+
+mod mirror;
+use mirror::default_mirror_engine;
+use mirror::default_mirror_root;
 
 /// Small example tool to convert .runmd to hosts.toml
 ///
@@ -27,13 +30,11 @@ async fn main() {
                 .with_default_directive("acr=info".parse().expect("should parse"))
                 .from_env()
                 .expect("should work")
-                .add_directive("lifec=info".parse().expect("should be ok"))
         } else {
             EnvFilter::builder()
                 .with_default_directive("acr=debug".parse().expect("should parse"))
                 .from_env()
                 .expect("should work")
-                .add_directive("lifec=debug".parse().expect("should be ok"))
         })
         .compact()
         .init();
@@ -68,15 +69,25 @@ async fn main() {
 
             match command {
                 Commands::Open => {
-                    let host = Host::load_workspace::<ACR>(None, registry_host, registry, None::<String>, None::<String>);
+                    let host = Host::load_workspace::<ACR>(
+                        None,
+                        registry_host,
+                        registry,
+                        None::<String>,
+                        None::<String>,
+                    );
 
                     tokio::task::block_in_place(|| {
                         host.open_runtime_editor::<ACR>();
                     })
                 }
-                Commands::Mirror(host) => {
-                    if let Some(mut host) = host.create_host::<ACR>().await.take() {
-                        host.start::<ACR>();
+                Commands::Mirror(mut host_settings) => {
+                    if host_settings.workspace.is_none() {
+                        host_settings.set_workspace(format!("{registry}.{registry_host}"));
+                    }
+
+                    if let Some(mut host) = host_settings.create_host::<ACR>().await.take() {
+                        host.start_with::<ACR>("mirror");
                     } else {
                         panic!("Could not create/start host");
                     }
@@ -126,44 +137,32 @@ async fn main() {
                         }
                     }
                 },
-                Commands::Init(mut mirror_settings) => {
+                Commands::Init(_mirror_settings) => {
                     if mirror_runmd.exists() {
                         event!(Level::WARN, "Overwriting existing file {:?}", mirror_runmd);
                     }
 
-                    let mut tt = TinyTemplate::new();
-                    tt.add_template("mirror", MIRROR_TEMPLATE)
-                        .expect("Should be able to add template");
-
-                    mirror_settings.registry_name = Some(registry.to_string());
-
-                    if mirror_settings.teleport_format == "overlaybd" {
-                        mirror_settings.artifact_type = Some("dadi.image.v1".to_string());
-                    }
-
-                    let rendered = tt
-                        .render("mirror", &mirror_settings)
-                        .expect("Should be able to render template");
-
-                    tokio::fs::write(&mirror_runmd, rendered)
-                        .await
-                        .expect("Should be able to write runmd to file");
+                    tokio::fs::write(
+                        &mirror_runmd,
+                        default_mirror_engine().source.expect("should have a value"),
+                    )
+                    .await
+                    .expect("Should be able to write runmd to file");
                     event!(
                         Level::INFO,
                         "Wrote runmd file, recommend tracking the .world dir with source control"
                     );
 
-                    tokio::fs::write(&world_dir.join(".runmd"), 
-                    r#"
-                    ```
-                    ```
-                    "#)
+                    tokio::fs::write(
+                        &world_dir.join(".runmd"),
+                        default_mirror_root().source.expect("should have a value"),
+                    )
                     .await
                     .expect("Should be able to write runmd to file");
-                event!(
-                    Level::INFO,
-                    "Wrote runmd file, recommend tracking the .world dir with source control"
-                );
+                    event!(
+                        Level::INFO,
+                        "Wrote runmd file, recommend tracking the .world dir with source control"
+                    );
                     println!(
                         "{}",
                         mirror_runmd
@@ -261,6 +260,8 @@ struct ACR {
 ///
 #[derive(Subcommand)]
 enum Commands {
+    /// Opens an editor,
+    /// 
     Open,
     /// Host a mirror server that can extend ACR features,
     ///
@@ -366,4 +367,3 @@ impl Project for ACR {
         runtime
     }
 }
-

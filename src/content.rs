@@ -21,3 +21,15 @@ pub use image_index::ImageIndex;
 
 mod manifests;
 pub use manifests::Manifests;
+
+mod registry;
+pub use registry::Registry;
+
+mod contents;
+pub use contents::Contents;
+
+mod upstream;
+pub use upstream::Upstream;
+
+mod local;
+pub use local::Local;

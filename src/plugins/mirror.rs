@@ -121,19 +121,21 @@ Design of containerd registry mirror feature
 
     fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         context.task(|_| {
-            let tc = context.clone();
+            let mut tc = context.clone();
             async move {
-                if !tc.is_enabled("skip_hosts_dir_check") {
-                    let app_host = tc
-                        .state()
-                        .find_symbol("mirror")
-                        .expect("host name to mirror is required");
+                // if !tc.search().find_bool("skip_hosts_dir_check").unwrap_or_default() {
+                //     let app_host = tc
+                //         .state()
+                //         .find_symbol("mirror")
+                //         .expect("host name to mirror is required");
 
-                    Self::ensure_hosts_dir(app_host).await;
-                }
+                //     Self::ensure_hosts_dir(app_host).await;
+                // }
+
+                let app_host = tc.search().find_symbol("app_host").expect("should have an app host");
 
                 // TODO: Handle multiple proxies
-                match AppHost::<RegistryProxy>::call(&tc) {
+                match AppHost::<RegistryProxy>::call(&tc.with_symbol("app_host", app_host)) {
                     Some((task, _)) => match task.await {
                         Ok(tc) => {
                             event!(Level::INFO, "Exiting");
@@ -216,6 +218,8 @@ Design of containerd registry mirror feature
             let last = p.last_child_entity().expect("child entity required");
             p.define_child(last, "https", Value::Symbol(format!("{:?}", path)));
         }));
+
+        parser.with_custom::<RegistryProxy>();
     }
 }
 

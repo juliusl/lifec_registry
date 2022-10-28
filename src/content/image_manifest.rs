@@ -1,12 +1,14 @@
 use std::collections::BTreeMap;
 
 use serde::{Serialize, Deserialize};
+use specs::{Component, VecStorage};
 
 use super::Descriptor;
 
 /// Struct for an image manifest,
 /// 
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Component, Debug, Default, Clone, Serialize, Deserialize)]
+#[storage(VecStorage)]
 pub struct ImageManifest {
     #[serde(rename = "schemaVersion")]
     pub schema_versin: usize,

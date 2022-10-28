@@ -54,64 +54,55 @@ impl Plugin for LoginACR {
                     .unpack_resource::<LoginACR>(&tc, &String::from("login-acr-admin.sh"))
                     .await;
 
-                if let Some(registry_name) = tc.state().find_symbol("login-acr") {
-                    let admin_enabled = tc.state().find_bool("admin").unwrap_or_default();
-                    let login_process = if admin_enabled {
-                        Self::login_admin(&registry_name, &mut tc)
-                    } else {
-                        Self::login_access_token(&registry_name, &mut tc)
-                    };
+                let registry = tc.workspace().expect("should have a workspace").get_tenant().expect("should have a tenant").clone();
+                let registry_host = tc.workspace().expect("should have a workspace").get_host().clone();
+                let admin_enabled = tc.state().find_bool("admin").unwrap_or_default();
                 
-                    let (task, cancel) = login_process;
-                    select! {
-                        tc = task => {
-                            event!(Level::DEBUG, "Finished login to acr - {}", registry_name);
-                            if let Some(mut tc) = tc.ok() {
-                                let registry_host = tc.state().find_symbol("host").unwrap_or("azurecr.io".to_string());
-                                if admin_enabled {
-                                    let registry = format!("{registry_name}.{registry_host}");
-                                    let username = format!("{registry}.username");
-                                    tc.state_mut()
-                                        .with_symbol(username, &registry_name)
-                                        .with_symbol(
-                                            format!("{registry_name}.{registry_host}"), 
-                                            tokio::fs::read_to_string("admin_pass").await.expect("a file should have been created").trim().trim_matches('"')
-                                    );
-                                } else {
-                                    let registry = format!("{registry_name}.{registry_host}");
-                                    let username = format!("{registry}.username");
-                                    tc.state_mut()
-                                        .with_symbol(username, "00000000-0000-0000-0000-000000000000")
-                                        .with_symbol(
-                                            registry, 
-                                            tokio::fs::read_to_string("access_token").await.expect("a file should have been created").trim()
-                                    );
-                                }
-
-                                Some(tc)
+                let (task, cancel) = if admin_enabled {
+                    Self::login_admin(&registry, &mut tc)
+                } else {
+                    Self::login_access_token(&registry, &mut tc)
+                };
+                
+                select! {
+                    tc = task => {
+                        event!(Level::DEBUG, "Finished login to acr - {}", registry);
+                        if let Some(mut tc) = tc.ok() {
+                            if admin_enabled {
+                                let registry = format!("{registry}.{registry_host}");
+                                let username = format!("{registry}.username");
+                                tc.state_mut()
+                                    .with_symbol(username, &registry)
+                                    .with_symbol(
+                                        format!("{registry}.{registry_host}"), 
+                                        tokio::fs::read_to_string("admin_pass").await.expect("a file should have been created").trim().trim_matches('"')
+                                );
                             } else {
-                                None
+                                let registry = format!("{registry}.{registry_host}");
+                                let username = format!("{registry}.username");
+                                tc.state_mut()
+                                    .with_symbol(username, "00000000-0000-0000-0000-000000000000")
+                                    .with_symbol(
+                                        registry, 
+                                        tokio::fs::read_to_string("access_token").await.expect("a file should have been created").trim()
+                                );
                             }
-                        }
-                        _ = cancel_source => {
-                            cancel.send(()).ok();
+
+                            Some(tc)
+                        } else {
                             None
                         }
                     }
-                } else {
-                    panic!("A registry name was not provided, cannot continue to logging in");
+                    _ = cancel_source => {
+                        cancel.send(()).ok();
+                        None
+                    }
                 }
             }
         })
     }
 
     fn compile(parser: &mut AttributeParser) {
-        parser.add_custom_with("host", |p, content| {
-            if let Some(last_entity) = p.last_child_entity() {
-                p.define_child(last_entity, "host", Value::Symbol(content));
-            }
-        });
-
         parser.add_custom_with("admin", |p, _| {
             if let Some(last_entity) = p.last_child_entity() {
                 p.define_child(last_entity, "admin", true);
@@ -123,8 +114,7 @@ impl Plugin for LoginACR {
 impl BlockObject for LoginACR {
     fn query(&self) -> BlockProperties {
         BlockProperties::default()
-            .require("login-acr")
-            .optional("windows")
+            .optional("admin")
     }
 
     fn parser(&self) -> Option<CustomAttribute> {

@@ -198,7 +198,7 @@ pub async fn blob_chunk_upload_api(
             None => {}
         }
     }
-
+    
     event!(
         Level::DEBUG,
         "Got {method} blob_upload_chunks request, {name} {reference}, {:?}",
