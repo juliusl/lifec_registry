@@ -123,18 +123,17 @@ Design of containerd registry mirror feature
         context.task(|_| {
             let mut tc = context.clone();
             async move {
-                // if !tc.search().find_bool("skip_hosts_dir_check").unwrap_or_default() {
-                //     let app_host = tc
-                //         .state()
-                //         .find_symbol("mirror")
-                //         .expect("host name to mirror is required");
+                if !tc.search().find_bool("skip_hosts_dir_check").unwrap_or_default() {
+                    let app_host = tc
+                        .state()
+                        .find_symbol("mirror")
+                        .expect("host name to mirror is required");
 
-                //     Self::ensure_hosts_dir(app_host).await;
-                // }
+                    Self::ensure_hosts_dir(app_host).await;
+                }
 
                 let app_host = tc.search().find_symbol("app_host").expect("should have an app host");
 
-                // TODO: Handle multiple proxies
                 match AppHost::<RegistryProxy>::call(&tc.with_symbol("app_host", app_host)) {
                     Some((task, _)) => match task.await {
                         Ok(tc) => {

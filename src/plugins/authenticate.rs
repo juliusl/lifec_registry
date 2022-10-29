@@ -2,7 +2,7 @@ use hyper::{http, Method, Uri};
 use lifec::prelude::{
     AttributeIndex, BlockObject, BlockProperties, Component, DenseVecStorage, Plugin, ThunkContext, CustomAttribute,
 };
-use poem::Request;
+use poem::{Request, web::headers::Authorization};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tracing::{event, Level};
@@ -35,13 +35,20 @@ impl Plugin for Authenticate {
             let mut tc = context.clone();
             async move {
                 if let Some(credentials) = Self::authenticate(&tc).await {
-                    event!(Level::DEBUG, "Received credentials for registry");
-                    tc.state_mut().add_symbol(
-                        "access_token",
+                    match Authorization::bearer(
                         credentials
                             .access_token
-                            .expect("received some access token"),
-                    );
+                            .expect("received some access token").as_str()
+                    ) {
+                        Ok(auth_header) => {
+                            tc.state_mut()
+                                .with_symbol("header", "Authorization")
+                                .with_symbol("Authorization", format!("{:?}", auth_header));
+                        },
+                        Err(err) => {
+                            event!(Level::ERROR, "Could not parse auth header, {err}");
+                        }
+                    }
 
                     tc.copy_previous();
 
@@ -78,10 +85,10 @@ impl Authenticate {
     async fn authenticate(tc: &ThunkContext) -> Option<Credentials> {
         if let Some(challenge_uri) = Self::start_challenge(tc).await {
             if let (Some(ns), Some(token)) = (
-                tc.search().find_symbol("ns"),
-                tc.search().find_text("token"),
+                tc.search().find_symbol("REGISTRY_NAMESPACE"),
+                tc.search().find_symbol("REGISTRY_TOKEN"),
             ) {
-                event!(Level::DEBUG, "Start authn for {challenge_uri}");
+                event!(Level::INFO, "Start authn for {challenge_uri}");
 
                 /*
                 # Example curl request:
@@ -140,7 +147,7 @@ impl Authenticate {
                 .and_then(|a| Uri::from_str(a.as_str()).ok());
 
             if let Some(api) = api {
-                event!(Level::DEBUG, "calling {api} to initiate authn");
+                event!(Level::INFO, "calling {api} to initiate authn");
                 let method = tc
                     .search()
                     .find_symbol("method")
@@ -157,7 +164,7 @@ impl Authenticate {
                 if let Some(response) = client.request(request.into()).await.ok() {
                     if response.status().is_client_error() {
                         event!(
-                            Level::DEBUG,
+                            Level::INFO,
                             "client error detected, starting auth challenge"
                         );
                         event!(Level::TRACE, "{:#?}", response);
@@ -170,7 +177,7 @@ impl Authenticate {
                             .expect("challenge header should be a string");
                         let challenge = Self::parse_challenge_header(challenge);
 
-                        event!(Level::DEBUG, "received challange {challenge}");
+                        event!(Level::INFO, "received challange {challenge}");
 
                         return Some(
                             Uri::from_str(&challenge).expect("challenge should be a valid uri"),
@@ -180,7 +187,7 @@ impl Authenticate {
             }
         }
 
-        event!(Level::WARN, "Did not authn request, exiting");
+        event!(Level::WARN, "Did not authn request, exiting, {:?}", tc.client());
         None
     }
 

@@ -179,54 +179,6 @@ async fn main() {
 
                     host.print_engine_event_graph();
                     host.print_lifecycle_graph();
-
-                    // Print the proxy state
-                    for block in host.world().read_component::<Block>().as_slice() {
-                        for i in block.index().iter().filter(|b| b.root().name() == "proxy") {
-                            println!("Proxy routes:");
-                            println!("This is the configuration for the proxy sub-engine hosted by the mirror");
-                            println!();
-                            for route in RegistryProxy::extract_routes(i) {
-                                let methods = route.find_symbol_values("method");
-                                let resources = route.find_symbol_values("resource");
-
-                                let mut zipped = methods.iter().zip(resources.iter());
-                                if let Some((method, resource)) = zipped.next() {
-                                    print!("\t{:2}:\t{resource} - {method}", route.entity_id());
-                                }
-                                for (method, _) in zipped {
-                                    print!(" {method}");
-                                }
-                                println!();
-
-                                for i in
-                                    route
-                                        .find_values("sequence")
-                                        .iter()
-                                        .filter_map(|v| match v {
-                                            Value::Int(ent) => {
-                                                Some(host.world().entities().entity(*ent as u32))
-                                            }
-                                            _ => None,
-                                        })
-                                {
-                                    let props = host.world().read_component::<BlockProperties>();
-                                    let events = host.world().read_component::<Event>();
-                                    if let (Some(event), Some(properties)) =
-                                        (events.get(i), props.get(i))
-                                    {
-                                        print!("\t{:2}:\t{}", i.id(), event);
-                                        // if let Some(prop) = properties.property(event.1 .0) {
-                                        //     print!(" {prop}");
-                                        // }
-                                        println!();
-                                    }
-                                }
-                                println!();
-                            }
-                            return;
-                        }
-                    }
                 }
             }
         }
@@ -328,21 +280,6 @@ struct MirrorSettings {
 impl Project for ACR {
     fn interpret(world: &World, block: &Block) {
         Mirror::default().interpret(world, block);
-
-        for index in block
-            .index()
-            .iter()
-            .filter(|b| b.root().name() == "runtime")
-        {
-            for (child, props) in index.iter_children() {
-                if props.property("mirror").is_some() {
-                    let child = world.entities().entity(*child);
-                    if let Some(graph) = world.write_component::<AttributeGraph>().get_mut(child) {
-                        graph.add_text_attr("proxy_src", "");
-                    }
-                }
-            }
-        }
     }
 
     fn parser() -> lifec::prelude::Parser {

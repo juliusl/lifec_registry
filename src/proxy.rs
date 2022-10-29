@@ -1,23 +1,14 @@
-use hyper::http::StatusCode;
 use lifec::{
     prelude::{
-        AttributeParser, Block, BlockIndex, Host, Parser, Run, SpecialAttribute,
-        ThunkContext, Value, World,
+        AttributeParser, Block, Host, Parser, Run, SpecialAttribute, ThunkContext, Value, World, HostEditor,
     },
-    project::{default_parser, default_runtime, Operations, Project, default_world},
+    project::{default_parser, default_runtime, default_world, Project},
     runtime::Runtime,
-    state::{AttributeGraph, AttributeIndex},
 };
-use lifec_poem::{WebApp, RoutePlugin};
-use logos::Logos;
-use poem::{
-    get, handler, post, put,
-    web::{Data, Query},
-    EndpointExt, Request, Response, Route,
-};
-use serde::Deserialize;
-use specs::{WorldExt, Join};
-use std::{collections::HashMap, sync::Arc};
+use lifec_poem::{RoutePlugin, WebApp};
+use poem::{Route, RouteMethod};
+use specs::{Join, WorldExt};
+use std::sync::Arc;
 use tracing::{event, Level};
 
 use crate::{
@@ -28,83 +19,22 @@ use crate::{
 mod proxy_target;
 pub use proxy_target::ProxyTarget;
 
-mod methods;
-use methods::Methods;
-
-mod resources;
-use resources::Resources;
-
-mod blobs;
-use blobs::blob_chunk_upload_api;
-use blobs::blob_download_api;
-use blobs::blob_upload_api;
-
 mod manifests;
-use manifests::manifests_api;
-
-mod tags;
-use tags::tags_api;
-
-mod resolve;
-pub use resolve::Manifests;
+pub use manifests::Manifests;
 
 /// Struct for creating a customizable registry proxy,
 ///
-/// # Customizable registry proxy
-///
-/// This special attribute enables describing a customizable registry proxy.
-/// Underneath the hood, this enables the `.runtime` attribute so that plugin
-/// declarations can be assigned an entity/event. Next this attribute adds 3
-/// custom attributes `manifests`, `blobs`, `tags` which represent the 3 core
-/// resources the OCI distribution api hosts. Methods for each resource can be
-/// customized with a sequence of plugin calls. Since these calls aren't part
-/// of the normal event runtime flow, they are executed with the host.execute(..)
-/// extension method instead.
-///
-/// ## Example proxy definition
-///
-/// ```md
-/// <``` start proxy>
-/// # Proxy setup
-/// + .proxy                  localhost:8567
-/// ## Resolve manifests and artifacts
-/// - This example shows how the proxy can be configuired to make discover calls,
-/// - When an image manifest is being resolved, the proxy will also call discover on artifacts
-///
-/// : .manifests head, get
-/// :   .login                  access_token
-/// :   .authn                  oauth2
-/// :   .resolve                application/vnd.oci.image.manifest.v1+json
-/// :   .discover               dadi.image.v1
-/// :   .discover               notary.signature.v1
-///
-/// ## Teleport and dispatch a convert operation if teleport isn't available
-/// :   .teleport               overlaybd
-/// :   .converter              convert overlaybd
-///
-/// ## Validate signatures, or create a signature if it doesn't exist
-/// :   .notary
-/// :   .reject_if_missing
-/// :   .sign_if_missing
-///
-/// ## Download blobs
-/// : .blobs head, get
-/// : .login                  login.pfx
-/// : .authn                  cert
-/// : .pull
-/// <```>  
-/// ```
 #[derive(Default)]
 pub struct RegistryProxy {
     host: Arc<Host>,
+    context: ThunkContext,
 }
 
 impl RegistryProxy {
-    /// Fails in a way that the runtime will fallback to the upstream server
-    pub fn soft_fail() -> Response {
-        Response::builder()
-            .status(StatusCode::SERVICE_UNAVAILABLE)
-            .finish()
+    /// Returns the host,
+    /// 
+    pub fn host(&self) -> Arc<Host> {
+        self.host.clone()
     }
 }
 
@@ -165,42 +95,28 @@ impl WebApp for RegistryProxy {
     fn routes(&mut self) -> poem::Route {
         let mut route = Route::default();
 
+        let mut manifest_route = None::<RouteMethod>;
         for manifest in self.host.world().read_component::<Manifests>().join() {
+        
             if manifest.can_route() {
                 let mut manifest = manifest.clone();
                 manifest.set_host(self.host.clone());
+                manifest.set_context(self.context.clone());
 
-
-                route = route.nest("/v2", manifest.route());
+                if let Some(m) = manifest_route.take() {
+                    manifest_route = Some(manifest.route(Some(m)));
+                } else {
+                    manifest_route = Some(manifest.route(None));
+                }
             }
         }
+        let path = "/:repo<[a-zA-Z0-9/_-]+(?:manifests)>/:reference";
+        if let Some(manifest_route) = manifest_route.take() {
+            route = route.at(path, manifest_route);
+        }
 
-        route
+        Route::default().nest("/v2", route)
     }
-}
-
-#[derive(Deserialize)]
-struct IndexParams {
-    ns: Option<String>,
-}
-#[handler]
-async fn index(
-    request: &Request,
-    Query(IndexParams { ns }): Query<IndexParams>,
-    context: Data<&ThunkContext>,
-    host: Data<&Host>,
-) -> Response {
-    event!(Level::DEBUG, "Got /v2 request");
-    event!(Level::TRACE, "{:#?}", request);
-
-    let mut input = context.clone();
-
-    if let Some(ns) = ns {
-        input.state_mut().with_symbol("ns", &ns);
-    }
-
-    // TODO Dump proxy state here
-    todo!()
 }
 
 impl From<ThunkContext> for RegistryProxy {
@@ -211,7 +127,7 @@ impl From<ThunkContext> for RegistryProxy {
             .get_tenant()
             .expect("should have tenant")
             .to_string();
-        
+
         let mut host = Host::load_workspace::<RegistryProxy>(
             None,
             &registry_host,
@@ -221,122 +137,21 @@ impl From<ThunkContext> for RegistryProxy {
         );
         host.prepare::<RegistryProxy>();
 
-        Self {
+        let proxy = Self {
             host: Arc::new(host),
-        }
-    }
-}
+            context: context.clone(),
+        };
 
-impl RegistryProxy {
-    /// Handles executing the proxy sequence
-    ///
-    pub async fn handle(
-        host: &Host,
-        resource: impl AsRef<str>,
-        method: impl AsRef<str>,
-        input: &ThunkContext,
-    ) -> Response {
-        let resource = resource.as_ref();
-        let method = method.as_ref();
+        // if context.enable_guest(proxy.host.clone()) {
+        //     event!(Level::DEBUG, "Guest enabled for proxy");
+        // }
 
-        let mut operations = host.world().system_data::<Operations>();
-        let mut operation = operations
-            .execute_operation(
-                format!("{resource}.{method}"),
-                input.find_symbol("tag"),
-                Some(input),
-            )
-            .expect("should have started an operation");
-
-        let (_, rx) = tokio::sync::oneshot::channel();
-
-        match operation.task(rx).await {
-            Some(result) => RegistryProxy::into_response(&result),
-            None => {
-                event!(Level::ERROR, "Error handling call sequence");
-                RegistryProxy::soft_fail()
-            }
-        }
-    }
-
-    pub fn into_response(context: &ThunkContext) -> Response {
-        if let (Some(location), Some(301 | 307 | 308)) = (
-            context.find_symbol("location"),
-            context.find_int("status_code"),
-        ) {
-            let content_type = context
-                .search()
-                .find_symbol("content-type")
-                .expect("A content type should've been provided");
-            let digest = context
-                .search()
-                .find_symbol("digest")
-                .expect("A digest should've been provided");
-
-            Response::builder()
-                .status(StatusCode::MOVED_PERMANENTLY)
-                .header("location", location)
-                .header("docker-content-digest", digest)
-                .header("content-type", content_type)
-                .finish()
-        } else if let Some(body) = context.state().find_binary("body") {
-            let content_type = context
-                .search()
-                .find_symbol("content-type")
-                .expect("A content type should've been provided");
-            let digest = context
-                .search()
-                .find_symbol("digest")
-                .expect("A digest should've been provided");
-
-            let mut response = Response::builder()
-                .status(StatusCode::OK)
-                .content_type(content_type)
-                .header("Docker-Content-Digest", digest);
-
-            if let Some(location) = context.search().find_symbol("location") {
-                response = response.header("Location", location);
-            }
-
-            response.body(body)
-        } else {
-            Response::builder()
-                .status(StatusCode::SERVICE_UNAVAILABLE)
-                .finish()
-        }
-    }
-
-    /// Extracts route definitions for the proxy and calls on_route for each route found,
-    ///
-    pub fn extract_routes(block_index: &BlockIndex) -> Vec<AttributeGraph> {
-        let mut graphs = vec![];
-        let graph = AttributeGraph::new(block_index.clone());
-
-        if let Some(proxy_entity) = graph.find_int("proxy_entity") {
-            let original = graph.entity_id();
-            let proxy_entity = graph
-                .scope(proxy_entity as u32)
-                .expect("proxy entity should have been placed in the child properties");
-
-            for route_value in proxy_entity.find_values("route") {
-                match route_value {
-                    Value::Int(id) if id as u32 != original => {
-                        let graph = graph.scope(id as u32).expect("should be a route");
-                        graphs.push(graph);
-                    }
-                    _ => continue,
-                }
-            }
-
-            let graph = graph.unscope();
-            graphs.push(graph);
-        }
-
-        graphs
+        proxy
     }
 }
 
 mod tests {
+
     #[test]
     #[tracing_test::traced_test]
     fn test_proxy_parsing() {

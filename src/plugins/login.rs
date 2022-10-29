@@ -33,26 +33,26 @@ impl Plugin for Login {
             let mut tc = context.clone();
             async {      
                 event!(Level::DEBUG, "Starting registry login");
-                if let Some(token_src) = tc.state().find_symbol("file_src") {
+                if let Some(token_src) = tc.state().find_symbol("login") {
                     let token_src = &token_src;
-                    event!(Level::DEBUG, "Found file_src for token at {token_src}");
+                    event!(Level::DEBUG, "login method: {token_src}");
                     let user = tc
                         .state()
-                        .find_symbol("user")
+                        .find_symbol("REGISTRY_USER")
                         .unwrap_or("00000000-0000-0000-0000-000000000000".to_string());
                     match tokio::fs::read_to_string(token_src).await {
                         Ok(token) => {
                             event!(Level::DEBUG, "Writing credentials to context");
                             tc.state_mut()
-                                .with_text("user", user)
-                                .with_text("token", token.trim());
+                                .with_symbol("REGISTRY_USER", user)
+                                .with_symbol("REGISTRY_TOKEN", token.trim());
                         }
                         Err(err) => {
                             event!(Level::ERROR, "Issue reading {token_src} -- {err}");
                         }
                     }
                 } else {
-                    event!(Level::WARN, "Missing file_src property");
+                    event!(Level::WARN, "Missing login property");
                 }
 
                 tc.copy_previous();
@@ -66,9 +66,8 @@ impl Plugin for Login {
 impl BlockObject for Login {
     fn query(&self) -> BlockProperties {
         BlockProperties::default()
-            .require("file_src")
             .require("login")
-            .optional("user")
+            .optional("REGISTRY_USER")
     }
 
     fn parser(&self) -> Option<CustomAttribute> {

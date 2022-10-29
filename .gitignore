@@ -17,7 +17,9 @@ Cargo.lock
 
 .out/
 access_token
+admin_pass
 .world
 .work
 .vscode
 login-acr.sh
+login-acr-admin.sh
