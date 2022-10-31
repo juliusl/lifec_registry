@@ -7,11 +7,6 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : app_host              .symbol         localhost:8567
 : teleport              .symbol         overlaybd
 : skip_hosts_dir_check  .false
-
-# Debug config
-+ debug .config         start.mirror
-: .branch
-: skip_hosts_dir_check  .true
 ```
 
 # Resolve manifest handler (/v2/../manifests/..)
@@ -20,12 +15,12 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 - Using the resolved digest, we call the referrer's api to `.discover` links to streamable formats
 
 ```
-+ .operation        manifests.resolve
-: .login            access_token
-: .authn            oauth2
-: .resolve          application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json, */*     
-: .discover         teleport.link.v1
-: .teleport         
++ .operation    manifests.resolve
+: .login        access_token
+: .authn    
+: .request
+: .resolve
+# : .discover     teleport.link.v1
 
 ## Example of a "manual" teleport
 - This configures the handler to swap a specific digest
@@ -38,8 +33,8 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 ```
 + .operation      blobs.download
 : .login          access_token
-: .authn          oauth2
-: .continue      
+: .authn            
+: .request          
 ```
 "#;
 
@@ -68,9 +63,9 @@ pub static MIRROR_ENGINE_TEMPLATE: &'static str = r#"
 
 ``` install
 + .runtime
-: .login-acr        
+: .login_acr        
 : .admin            
-: .login-overlaybd  
+: .login_overlaybd  
 : .registry         
 ```
 
@@ -83,16 +78,14 @@ pub static MIRROR_ENGINE_TEMPLATE: &'static str = r#"
 # : skip_hosts_dir_check .true
 
 + .runtime
-: .login-acr    
+: .login_acr    
 : .install      access_token
-: .mirror       {registry_name}.{registry_host}
+: .mirror    
 : .host         localhost:8578, resolve, pull
 
-# Proxy settings
 + .proxy        localhost:8578
 : .manifests    
-: .get
-: .head
-
-: .blobs        get
+: .get          manifests.resolve
+: .blobs
+: .get          blobs.download
 "#;

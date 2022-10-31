@@ -8,7 +8,7 @@ pub struct LoginNydus;
 
 impl Plugin for LoginOverlayBD {
     fn symbol() -> &'static str {
-        "login-nydus"
+        "login_nydus"
     }
 
     fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {

@@ -11,7 +11,7 @@ pub struct LoginOverlayBD;
 
 impl Plugin for LoginOverlayBD {
     fn symbol() -> &'static str {
-        "login-overlaybd"
+        "login_overlaybd"
     }
 
     fn call(context: &mut ThunkContext) -> Option<AsyncContext> {

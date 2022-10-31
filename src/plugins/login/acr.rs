@@ -17,8 +17,8 @@ impl LoginACR {
     fn login_access_token(registry_name: impl AsRef<str>, tc: &mut ThunkContext) -> AsyncContext {
         tc.state_mut()
             .with_symbol("process", "sh login-acr.sh")
-            .with_symbol("env", "REGISTRY_NAME")
-            .with_symbol("REGISTRY_NAME", registry_name.as_ref());
+            .with_symbol("env", "REGISTRY_TENANT")
+            .with_symbol("REGISTRY_TENANT", registry_name.as_ref());
             
         Process::call(tc).expect("Should start")
     }
@@ -26,8 +26,8 @@ impl LoginACR {
     fn login_admin(registry_name: impl AsRef<str>, tc: &mut ThunkContext) -> AsyncContext {
         tc.state_mut()
             .with_symbol("process", "sh login-acr-admin.sh")
-            .with_symbol("env", "REGISTRY_NAME")
-            .with_symbol("REGISTRY_NAME", registry_name.as_ref());
+            .with_symbol("env", "REGISTRY_TENANT")
+            .with_symbol("REGISTRY_TENANT", registry_name.as_ref());
             
         Process::call(tc).expect("Should start")
     }

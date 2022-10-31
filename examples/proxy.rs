@@ -29,9 +29,15 @@ fn main() {
     : .login        access_token
     : .authn    
     : .request
-    : .resolve
-    : .discover     teleport.link.v1
+    # : .resolve
+    # : .discover     teleport.link.v1
     # : .teleport     overlaybd
+
+    + .operation download.test
+    : .install      access_token
+    : .login        access_token
+    : .authn    
+    : .request
 
     # : .process sh test.sh
     # : .env REGISTRY_HOST
@@ -52,6 +58,16 @@ fn main() {
     : .flag -X GET
     : .flag -H Accept:application/vnd.docker.distribution.manifest.v2+json
     : .redirect output.resp
+    ```
+
+    # Test operation to call the mirror to download blob
+    ```
+    + .operation test-download
+    : .process curl
+    : .arg localhost:8578/v2/redis/blobs/sha256:afb6ec6fdc1c3ba04f7a56db32c5ff5ff38962dc4cd0ffdef5beaa0ce2eb77e2?ns=obddemo2.azurecr.io
+    : .arg -v
+    : .flag -H Accept:application/vnd.docker.image.rootfs.diff.tar.gzip
+    : .flag -o layer.tar.gzip
     ```
     "#,
     );
@@ -82,6 +98,7 @@ fn main() {
         ```
 
         ``` start
+
         + .runtime
         : .mirror    
         : .host         localhost:8578, resolve, pull
@@ -89,6 +106,8 @@ fn main() {
         + .proxy        localhost:8578
         : .manifests    
         : .get          resolve.test
+        : .blobs
+        : .get          download.test
         ```
 
         ``` recover

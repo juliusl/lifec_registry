@@ -1,6 +1,6 @@
 use lifec::{
     prelude::{
-        AttributeParser, Block, Host, Parser, Run, SpecialAttribute, ThunkContext, Value, World, HostEditor,
+        AttributeParser, Block, Host, Parser, Run, SpecialAttribute, ThunkContext, Value, World,
     },
     project::{default_parser, default_runtime, default_world, Project},
     runtime::Runtime,
@@ -9,7 +9,6 @@ use lifec_poem::{RoutePlugin, WebApp};
 use poem::{Route, RouteMethod};
 use specs::{Join, WorldExt};
 use std::sync::Arc;
-use tracing::{event, Level};
 
 use crate::{
     Artifact, Authenticate, Continue, Discover, FormatOverlayBD, Import, Login, LoginACR,
@@ -21,6 +20,9 @@ pub use proxy_target::ProxyTarget;
 
 mod manifests;
 pub use manifests::Manifests;
+
+mod blobs;
+pub use blobs::Blobs;
 
 /// Struct for creating a customizable registry proxy,
 ///
@@ -51,6 +53,7 @@ impl SpecialAttribute for RegistryProxy {
         parser.define("app_host", Value::Symbol(content.as_ref().to_string()));
 
         parser.with_custom::<Manifests>();
+        parser.with_custom::<Blobs>();
     }
 }
 
@@ -83,6 +86,7 @@ impl Project for RegistryProxy {
         let mut world = default_world();
         world.insert(Self::runtime());
         world.register::<Manifests>();
+        world.register::<Blobs>();
         world
     }
 }
@@ -113,6 +117,26 @@ impl WebApp for RegistryProxy {
         let path = "/:repo<[a-zA-Z0-9/_-]+(?:manifests)>/:reference";
         if let Some(manifest_route) = manifest_route.take() {
             route = route.at(path, manifest_route);
+        }
+
+        let mut blob_route = None::<RouteMethod>;
+        for blob in self.host.world().read_component::<Blobs>().join() {
+        
+            if blob.can_route() {
+                let mut blob = blob.clone();
+                blob.set_host(self.host.clone());
+                blob.set_context(self.context.clone());
+
+                if let Some(m) = blob_route.take() {
+                    blob_route = Some(blob.route(Some(m)));
+                } else {
+                    blob_route = Some(blob.route(None));
+                }
+            }
+        }
+        let path = "/:repo<[a-zA-Z0-9/_-]+(?:blobs)>/:reference";
+        if let Some(blob_route) = blob_route.take() {
+            route = route.at(path, blob_route);
         }
 
         Route::default().nest("/v2", route)

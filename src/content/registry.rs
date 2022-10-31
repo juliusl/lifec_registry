@@ -1,4 +1,4 @@
-use hyper::{Body, StatusCode};
+use hyper::{Body, StatusCode, Uri};
 use lifec::prelude::{NodeCommand, SpecialAttribute, ThunkContext};
 use lifec::project::Workspace;
 use lifec::state::AttributeIndex;
@@ -54,17 +54,38 @@ impl<'a> Registry<'a> {
             .get(&operation_name)
             .expect("should have an operation entity");
 
-        let context = self.prepare_registry_context::<P>(request, namespace, repo, reference, context);
+        let context =
+            self.prepare_registry_context::<P>(request, namespace, repo, reference, context);
 
-        if let Some(yielding) = context.dispatch_node_command(NodeCommand::Spawn(*operation))
-        {
+        if let Some(yielding) = context.dispatch_node_command(NodeCommand::Spawn(*operation)) {
             match yielding.await {
                 Ok(mut context) => {
                     if let Some(body) = body {
                         context.cache_body(body);
                     }
 
-                    P::response(&mut context)
+                    let response = P::response(&mut context);
+
+                    if response.status().is_redirection() {
+                        if let Some(api) = response
+                            .headers()
+                            .get("location")
+                            .and_then(|api| api.to_str().ok())
+                            .and_then(|api| api.parse::<Uri>().ok())
+                        {
+                            event!(Level::DEBUG, "Handling redirect, {api}");
+                            let client = context.client().expect("should have client");
+                            match client.get(api).await {
+                                Ok(resp) => resp.into(),
+                                Err(err) => panic!("error following redirect {err}"),
+                            }
+                        } else {
+                            event!(Level::DEBUG, "No location header");
+                            response.into()
+                        }
+                    } else {
+                        response
+                    }
                 }
                 Err(err) => {
                     event!(
@@ -130,9 +151,15 @@ impl<'a> Registry<'a> {
                 "WORK_DIR",
                 workspace.work_dir().to_str().expect("should be a string"),
             )
-            .with_symbol("api", format!("https://{namespace}/v2/{repo}/{resource}/{reference}"));
+            .with_symbol(
+                "api",
+                format!("https://{namespace}/v2/{repo}/{resource}/{reference}"),
+            );
 
-        for (name, value) in headers.iter().filter(|(n, _)| n.to_string() != "host" && n.to_string() != "user-agent") {
+        for (name, value) in headers
+            .iter()
+            .filter(|(n, _)| n.to_string() != "host" && n.to_string() != "user-agent")
+        {
             context
                 .state_mut()
                 .with_symbol("header", name.to_string())
