@@ -7,9 +7,10 @@ pub use init::Init;
 use lifec::prelude::{
     AttributeGraph, Block, Engine, Executor, Host, Inspector, SecureClient, ThunkContext, WorldExt,
 };
+use lifec_registry::RegistryProxy;
 use tracing::{event, Level};
 
-use crate::{MirrorSettings, ACR};
+use crate::MirrorSettings;
 
 /// Struct for cli config for making images teleportable
 ///
@@ -65,7 +66,7 @@ impl Commands {
         while let Ok(Some(dir_entry)) = read_dir.next_entry().await {
             if dir_entry.file_type().await.unwrap().is_dir() {
                 let format_runmd = dir_entry.path().join(".runmd");
-                let mut host = Host::open::<ACR>(format_runmd)
+                let mut host = Host::open::<RegistryProxy>(format_runmd)
                     .await
                     .expect("should be a host");
 
@@ -91,7 +92,7 @@ impl Commands {
         while let Ok(Some(dir_entry)) = read_dir.next_entry().await {
             if dir_entry.file_type().await.unwrap().is_dir() {
                 let format_runmd = dir_entry.path().join(".runmd");
-                let mut host = Host::open::<ACR>(format_runmd)
+                let mut host = Host::open::<RegistryProxy>(format_runmd)
                     .await
                     .expect("should be a host");
                 host.world_mut().insert(MirrorSettings {

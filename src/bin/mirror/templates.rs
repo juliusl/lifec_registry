@@ -88,4 +88,11 @@ pub static MIRROR_ENGINE_TEMPLATE: &'static str = r#"
 : .get          manifests.resolve
 : .blobs
 : .get          blobs.download
+```
+
+``` recover
++ .runtime
+: .println Waiting for 10 secs before repeating
+: .timer 10 s
+```
 "#;

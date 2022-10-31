@@ -2,10 +2,6 @@ use clap::{Args, Parser, Subcommand};
 use lifec::host::HostSettings;
 use lifec::prelude::*;
 use lifec_registry::RegistryProxy;
-use lifec_registry::{
-    Artifact, Authenticate, Continue, Discover, FormatOverlayBD, Import, Login, LoginACR,
-    LoginOverlayBD, Mirror, Resolve, Teleport,
-};
 use serde::Serialize;
 use std::path::PathBuf;
 use tracing::event;
@@ -25,17 +21,16 @@ use mirror::default_mirror_root;
 async fn main() {
     let cli = ACR::parse();
     tracing_subscriber::fmt::Subscriber::builder()
-        .with_env_filter(if !cli.debug {
-            EnvFilter::builder()
-                .with_default_directive("acr=info".parse().expect("should parse"))
-                .from_env()
-                .expect("should work")
-        } else {
-            EnvFilter::builder()
-                .with_default_directive("acr=debug".parse().expect("should parse"))
-                .from_env()
-                .expect("should work")
-        })
+    .with_env_filter(if !cli.debug {
+        EnvFilter::builder()
+            .from_env()
+            .expect("should work")
+    } else {
+        EnvFilter::builder()
+            .with_default_directive("lifec_registry=debug".parse().expect("should parse"))
+            .from_env()
+            .expect("should work")
+    })
         .compact()
         .init();
 
@@ -69,7 +64,7 @@ async fn main() {
 
             match command {
                 Commands::Open => {
-                    let host = Host::load_workspace::<ACR>(
+                    let mut host = Host::load_workspace::<RegistryProxy>(
                         None,
                         registry_host,
                         registry,
@@ -77,8 +72,10 @@ async fn main() {
                         None::<String>,
                     );
 
+                    host.enable_listener::<ACR>();
+
                     tokio::task::block_in_place(|| {
-                        host.open_runtime_editor::<ACR>();
+                        host.open_runtime_editor::<RegistryProxy>();
                     })
                 }
                 Commands::Mirror(mut host_settings) => {
@@ -86,11 +83,7 @@ async fn main() {
                         host_settings.set_workspace(format!("{registry}.{registry_host}"));
                     }
 
-                    if let Some(mut host) = host_settings.create_host::<ACR>().await.take() {
-                        host.start_with::<ACR>("mirror");
-                    } else {
-                        panic!("Could not create/start host");
-                    }
+                    host_settings.handle::<RegistryProxy>().await;
                 }
                 Commands::Teleport(teleport) => match teleport {
                     TeleportSettings {
@@ -173,7 +166,7 @@ async fn main() {
                     );
                 }
                 Commands::Dump => {
-                    let mut host = Host::open::<ACR>(mirror_runmd)
+                    let mut host = Host::open::<RegistryProxy>(mirror_runmd)
                         .await
                         .expect("Should be able to open runmd file");
 
@@ -277,30 +270,21 @@ struct MirrorSettings {
     artifact_type: Option<String>,
 }
 
-impl Project for ACR {
-    fn interpret(world: &World, block: &Block) {
-        Mirror::default().interpret(world, block);
+impl Listener for ACR {
+    fn create(_: &World) -> Self {
+        ACR::default()
     }
 
-    fn parser() -> lifec::prelude::Parser {
-        default_parser(Self::world()).with_special_attr::<RegistryProxy>()
-    }
+    fn on_runmd(&mut self, _: &RunmdFile) {}
 
-    fn runtime() -> Runtime {
-        let mut runtime = default_runtime();
-        runtime.install_with_custom::<Run<Self>>("");
-        runtime.install_with_custom::<Authenticate>("");
-        runtime.install_with_custom::<LoginACR>("");
-        runtime.install_with_custom::<Mirror>("");
-        runtime.install_with_custom::<Login>("");
-        runtime.install_with_custom::<Resolve>("");
-        runtime.install_with_custom::<Import>("");
-        runtime.install_with_custom::<Discover>("");
-        runtime.install_with_custom::<Teleport>("");
-        runtime.install_with_custom::<Artifact>("");
-        runtime.install_with_custom::<Continue>("");
-        runtime.install_with_custom::<LoginOverlayBD>("");
-        runtime.install_with_custom::<FormatOverlayBD>("");
-        runtime
-    }
+    fn on_status_update(&mut self, _: &StatusUpdate) {}
+
+    fn on_operation(&mut self, _: Operation) { }
+
+    fn on_error_context(&mut self, _: &ErrorContext) {}
+
+    fn on_completed_event(&mut self, _: &Entity) {}
+
+    fn on_start_command(&mut self, _: &Start) {}
 }
+

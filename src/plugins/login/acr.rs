@@ -1,5 +1,5 @@
 use lifec::prelude::{AttributeParser, BlockProperties, CustomAttribute};
-use lifec::prelude::{BlockObject, Value, ThunkContext, AsyncContext, AttributeIndex, Plugin, Resources, Process};
+use lifec::prelude::{BlockObject, ThunkContext, AsyncContext, AttributeIndex, Plugin, Resources, Process};
 use rust_embed::RustEmbed;
 use tokio::select;
 use tracing::event;
