@@ -2,8 +2,7 @@ use lifec::prelude::{
     AttributeIndex, BlockObject, BlockProperties, Component, CustomAttribute, DenseVecStorage,
     Plugin, ThunkContext,
 };
-
-use crate::ProxyTarget;
+use tracing::{event, Level};
 
 /// Plugin that mirrors image resolution api's, based on OCI spec endpoints,
 ///
@@ -25,22 +24,20 @@ impl Plugin for Resolve {
     }
 
     fn description() -> &'static str {
-        "Resolves an image manifest from the registry. If an artifact_type text attribute exists, will query the referrers api and attach the result"
-    }
-
-    fn caveats() -> &'static str {
-        "This makes the original call to resolve the image from the desired address, then it passes the response to the mirror proxy implementation"
+        "Resolves a digest from a cached response and saves it to state"
     }
 
     fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+        let digest = context.cached_response().and_then(|c| c.headers().get("docker-content-digest")).cloned();
+        
         context.task(|_| {
             let mut tc = context.clone();
             async move {
-                if let Some(proxy_target) = ProxyTarget::try_from(&tc).ok() {
-                    if let Some((manifests, body)) = proxy_target.resolve().await {
-                        manifests.copy_to_context(&mut tc);
-                        tc.state_mut().with_binary("body", body);
-                    }
+                if let Some(digest) = digest {
+                    event!(Level::DEBUG, "Found digest {:?}", digest); 
+                    tc.state_mut().with_symbol("digest", digest.to_str().expect("should be a string"));
+                } else {
+                    event!(Level::ERROR, "Did not find digest from cached response"); 
                 }
 
                 tc.copy_previous();
@@ -53,14 +50,6 @@ impl Plugin for Resolve {
 impl BlockObject for Resolve {
     fn query(&self) -> BlockProperties {
         BlockProperties::default()
-            .require("resolve")
-            .require("ns")
-            .require("repo")
-            .require("reference")
-            .require("accept")
-            .optional("access_token")
-            .optional("digest")
-            .optional("protocol")
     }
 
     fn parser(&self) -> Option<CustomAttribute> {

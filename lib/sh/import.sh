@@ -1,7 +1,7 @@
 #!/bin/sh
 
 user="$REGISTRY_USER:$REGISTRY_TOKEN"
-dest="$REGISTRY_NAME.$REGISTRY_HOST/$REPO:$REFERENCE"
+dest="$REGISTRY_TENANT.$REGISTRY_HOST/$REPO:$REFERENCE"
 
 bin/ctr images pull --user "$user" "$SOURCE"
 bin/ctr images tag  "$dest"

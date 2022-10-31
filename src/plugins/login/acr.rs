@@ -55,7 +55,6 @@ impl Plugin for LoginACR {
                     .await;
 
                 let registry = tc.workspace().expect("should have a workspace").get_tenant().expect("should have a tenant").clone();
-                let registry_host = tc.workspace().expect("should have a workspace").get_host().clone();
                 let admin_enabled = tc.state().find_bool("admin").unwrap_or_default();
                 
                 let (task, cancel) = if admin_enabled {
@@ -67,27 +66,7 @@ impl Plugin for LoginACR {
                 select! {
                     tc = task => {
                         event!(Level::DEBUG, "Finished login to acr - {}", registry);
-                        if let Some(mut tc) = tc.ok() {
-                            if admin_enabled {
-                                let registry = format!("{registry}.{registry_host}");
-                                let username = format!("{registry}.username");
-                                tc.state_mut()
-                                    .with_symbol(username, &registry)
-                                    .with_symbol(
-                                        format!("{registry}.{registry_host}"), 
-                                        tokio::fs::read_to_string("admin_pass").await.expect("a file should have been created").trim().trim_matches('"')
-                                );
-                            } else {
-                                let registry = format!("{registry}.{registry_host}");
-                                let username = format!("{registry}.username");
-                                tc.state_mut()
-                                    .with_symbol(username, "00000000-0000-0000-0000-000000000000")
-                                    .with_symbol(
-                                        registry, 
-                                        tokio::fs::read_to_string("access_token").await.expect("a file should have been created").trim()
-                                );
-                            }
-
+                        if let Some(tc) = tc.ok() {
                             Some(tc)
                         } else {
                             None

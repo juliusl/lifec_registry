@@ -18,15 +18,21 @@ fn main() {
     let mut workspace = Workspace::new("azurecr.io", None).tenant("obddemo2");
     workspace.set_root_runmd(
         r#"
+    
+    # Implementation that will be executed when proxying the request
     ```
     + .config start.mirror
     : skip_hosts_dir_check .true
 
     + .operation resolve.test
-    : .install  access_token
-    : .login    access_token
+    : .install      access_token
+    : .login        access_token
     : .authn    
     : .request
+    # : .resolve
+    # : .discover     teleport.link.v1
+    # : .teleport     overlaybd
+
     # : .process sh test.sh
     # : .env REGISTRY_HOST
     # : .env REGISTRY_USER
@@ -35,11 +41,15 @@ fn main() {
     # : .env REGISTRY_REPO
     # : .env REFERENCE
     # : .env WORK_DIR
+    ```
     
+    # Test operation to call the mirror
+    ```
     + .operation test
     : .process curl
     : .arg localhost:8578/v2/redis/manifests/6.0.2?ns=obddemo2.azurecr.io
     : .arg -v
+    : .flag -X GET
     : .flag -H Accept:application/vnd.docker.distribution.manifest.v2+json
     : .redirect output.resp
     ```
@@ -83,7 +93,7 @@ fn main() {
 
         ``` recover
         + .runtime
-        : .println Waiting fot 10 secs before repeating
+        : .println Waiting for 10 secs before repeating
         : .timer 10 s
         ```
         "#,
