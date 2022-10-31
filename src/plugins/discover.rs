@@ -1,4 +1,4 @@
-use lifec::prelude::{AsyncContext, BlockProperties, CustomAttribute, ThunkContext};
+use lifec::prelude::{AsyncContext, BlockProperties, CustomAttribute, Request, ThunkContext};
 use lifec::prelude::{AttributeIndex, BlockObject, Plugin};
 use tokio::select;
 use tracing::event;
@@ -26,7 +26,7 @@ impl Plugin for Discover {
                     tc.state().find_symbol("discover"),
                     tc.search().find_symbol("digest"),
                     tc.search().find_symbol("REGISTRY_NAMESPACE"),
-                    tc.search().find_symbol("REGISTRY_REPO")
+                    tc.search().find_symbol("REGISTRY_REPO"),
                 ) {
                     event!(Level::DEBUG, "Discovering {artifact_type}");
                     let api = tc
@@ -45,29 +45,15 @@ impl Plugin for Discover {
 
                     tc.state_mut().replace_symbol("request", referrers_api);
 
-                    if let Some((task, cancel)) = lifec::plugins::Request::call(&mut tc) {
-                        select! {
-                            result = task => {
-                                match result {
-                                    Ok(mut context) => {
-                                        context.copy_previous();
-                                        return Some(context);
-                                    },
-                                    Err(err) => {
-                                        event!(Level::ERROR, "Error calling plugin, {err}");
-                                    },
-                                }
-                            },
-                            _ = cancel_source => {
-                                cancel.send(()).ok();
-                                event!(Level::WARN, "Cancelling request");
-                            }
-                        }
-                    }
+                    lifec::plugins::await_plugin::<Request>(cancel_source, &mut tc, |mut result| {
+                        result.copy_previous();
+                        Some(result)
+                    })
+                    .await
+                } else {
+                    tc.copy_previous();
+                    Some(tc)
                 }
-
-                tc.copy_previous();
-                Some(tc)
             }
         })
     }
