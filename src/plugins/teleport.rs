@@ -9,11 +9,11 @@ use tracing::Level;
 use crate::content::{ArtifactManifest, Descriptor, ImageManifest, ReferrersList};
 use crate::ProxyTarget;
 
-mod format_overlaybd;
-pub use format_overlaybd::FormatOverlayBD;
+mod overlaybd;
+pub use overlaybd::FormatOverlayBD;
 
-mod format_nydus;
-pub use format_nydus::FormatNydus;
+mod nydus;
+pub use nydus::FormatNydus;
 
 /// Plugin to handle swapping out the manifest resolution to a teleportable image
 ///

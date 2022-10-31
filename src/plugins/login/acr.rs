@@ -14,6 +14,8 @@ use tracing::Level;
 pub struct LoginACR;
 
 impl LoginACR {
+    /// Fetch an ACR refresh token (Named access_token for historical reasons),
+    /// 
     fn login_access_token(registry_name: impl AsRef<str>, tc: &mut ThunkContext) -> AsyncContext {
         tc.state_mut()
             .with_symbol("process", "sh login-acr.sh")
@@ -23,6 +25,8 @@ impl LoginACR {
         Process::call(tc).expect("Should start")
     }
 
+    /// Fetch admin credentials,
+    /// 
     fn login_admin(registry_name: impl AsRef<str>, tc: &mut ThunkContext) -> AsyncContext {
         tc.state_mut()
             .with_symbol("process", "sh login-acr-admin.sh")

@@ -18,7 +18,7 @@ impl Plugin for LoginOverlayBD {
         context.task(|_| {
             let tc = context.clone();
             async {
-                if let Some(creds_path) = tc.search().find_symbol("login-overlaybd") {
+                if let Some(creds_path) = tc.search().find_symbol("login_overlaybd") {
                     match tokio::fs::read_to_string(&creds_path).await {
                         Ok(content) => {
                             let mut value =
@@ -79,7 +79,7 @@ impl Plugin for LoginOverlayBD {
 
 impl BlockObject for LoginOverlayBD {
     fn query(&self) -> BlockProperties {
-        BlockProperties::default().require("login-overlaybd")
+        BlockProperties::default().require("login_overlaybd")
     }
 
     fn parser(&self) -> Option<CustomAttribute> {

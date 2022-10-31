@@ -15,7 +15,7 @@ impl Plugin for LoginOverlayBD {
         context.task(|_| {
             let tc = context.clone();
             async {
-                if let Some(creds_path) = tc.search().find_symbol("login-nydus") {
+                if let Some(creds_path) = tc.search().find_symbol("login_nydus") {
                     match tokio::fs::read_to_string(&creds_path).await {
                         Ok(content) => {
                             let mut value =
@@ -76,7 +76,7 @@ impl Plugin for LoginOverlayBD {
 
 impl BlockObject for LoginOverlayBD {
     fn query(&self) -> lifec::BlockProperties {
-        BlockProperties::default().require("login-nydus")
+        BlockProperties::default().require("login_nydus")
     }
 
     fn parser(&self) -> Option<lifec::CustomAttribute> {
