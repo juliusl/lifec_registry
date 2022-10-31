@@ -56,7 +56,7 @@ impl<'a> Registry<'a> {
 
         let context = self.prepare_registry_context::<P>(request, namespace, repo, reference, context);
 
-        if let Some(yielding) = context.dispatch_node_command(NodeCommand::Spawn(*operation, None))
+        if let Some(yielding) = context.dispatch_node_command(NodeCommand::Spawn(*operation))
         {
             match yielding.await {
                 Ok(mut context) => {
