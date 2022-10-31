@@ -257,7 +257,7 @@ impl ProxyTarget {
 
     /// Resolves a referrer's request to a manifest,
     /// 
-    pub async fn resolve_referrers(&self, referrers_request: Request) -> Option<(Manifests, Vec<u8>)> {
+    pub async fn resolve_referrers(&self, _: Request) -> Option<(Manifests, Vec<u8>)> {
 
         None
     }
@@ -724,7 +724,7 @@ impl TryFrom<&ThunkContext> for ProxyTarget {
                                 accept
                             }
                         })
-                    } else if let Some(body) = tc.search().find_binary("body") {
+                    } else if let Some(_) = tc.search().find_binary("body") {
                         let content_type = tc
                             .search()
                             .find_symbol("content-type")
@@ -799,7 +799,7 @@ fn test_object_parser() {
 }
 
 impl From<(&Request, Body)> for ProxyTarget {
-    fn from((request, body): (&Request, Body)) -> Self {
+    fn from((_, _): (&Request, Body)) -> Self {
         todo!()
     }
 }

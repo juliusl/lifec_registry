@@ -1,8 +1,5 @@
-use lifec::prelude::{AsyncContext, BlockProperties, CustomAttribute, Request, ThunkContext};
-use lifec::prelude::{AttributeIndex, BlockObject, Plugin};
-use tokio::select;
-use tracing::event;
-use tracing::Level;
+use lifec::prelude::{AsyncContext, BlockProperties, CustomAttribute, Request, ThunkContext, AttributeIndex, BlockObject, Plugin};
+use tracing::{event, Level};
 
 /// Plugin for calling the referrer's api and adding the result to state,
 ///

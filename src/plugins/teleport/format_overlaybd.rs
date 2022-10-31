@@ -1,7 +1,6 @@
-use lifec::prelude::{AsyncContext, CustomAttribute, ThunkContext};
 use lifec::prelude::{AttributeIndex, BlockObject, BlockProperties, Plugin, Process, Resources};
+use lifec::prelude::{AsyncContext, CustomAttribute, ThunkContext};
 use rust_embed::RustEmbed;
-use tokio::select;
 use tracing::event;
 use tracing::Level;
 
