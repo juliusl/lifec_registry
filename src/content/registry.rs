@@ -132,7 +132,7 @@ impl<'a> Registry<'a> {
             )
             .with_symbol("api", format!("https://{namespace}/v2/{repo}/{resource}/{reference}"));
 
-        for (name, value) in headers {
+        for (name, value) in headers.iter().filter(|(n, _)| n.to_string() != "host" && n.to_string() != "user-agent") {
             context
                 .state_mut()
                 .with_symbol("header", name.to_string())

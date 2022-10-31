@@ -43,7 +43,7 @@ impl Plugin for Authenticate {
                         Ok(auth_header) => {
                             tc.state_mut()
                                 .with_symbol("header", "Authorization")
-                                .with_symbol("Authorization", format!("{:?}", auth_header));
+                                .with_symbol("Authorization", format!("Bearer {}", auth_header.token()));
                         },
                         Err(err) => {
                             event!(Level::ERROR, "Could not parse auth header, {err}");
@@ -51,7 +51,6 @@ impl Plugin for Authenticate {
                     }
 
                     tc.copy_previous();
-
                     Some(tc)
                 } else {
                     event!(Level::ERROR, "Could not authn w/ registry");
@@ -65,6 +64,7 @@ impl Plugin for Authenticate {
 impl BlockObject for Authenticate {
     fn query(&self) -> BlockProperties {
         BlockProperties::default()
+            .require("authn")
             .require("ns")
             .require("api")
             .require("token")
@@ -102,6 +102,7 @@ impl Authenticate {
                     challenge_uri.query().unwrap(),
                     token
                 );
+
                 let req = Request::builder()
                     .uri(challenge_uri)
                     .header("Content-Type", "application/x-www-form-urlencoded")

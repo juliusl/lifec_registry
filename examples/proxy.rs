@@ -1,13 +1,19 @@
 use lifec::{
     prelude::{Editor, Host, Sequencer},
-    project::{Project, RunmdFile, Workspace, Listener},
+    project::{Listener, Project, RunmdFile, Workspace},
 };
-use lifec_registry::{RegistryProxy};
+use lifec_registry::RegistryProxy;
+use tracing_subscriber::EnvFilter;
 
 fn main() {
     tracing_subscriber::fmt::Subscriber::builder()
-    .compact()
-    .init();
+        .with_env_filter(
+            EnvFilter::builder()
+                .from_env()
+                .expect("should work"),
+        )
+        .compact()
+        .init();
 
     let mut workspace = Workspace::new("azurecr.io", None).tenant("obddemo2");
     workspace.set_root_runmd(
@@ -20,9 +26,14 @@ fn main() {
     : .install  access_token
     : .login    access_token
     : .authn    
-    : .println Resolving {REGISTRY_HOST} {REGISTRY_TENANT} {REFERENCE} {REGISTRY_NAMESPACE} {WORK_DIR} {REGISTRY_REPO} {api} {Authorization}
-    : .fmt REGISTRY_HOST, REGISTRY_TENANT, REFERENCE, REGISTRY_NAMESPACE, WORK_DIR, REGISTRY_REPO, api, Authorization
-    : .chaos
+    : .request
+    
+    + .operation test
+    : .process curl
+    : .arg localhost:8578/v2/redis/manifests/6.0.2?ns=obddemo2.azurecr.io
+    : .arg -v
+    : .flag -H Accept:application/vnd.docker.distribution.manifest.v2+json
+    : .redirect output.resp
     ```
     "#,
     );
@@ -41,9 +52,15 @@ fn main() {
         r#"
         ```
         + .engine
+        : .start    setup
         : .start    start
         : .start    recover
         : .loop
+        ```
+
+        ``` setup
+        + .runtime
+        : .login_acr
         ```
 
         ``` start
@@ -92,21 +109,15 @@ impl Listener for Test {
         Test {}
     }
 
-    fn on_runmd(&mut self, _runmd: &RunmdFile) {
-    }
+    fn on_runmd(&mut self, _runmd: &RunmdFile) {}
 
-    fn on_status_update(&mut self, _status_update: &lifec::prelude::StatusUpdate) {
-    }
+    fn on_status_update(&mut self, _status_update: &lifec::prelude::StatusUpdate) {}
 
-    fn on_operation(&mut self, _operation: lifec::prelude::Operation) {
-    }
+    fn on_operation(&mut self, _operation: lifec::prelude::Operation) {}
 
-    fn on_error_context(&mut self, _error: &lifec::prelude::ErrorContext) {
-    }
+    fn on_error_context(&mut self, _error: &lifec::prelude::ErrorContext) {}
 
-    fn on_completed_event(&mut self, _entity: &specs::Entity) {
-    }
+    fn on_completed_event(&mut self, _entity: &specs::Entity) {}
 
-    fn on_start_command(&mut self, _start_command: &lifec::prelude::Start) {
-    }
+    fn on_start_command(&mut self, _start_command: &lifec::prelude::Start) {}
 }

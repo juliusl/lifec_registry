@@ -35,7 +35,7 @@ impl LoginACR {
 
 impl Plugin for LoginACR {
     fn symbol() -> &'static str {
-        "login-acr"
+        "login_acr"
     }
 
     fn description() -> &'static str {
