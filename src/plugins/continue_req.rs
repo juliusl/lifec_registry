@@ -21,7 +21,7 @@ impl Plugin for Continue {
         "Useful if all you require is authn or response inspection"
     }
 
-    fn call(context: &ThunkContext) -> Option<AsyncContext> {
+    fn call(context: &mut ThunkContext) -> Option<AsyncContext> {
         context.task(|_| {
             let mut tc = context.clone();
             async move {

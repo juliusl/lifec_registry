@@ -1,3 +1,4 @@
+use hyper::Body;
 use lifec::prelude::{
     AsyncContext, AttributeIndex, AttributeParser, BlockObject, BlockProperties, CustomAttribute,
     Plugin, ThunkContext, Value,
@@ -25,86 +26,48 @@ impl Plugin for Teleport {
     }
 
     fn description() -> &'static str {
-        "Checks to see the current image being resolved has a streamable format, if so, sets the response for the streamable format instead of the original"
+        "Checks to see if the cached response has a referrer's api response. If so, checks for a teleport link and follows the link to resolve w/ a stremable manifest."
     }
 
     fn caveats() -> &'static str {
-        "Expects that the calling snapshotter is capable of using the streamable format."
+        "If there is no manifest, this plugin will GET the manifest w/ the original resolved digest"
     }
 
-    fn call(context: &ThunkContext) -> Option<AsyncContext> {
+    fn call(context: &mut ThunkContext) -> Option<AsyncContext> {
+        let body = context
+            .take_response()
+            .and_then(|r| Some(r.into_body()))
+            .expect("should have body");
+
         context.task(|_| {
             let mut tc = context.clone();
             async move {
-                if let Some(teleport_format) = tc.search().find_symbol("teleport") {
-                    event!(Level::DEBUG, "Teleport format {teleport_format}");
-
-                    match teleport_format.as_str() {
-                        "nydus" | "overlaybd" => {
-                            if let Some(artifact) = tc.search().find_binary("teleport.link.v1") {
-                                if let Some(response) =
-                                    serde_json::from_slice::<ReferrersList>(artifact.as_slice())
-                                        .ok()
-                                {
-                                    event!(Level::DEBUG, "Got referrer's response");
-                                    if response.referrers.is_empty() {
-                                        event!(Level::DEBUG, "No referrer's found");
-                                    }
-
-                                    // Next we'll need to fetch the referrers
-                                    if let Some(referrer) = response.referrers.first() {
-                                        return Teleport::resolve_teleportable_manifest(
-                                            &tc, referrer,
-                                        )
-                                        .await;
-                                    }
-                                } else {
-                                    event!(Level::ERROR, "Could not parse referrer's response");
-                                }
-                            } else {
-                                event!(Level::DEBUG, "Requires conversion");
+                match hyper::body::to_bytes::<Body>(body).await {
+                    Ok(bytes) => match serde_json::from_slice::<ReferrersList>(&bytes) {
+                        Ok(list) => {
+                            event!(Level::DEBUG, "Got referrer's response");
+                            if list.referrers.is_empty() {
+                                event!(Level::DEBUG, "No referrer's found, Requires link.");
                                 tc.state_mut().with_bool("requires-conversion", true);
+
+                            } else if let Some(referrer) = list.referrers.first() {
+                                return Teleport::resolve_teleportable_manifest(&tc, referrer)
+                                    .await;
                             }
                         }
-                        "manual" => {
-                            if let (Some(from), Some(to)) = (
-                                tc.search().find_symbol("from"),
-                                tc.search().find_symbol("to"),
-                            ) {
-                                if let Some(digest) = tc.search().find_symbol("digest") {
-                                    if digest == from {
-                                        if let Some(mut proxy_target) =
-                                            ProxyTarget::try_from(&tc).ok()
-                                        {
-                                            proxy_target.context.replace_symbol("digest", &to);
-                                            if let Some((manifests, body)) =
-                                                proxy_target.resolve().await
-                                            {
-                                                event!(
-                                                    Level::DEBUG,
-                                                    "Manual teleport mode, swapping {from} -> {to}"
-                                                );
-                                                let mut swap = ThunkContext::default();
-                                                manifests.copy_to_context(&mut swap);
-                                                swap.state_mut().with_binary("body", body);
-                                                return Some(swap);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                        Err(err) => {
+                            event!(Level::ERROR, "Error deserializing referrer's list, {err}");
                         }
-                        _ => {
-                            event!(
-                                Level::ERROR,
-                                "Unrecognized teleport format {teleport_format}"
-                            );
-                        }
+                    },
+                    Err(err) => {
+                        event!(
+                            Level::ERROR,
+                            "Error reading body from cached response, {err}"
+                        );
                     }
                 }
 
                 tc.copy_previous();
-
                 Some(tc)
             }
         })

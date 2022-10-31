@@ -119,7 +119,7 @@ Design of containerd registry mirror feature
 "#
     }
 
-    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+    fn call(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         context.task(|_| {
             let mut tc = context.clone();
             async move {
@@ -134,7 +134,7 @@ Design of containerd registry mirror feature
 
                 let app_host = tc.search().find_symbol("app_host").expect("should have an app host");
 
-                match AppHost::<RegistryProxy>::call(&tc.with_symbol("app_host", app_host)) {
+                match AppHost::<RegistryProxy>::call(&mut tc.with_symbol("app_host", app_host)) {
                     Some((task, _)) => match task.await {
                         Ok(tc) => {
                             event!(Level::INFO, "Exiting");

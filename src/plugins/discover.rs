@@ -18,7 +18,7 @@ impl Plugin for Discover {
         "Uses the registry referrer's api to find artifacts by type and subject digest"
     }
 
-    fn call(context: &ThunkContext) -> Option<AsyncContext> {
+    fn call(context: &mut ThunkContext) -> Option<AsyncContext> {
         context.task(|cancel_source| {
             let mut tc = context.clone();
             async move {
@@ -45,7 +45,7 @@ impl Plugin for Discover {
 
                     tc.state_mut().replace_symbol("request", referrers_api);
 
-                    if let Some((task, cancel)) = lifec::plugins::Request::call(&tc) {
+                    if let Some((task, cancel)) = lifec::plugins::Request::call(&mut tc) {
                         select! {
                             result = task => {
                                 match result {

@@ -20,7 +20,7 @@ impl LoginACR {
             .with_symbol("env", "REGISTRY_NAME")
             .with_symbol("REGISTRY_NAME", registry_name.as_ref());
             
-        Process::call(&tc).expect("Should start")
+        Process::call(tc).expect("Should start")
     }
 
     fn login_admin(registry_name: impl AsRef<str>, tc: &mut ThunkContext) -> AsyncContext {
@@ -29,7 +29,7 @@ impl LoginACR {
             .with_symbol("env", "REGISTRY_NAME")
             .with_symbol("REGISTRY_NAME", registry_name.as_ref());
             
-        Process::call(&tc).expect("Should start")
+        Process::call(tc).expect("Should start")
     }
 }
 
@@ -42,7 +42,7 @@ impl Plugin for LoginACR {
         "Calls a login script, and outputs an access_token"
     }
 
-    fn call(context: &ThunkContext) -> Option<AsyncContext> {
+    fn call(context: &mut ThunkContext) -> Option<AsyncContext> {
         context.task(|cancel_source| {
             let mut tc = context.clone();
             async move {

@@ -697,8 +697,8 @@ impl TryFrom<&ThunkContext> for ProxyTarget {
 
     fn try_from(tc: &ThunkContext) -> Result<Self, Self::Error> {
         if let (Some(namespace), Some(repo), Some(api)) = (
-            tc.search().find_symbol("ns"),
-            tc.search().find_symbol("repo"),
+            tc.search().find_symbol("REGISTRY_NAMESPACE"),
+            tc.search().find_symbol("REGISTRY_REPO"),
             tc.search().find_symbol("api"),
         ) {
             Ok(Self {
@@ -708,7 +708,7 @@ impl TryFrom<&ThunkContext> for ProxyTarget {
                 object: {
                     if let Some(digest) = tc.search().find_symbol("digest") {
                         Object::Digest(digest)
-                    } else if let Some(reference) = tc.search().find_symbol("reference") {
+                    } else if let Some(reference) = tc.search().find_symbol("REFERENCE") {
                         Object::lexer(&reference).next().unwrap_or(Object::Error)
                     } else {
                         Object::Error

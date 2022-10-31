@@ -19,7 +19,7 @@ impl Plugin for Artifact {
         "Defines and adds an artifact manifest to the registry"
     }
 
-    fn call(context: &ThunkContext) -> Option<AsyncContext> {
+    fn call(context: &mut ThunkContext) -> Option<AsyncContext> {
         context.task(|_| {
             let mut tc = context.clone();
             async {

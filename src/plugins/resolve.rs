@@ -27,7 +27,7 @@ impl Plugin for Resolve {
         "Resolves a digest from a cached response and saves it to state"
     }
 
-    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+    fn call(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         let digest = context.cached_response().and_then(|c| c.headers().get("docker-content-digest")).cloned();
         
         context.task(|_| {

@@ -28,7 +28,7 @@ impl Plugin for Login {
         "Login to a registry, adds a `user` and `token` text attribute"
     }
 
-    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+    fn call(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         context.task(|_| {
             let mut tc = context.clone();
             async {      

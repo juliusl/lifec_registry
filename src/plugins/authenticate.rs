@@ -30,7 +30,7 @@ impl Plugin for Authenticate {
         "Authenticates to a registry and and adds an `access_token` to state"
     }
 
-    fn call(context: &ThunkContext) -> Option<lifec::plugins::AsyncContext> {
+    fn call(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         context.clone().task(|_| {
             let mut tc = context.clone();
             async move {

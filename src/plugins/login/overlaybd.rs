@@ -14,7 +14,7 @@ impl Plugin for LoginOverlayBD {
         "login-overlaybd"
     }
 
-    fn call(context: &ThunkContext) -> Option<AsyncContext> {
+    fn call(context: &mut ThunkContext) -> Option<AsyncContext> {
         context.task(|_| {
             let tc = context.clone();
             async {

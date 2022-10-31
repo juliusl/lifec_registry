@@ -18,7 +18,7 @@ impl Plugin for FormatNydus {
         "format-nydus"
     }
 
-    fn call(context: &ThunkContext) -> Option<AsyncContext> {
+    fn call(context: &mut ThunkContext) -> Option<AsyncContext> {
         context.task(|cancel_source| {
             let mut tc = context.clone();
             async move {
@@ -57,7 +57,7 @@ impl Plugin for FormatNydus {
                     .with_symbol("NYDUS_INSTALL_DIR", "/usr/local/bin")
                     .with_symbol("REFERENCE", &tag);
 
-                let (task, cancel) = Process::call(&tc).expect("Should start");
+                let (task, cancel) = Process::call(&mut tc).expect("Should start");
                 select! {
                     tc = task => {
                         if let Some(mut tc) = tc.ok() {
