@@ -27,6 +27,14 @@ fn main() {
     : .login    access_token
     : .authn    
     : .request
+    # : .process sh test.sh
+    # : .env REGISTRY_HOST
+    # : .env REGISTRY_USER
+    # : .env REGISTRY_TOKEN
+    # : .env REGISTRY_TENANT
+    # : .env REGISTRY_REPO
+    # : .env REFERENCE
+    # : .env WORK_DIR
     
     + .operation test
     : .process curl
