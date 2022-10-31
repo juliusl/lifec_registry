@@ -1,10 +1,8 @@
-use std::str::from_utf8;
-use lifec::prelude::{AsyncContext, ThunkContext, BlockProperties, CustomAttribute};
-use lifec::prelude::{BlockObject, Plugin, AttributeIndex};
+use lifec::prelude::{AsyncContext, BlockProperties, CustomAttribute, ThunkContext};
+use lifec::prelude::{AttributeIndex, BlockObject, Plugin};
+use tokio::select;
 use tracing::event;
 use tracing::Level;
-
-use crate::ProxyTarget;
 
 /// Plugin for calling the referrer's api and adding the result to state,
 ///
@@ -21,50 +19,48 @@ impl Plugin for Discover {
     }
 
     fn call(context: &ThunkContext) -> Option<AsyncContext> {
-        context.task(|_| {
+        context.task(|cancel_source| {
             let mut tc = context.clone();
             async move {
-                if let (Some(artifact_type), Some(digest)) = (
+                if let (Some(artifact_type), Some(digest), Some(namespace), Some(repo)) = (
                     tc.state().find_symbol("discover"),
                     tc.search().find_symbol("digest"),
+                    tc.search().find_symbol("REGISTRY_NAMESPACE"),
+                    tc.search().find_symbol("REGISTRY_REPO")
                 ) {
                     event!(Level::DEBUG, "Discovering {artifact_type}");
-                    if let Some(proxy_target) = ProxyTarget::try_from(&tc).ok() {
-                        let api = tc
-                            .state()
-                            .find_symbol("referrers_api")
-                            .unwrap_or("_oras/artifacts/referrers".to_string());
+                    let api = tc
+                        .state()
+                        .find_symbol("referrers_api")
+                        .unwrap_or("_oras/artifacts/referrers".to_string());
 
-                        let referrers_api = format!(
-                            "https://{}/v2/{}/{api}?digest={digest}&artifactType={artifact_type}",
-                            proxy_target.namespace,
-                            proxy_target.repo,
-                        );
-                        event!(
-                            Level::DEBUG,
-                            "Making referrers call for {artifact_type}\n{referrers_api}"
-                        );
-                        let req = proxy_target
-                            .start_request()
-                            .expect("should be able to create a request")
-                            .uri_str(referrers_api.as_str())
-                            .finish();
+                    let referrers_api = format!(
+                        "https://{}/v2/{}/{api}?digest={digest}&artifactType={artifact_type}",
+                        namespace, repo,
+                    );
+                    event!(
+                        Level::DEBUG,
+                        "Making referrers call for {artifact_type}\n{referrers_api}"
+                    );
 
-                        match proxy_target.send_request(req).await {
-                            Some(response) => {
-                                match hyper::body::to_bytes(response.into_body()).await {
-                                    Ok(data) => {
-                                        event!(Level::TRACE, "{:#?}", from_utf8(&data).ok());
-                                        tc.state_mut().add_binary_attr(&artifact_type, data)
-                                    }
-                                    Err(err) => event!(
-                                        Level::ERROR,
-                                        "Could not read referrers response body {err}"
-                                    ),
+                    tc.state_mut().replace_symbol("request", referrers_api);
+
+                    if let Some((task, cancel)) = lifec::plugins::Request::call(&tc) {
+                        select! {
+                            result = task => {
+                                match result {
+                                    Ok(mut context) => {
+                                        context.copy_previous();
+                                        return Some(context);
+                                    },
+                                    Err(err) => {
+                                        event!(Level::ERROR, "Error calling plugin, {err}");
+                                    },
                                 }
-                            }
-                            None => {
-                                event!(Level::ERROR, "Could not send request for referrers api")
+                            },
+                            _ = cancel_source => {
+                                cancel.send(()).ok();
+                                event!(Level::WARN, "Cancelling request");
                             }
                         }
                     }
@@ -82,9 +78,8 @@ impl BlockObject for Discover {
         BlockProperties::default()
             .require("discover")
             .require("digest")
-            .require("repo")
-            .require("ns")
-            .require("access_token")
+            .require("REGISTRY_NAMESPACE")
+            .require("REGISTRY_REPO")
     }
 
     fn parser(&self) -> Option<CustomAttribute> {

@@ -29,8 +29,8 @@ fn main() {
     : .login        access_token
     : .authn    
     : .request
-    # : .resolve
-    # : .discover     teleport.link.v1
+    : .resolve
+    : .discover     teleport.link.v1
     # : .teleport     overlaybd
 
     # : .process sh test.sh
