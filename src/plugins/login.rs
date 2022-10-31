@@ -11,6 +11,9 @@ pub use acr::LoginACR;
 mod overlaybd;
 pub use overlaybd::LoginOverlayBD;
 
+mod nydus;
+pub use nydus::LoginNydus;
+
 /// Component to login to a registry, 
 /// 
 /// Reads token from file_src in the work directory,

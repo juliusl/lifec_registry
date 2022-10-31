@@ -11,8 +11,8 @@ use specs::{Join, WorldExt};
 use std::sync::Arc;
 
 use crate::{
-    Artifact, Authenticate, Continue, Discover, FormatOverlayBD, Import, Login, LoginACR,
-    LoginOverlayBD, Mirror, Resolve, Teleport,
+    Artifact, Authenticate, Discover, FormatOverlayBD, Login, LoginACR,
+    LoginOverlayBD, Mirror, Resolve, Teleport, plugins::LoginNydus,
 };
 
 mod proxy_target;
@@ -68,17 +68,17 @@ impl Project for RegistryProxy {
         let mut runtime = default_runtime();
         runtime.install_with_custom::<Run<RegistryProxy>>("");
         runtime.install_with_custom::<LoginACR>("");
+        runtime.install_with_custom::<LoginNydus>("");
+        runtime.install_with_custom::<LoginOverlayBD>("");
+        runtime.install_with_custom::<Teleport>("");
+        runtime.install_with_custom::<FormatOverlayBD>("");
+        runtime.install_with_custom::<FormatOverlayBD>("");
+        runtime.install_with_custom::<Login>("");
         runtime.install_with_custom::<Authenticate>("");
         runtime.install_with_custom::<Mirror>("");
-        runtime.install_with_custom::<Login>("");
         runtime.install_with_custom::<Resolve>("");
         runtime.install_with_custom::<Discover>("");
-        runtime.install_with_custom::<Teleport>("");
-        runtime.install_with_custom::<Continue>("");
         runtime.install_with_custom::<Artifact>("");
-        runtime.install_with_custom::<Import>("");
-        runtime.install_with_custom::<LoginOverlayBD>("");
-        runtime.install_with_custom::<FormatOverlayBD>("");
         runtime
     }
 

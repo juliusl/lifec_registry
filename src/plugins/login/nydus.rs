@@ -1,3 +1,7 @@
+use lifec::{prelude::{Plugin, ThunkContext, AsyncContext, AttributeParser, Value, BlockObject, BlockProperties, CustomAttribute}, state::AttributeIndex};
+use serde_json::json;
+use tracing::{event, Level};
+
 /// Plugin that handles setting up the registry credentials for nydus
 /// 
 /// Nydusd/Nydusify needs a docker config file to handle sign-in
@@ -6,12 +10,12 @@
 pub struct LoginNydus;
 
 
-impl Plugin for LoginOverlayBD {
+impl Plugin for LoginNydus {
     fn symbol() -> &'static str {
         "login_nydus"
     }
 
-    fn call(context: &lifec::ThunkContext) -> Option<lifec::AsyncContext> {
+    fn call(context: &mut ThunkContext) -> Option<AsyncContext> {
         context.task(|_| {
             let tc = context.clone();
             async {
@@ -65,7 +69,7 @@ impl Plugin for LoginOverlayBD {
         })
     }
 
-    fn compile(parser: &mut lifec::AttributeParser) {
+    fn compile(parser: &mut AttributeParser) {
         parser.add_custom_with("registry", |p, content| {
             if let Some(last_entity) = p.last_child_entity() {
                 p.define_child(last_entity, "registry", Value::Symbol(content));
@@ -74,12 +78,12 @@ impl Plugin for LoginOverlayBD {
     }
 }
 
-impl BlockObject for LoginOverlayBD {
-    fn query(&self) -> lifec::BlockProperties {
+impl BlockObject for LoginNydus {
+    fn query(&self) -> BlockProperties {
         BlockProperties::default().require("login_nydus")
     }
 
-    fn parser(&self) -> Option<lifec::CustomAttribute> {
+    fn parser(&self) -> Option<CustomAttribute> {
         Some(Self::as_custom_attr())
     }
 }

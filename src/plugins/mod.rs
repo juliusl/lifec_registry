@@ -1,9 +1,6 @@
 mod mirror;
 pub use mirror::Mirror;
 
-mod continue_req;
-pub use continue_req::Continue;
-
 mod artifact;
 pub use artifact::Artifact;
 
@@ -20,10 +17,8 @@ pub use authenticate::Authenticate;
 mod login;
 pub use login::Login;
 pub use login::LoginACR;
+pub use login::LoginNydus;
 pub use login::LoginOverlayBD;
-
-mod import;
-pub use import::Import;
 
 mod resolve;
 pub use resolve::Resolve;
