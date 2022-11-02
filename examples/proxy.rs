@@ -1,8 +1,12 @@
+use std::ops::Deref;
+
 use lifec::{
-    prelude::{Editor, Host, Sequencer},
+    prelude::{Editor, Host, Sequencer, Appendix, WorkspaceEditor, Interpreter},
     project::{Listener, Project, RunmdFile, Workspace},
 };
 use lifec_registry::RegistryProxy;
+use shinsu::{NodeExtension, SingleIO};
+use specs::WorldExt;
 use tracing_subscriber::EnvFilter;
 
 fn main() {
@@ -130,12 +134,18 @@ fn main() {
     let files = vec![mirror];
 
     // Manually compile workspace since we don't need settings from the CLI --
-    let world = RegistryProxy::compile_workspace(&workspace, files.iter(), None);
+    let mut world = RegistryProxy::compile_workspace(&workspace, files.iter(), None);
+
+    let node_editor = NodeExtension::new(SingleIO::default());
+    node_editor.initialize(&mut world);
 
     let mut host = Host::from(world);
     host.link_sequences();
     host.enable_listener::<Test>();
-    host.open_runtime_editor::<RegistryProxy>()
+    host.build_appendix();
+    let appendix = host.world().read_resource::<Appendix>().deref().clone();
+    let workspace_editor = WorkspaceEditor::from(appendix);
+    host.open::<RegistryProxy, _>((workspace_editor, node_editor));
 }
 
 #[derive(Default)]
