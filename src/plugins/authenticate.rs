@@ -1,8 +1,9 @@
 use hyper::{http, Method, Uri};
 use lifec::prelude::{
-    AttributeIndex, BlockObject, BlockProperties, Component, DenseVecStorage, Plugin, ThunkContext, CustomAttribute,
+    AttributeIndex, BlockObject, BlockProperties, Component, CustomAttribute, DenseVecStorage,
+    Plugin, ThunkContext, Value,
 };
-use poem::{Request, web::headers::Authorization};
+use poem::{web::headers::Authorization, Request};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use tracing::{event, Level};
@@ -34,22 +35,34 @@ impl Plugin for Authenticate {
         context.clone().task(|_| {
             let mut tc = context.clone();
             async move {
+                if tc.search().find_symbol("api").is_none() {
+                    if let Some(authn) = tc.search().find_symbol("authn") {
+                        if !authn.is_empty() {
+                            tc.state_mut().with_symbol("api", authn);
+                        }
+                    }
+                }
+
                 if let Some(credentials) = Self::authenticate(&tc).await {
                     match Authorization::bearer(
                         credentials
                             .access_token
-                            .expect("received some access token").as_str()
+                            .expect("received some access token")
+                            .as_str(),
                     ) {
                         Ok(auth_header) => {
                             tc.state_mut()
                                 .with_symbol("header", "Authorization")
-                                .with_symbol("Authorization", format!("Bearer {}", auth_header.token()));
-                        },
+                                .with_symbol(
+                                    "Authorization",
+                                    format!("Bearer {}", auth_header.token()),
+                                );
+                        }
                         Err(err) => {
                             event!(Level::ERROR, "Could not parse auth header, {err}");
                         }
                     }
-
+                    
                     tc.copy_previous();
                     Some(tc)
                 } else {
@@ -58,6 +71,14 @@ impl Plugin for Authenticate {
                 }
             }
         })
+    }
+
+    fn compile(parser: &mut lifec::prelude::AttributeParser) {
+        parser.add_custom_with("method", |p, content| {
+            let entity = p.last_child_entity().expect("should have an entity");
+
+            p.define_child(entity, "method", Value::Symbol(content.to_uppercase()));
+        });
     }
 }
 
@@ -68,6 +89,7 @@ impl BlockObject for Authenticate {
             .require("ns")
             .require("api")
             .require("token")
+            .require("method")
     }
 
     fn parser(&self) -> Option<CustomAttribute> {
@@ -188,7 +210,11 @@ impl Authenticate {
             }
         }
 
-        event!(Level::WARN, "Did not authn request, exiting, {:?}", tc.client());
+        event!(
+            Level::WARN,
+            "Did not authn request, exiting, {:?}",
+            tc.client()
+        );
         None
     }
 

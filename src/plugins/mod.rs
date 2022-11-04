@@ -23,4 +23,6 @@ pub use login::LoginOverlayBD;
 mod resolve;
 pub use resolve::Resolve;
 
+mod store;
+pub use store::Store;
 

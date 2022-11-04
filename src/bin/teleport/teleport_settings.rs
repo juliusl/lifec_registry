@@ -5,7 +5,7 @@ use clap::{Args, Subcommand};
 mod init;
 pub use init::Init;
 use lifec::prelude::{
-    AttributeGraph, Block, Engine, Executor, Host, Inspector, SecureClient, ThunkContext, WorldExt,
+    AttributeGraph, Block, Engine, Host, Inspector, SecureClient, ThunkContext, WorldExt,
 };
 use lifec_registry::RegistryProxy;
 use tracing::{event, Level};
@@ -143,13 +143,13 @@ impl Commands {
                     let mut context = context.enable_async(start, runtime.handle().clone());
                     context.enable_https_client(client.deref().clone());
 
-                    let (join, _) = host.execute(&context.with_state(graph.clone()));
-                    match join.await {
-                        Ok(_) => {}
-                        Err(err) => {
-                            event!(Level::ERROR, "Error handling call sequence, {err}");
-                        }
-                    }
+                    // let (join, _) = host.execute(&context.with_state(graph.clone()));
+                    // match join.await {
+                    //     Ok(_) => {}
+                    //     Err(err) => {
+                    //         event!(Level::ERROR, "Error handling call sequence, {err}");
+                    //     }
+                    // }
                 }
 
                 host.exit();

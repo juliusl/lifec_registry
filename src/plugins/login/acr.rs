@@ -1,5 +1,7 @@
+use lifec::prelude::{
+    AsyncContext, AttributeIndex, BlockObject, Plugin, Process, Resources, ThunkContext,
+};
 use lifec::prelude::{AttributeParser, BlockProperties, CustomAttribute};
-use lifec::prelude::{BlockObject, ThunkContext, AsyncContext, AttributeIndex, Plugin, Resources, Process};
 use rust_embed::RustEmbed;
 use tokio::select;
 use tracing::event;
@@ -15,24 +17,50 @@ pub struct LoginACR;
 
 impl LoginACR {
     /// Fetch an ACR refresh token (Named access_token for historical reasons),
-    /// 
+    ///
     fn login_access_token(registry_name: impl AsRef<str>, tc: &mut ThunkContext) -> AsyncContext {
         tc.state_mut()
             .with_symbol("process", "sh login-acr.sh")
             .with_symbol("env", "REGISTRY_TENANT")
             .with_symbol("REGISTRY_TENANT", registry_name.as_ref());
-            
+
+        if tc.state().find_symbol("REGISTRY_NAMESPACE").is_none() {
+            let host = tc
+                .workspace()
+                .expect("should have a workspace")
+                .get_host()
+                .to_string();
+
+            tc.state_mut().with_symbol(
+                "REGISTRY_NAMESPACE",
+                format!("{}.{host}", registry_name.as_ref()),
+            );
+        }
+
         Process::call(tc).expect("Should start")
     }
 
     /// Fetch admin credentials,
-    /// 
+    ///
     fn login_admin(registry_name: impl AsRef<str>, tc: &mut ThunkContext) -> AsyncContext {
         tc.state_mut()
             .with_symbol("process", "sh login-acr-admin.sh")
             .with_symbol("env", "REGISTRY_TENANT")
             .with_symbol("REGISTRY_TENANT", registry_name.as_ref());
-            
+
+        if tc.state().find_symbol("REGISTRY_NAMESPACE").is_none() {
+            let host = tc
+                .workspace()
+                .expect("should have a workspace")
+                .get_host()
+                .to_string();
+
+            tc.state_mut().with_symbol(
+                "REGISTRY_NAMESPACE",
+                format!("{}.{host}", registry_name.as_ref()),
+            );
+        }
+
         Process::call(tc).expect("Should start")
     }
 }
@@ -53,20 +81,25 @@ impl Plugin for LoginACR {
                 Resources("")
                     .unpack_resource::<LoginACR>(&tc, &String::from("login-acr.sh"))
                     .await;
-                
+
                 Resources("")
                     .unpack_resource::<LoginACR>(&tc, &String::from("login-acr-admin.sh"))
                     .await;
 
-                let registry = tc.workspace().expect("should have a workspace").get_tenant().expect("should have a tenant").clone();
+                let registry = tc
+                    .workspace()
+                    .expect("should have a workspace")
+                    .get_tenant()
+                    .expect("should have a tenant")
+                    .clone();
                 let admin_enabled = tc.state().find_bool("admin").unwrap_or_default();
-                
+
                 let (task, cancel) = if admin_enabled {
                     Self::login_admin(&registry, &mut tc)
                 } else {
                     Self::login_access_token(&registry, &mut tc)
                 };
-                
+
                 select! {
                     tc = task => {
                         event!(Level::DEBUG, "Finished login to acr - {}", registry);
@@ -96,8 +129,7 @@ impl Plugin for LoginACR {
 
 impl BlockObject for LoginACR {
     fn query(&self) -> BlockProperties {
-        BlockProperties::default()
-            .optional("admin")
+        BlockProperties::default().optional("admin")
     }
 
     fn parser(&self) -> Option<CustomAttribute> {

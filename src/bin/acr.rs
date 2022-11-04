@@ -275,8 +275,6 @@ impl Listener for ACR {
         ACR::default()
     }
 
-    fn on_runmd(&mut self, _: &RunmdFile) {}
-
     fn on_status_update(&mut self, _: &StatusUpdate) {}
 
     fn on_operation(&mut self, _: Operation) { }
@@ -284,7 +282,5 @@ impl Listener for ACR {
     fn on_error_context(&mut self, _: &ErrorContext) {}
 
     fn on_completed_event(&mut self, _: &Entity) {}
-
-    fn on_start_command(&mut self, _: &Start) {}
 }
 

@@ -31,3 +31,15 @@ pub struct ImageManifest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub annotations: Option<BTreeMap<String, String>> 
 }
+
+/// OCI image manifest media type,
+/// 
+pub const OCI_IMAGE_MANIFEST: &'static str  = "application/vnd.oci.image.manifest.v1+json";
+
+/// Docker V1 manifest media type,
+/// 
+pub const DOCKER_V1_MANIFEST: &'static str  = "application/vnd.docker.distribution.manifest.v1+json";
+
+/// Docker V2 manifest media type,
+/// 
+pub const DOCKER_V2_MANIFEST: &'static str  = "application/vnd.docker.distribution.manifest.v2+json";

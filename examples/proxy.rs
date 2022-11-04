@@ -29,12 +29,11 @@ fn main() {
     : skip_hosts_dir_check .true
 
     + .operation resolve.test
-    : .install      access_token
     : .login        access_token
     : .authn    
     : .request
-    # : .resolve
-    # : .discover     teleport.link.v1
+    : .resolve
+    : .discover     teleport.link.v1
     # : .teleport     overlaybd
 
     + .operation download.test
@@ -42,6 +41,16 @@ fn main() {
     : .login        access_token
     : .authn    
     : .request
+
+    + .operation resolve.test2
+    : .login_acr
+    : .install      access_token
+    : .login        access_token
+    : .authn        https://obddemo2.azurecr.io/v2/d/redis/manifests/6.0.2
+    : .method       GET
+    : .request      
+    : Accept .header application/vnd.docker.distribution.manifest.v2+json
+    : .store
 
     # : .process sh test.sh
     # : .env REGISTRY_HOST
@@ -57,7 +66,7 @@ fn main() {
     ```
     + .operation test
     : .process curl
-    : .arg localhost:8578/v2/redis/manifests/6.0.2?ns=obddemo2.azurecr.io
+    : .arg localhost:8578/v2/d/redis/manifests/6.0.2?ns=obddemo2.azurecr.io
     : .arg -v
     : .flag -X GET
     : .flag -H Accept:application/vnd.docker.distribution.manifest.v2+json
@@ -145,7 +154,7 @@ fn main() {
     host.build_appendix();
     let appendix = host.world().read_resource::<Appendix>().deref().clone();
     let workspace_editor = WorkspaceEditor::from(appendix);
-    host.open::<RegistryProxy, _>((workspace_editor, node_editor));
+    host.open::<RegistryProxy, _>((node_editor, workspace_editor));
 }
 
 #[derive(Default)]
@@ -156,8 +165,6 @@ impl Listener for Test {
         Test {}
     }
 
-    fn on_runmd(&mut self, _runmd: &RunmdFile) {}
-
     fn on_status_update(&mut self, _status_update: &lifec::prelude::StatusUpdate) {}
 
     fn on_operation(&mut self, _operation: lifec::prelude::Operation) {}
@@ -165,6 +172,4 @@ impl Listener for Test {
     fn on_error_context(&mut self, _error: &lifec::prelude::ErrorContext) {}
 
     fn on_completed_event(&mut self, _entity: &specs::Entity) {}
-
-    fn on_start_command(&mut self, _start_command: &lifec::prelude::Start) {}
 }

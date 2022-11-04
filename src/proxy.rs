@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use crate::{
     Artifact, Authenticate, Discover, FormatOverlayBD, Login, LoginACR,
-    LoginOverlayBD, Mirror, Resolve, Teleport, plugins::LoginNydus,
+    LoginOverlayBD, Mirror, Resolve, Teleport, plugins::{LoginNydus, Store}, ImageIndex, ImageManifest, ArtifactManifest, Descriptor,
 };
 
 mod proxy_target;
@@ -79,6 +79,7 @@ impl Project for RegistryProxy {
         runtime.install_with_custom::<Resolve>("");
         runtime.install_with_custom::<Discover>("");
         runtime.install_with_custom::<Artifact>("");
+        runtime.install_with_custom::<Store>("");
         runtime
     }
 
@@ -87,6 +88,10 @@ impl Project for RegistryProxy {
         world.insert(Self::runtime());
         world.register::<Manifests>();
         world.register::<Blobs>();
+        world.register::<ImageIndex>();
+        world.register::<Descriptor>();
+        world.register::<ImageManifest>();
+        world.register::<ArtifactManifest>();
         world
     }
 }

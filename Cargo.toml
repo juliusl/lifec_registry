@@ -27,3 +27,4 @@ toml = "0.5.9"
 tracing = "0.1.35"
 tracing-subscriber =  { version = "0.3", features = [ "env-filter" ] }
 tracing-test = "0.2.3"
+sha2 = "0.10.6"
