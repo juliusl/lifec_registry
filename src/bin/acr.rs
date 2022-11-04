@@ -75,7 +75,7 @@ async fn main() {
                     host.enable_listener::<ACR>();
 
                     tokio::task::block_in_place(|| {
-                        host.open_runtime_editor::<RegistryProxy>();
+                        host.open_runtime_editor::<RegistryProxy>(cli.debug);
                     })
                 }
                 Commands::Mirror(mut host_settings) => {
@@ -282,5 +282,7 @@ impl Listener for ACR {
     fn on_error_context(&mut self, _: &ErrorContext) {}
 
     fn on_completed_event(&mut self, _: &Entity) {}
+
+    fn on_completion(&mut self, _: lifec::engine::Completion) {}
 }
 

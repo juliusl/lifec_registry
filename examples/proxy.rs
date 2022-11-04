@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use lifec::{
     prelude::{Editor, Host, Sequencer, Appendix, WorkspaceEditor, Interpreter},
-    project::{Listener, Project, RunmdFile, Workspace},
+    project::{Project, RunmdFile, Workspace}, debugger::Debugger,
 };
 use lifec_registry::RegistryProxy;
 use shinsu::{NodeExtension, SingleIO};
@@ -49,7 +49,7 @@ fn main() {
     : .authn        https://obddemo2.azurecr.io/v2/d/redis/manifests/6.0.2
     : .method       GET
     : .request      
-    : Accept .header application/vnd.docker.distribution.manifest.v2+json
+    : .accept       application/vnd.docker.distribution.manifest.v2+json
     : .store
 
     # : .process sh test.sh
@@ -149,27 +149,11 @@ fn main() {
     node_editor.initialize(&mut world);
 
     let mut host = Host::from(world);
+    host.prepare::<RegistryProxy>();
     host.link_sequences();
-    host.enable_listener::<Test>();
     host.build_appendix();
+    host.enable_listener::<Debugger>();
     let appendix = host.world().read_resource::<Appendix>().deref().clone();
     let workspace_editor = WorkspaceEditor::from(appendix);
     host.open::<RegistryProxy, _>((node_editor, workspace_editor));
-}
-
-#[derive(Default)]
-struct Test;
-
-impl Listener for Test {
-    fn create(_world: &specs::World) -> Self {
-        Test {}
-    }
-
-    fn on_status_update(&mut self, _status_update: &lifec::prelude::StatusUpdate) {}
-
-    fn on_operation(&mut self, _operation: lifec::prelude::Operation) {}
-
-    fn on_error_context(&mut self, _error: &lifec::prelude::ErrorContext) {}
-
-    fn on_completed_event(&mut self, _entity: &specs::Entity) {}
 }
