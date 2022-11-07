@@ -21,6 +21,7 @@ pub use plugins::LoginOverlayBD;
 pub use plugins::Discover;
 pub use plugins::Teleport;
 pub use plugins::Resolve;
+pub use plugins::RemoteRegistry;
 
 mod proxy;
 pub use proxy::RegistryProxy;

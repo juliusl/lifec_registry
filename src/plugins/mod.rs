@@ -26,3 +26,5 @@ pub use resolve::Resolve;
 mod store;
 pub use store::Store;
 
+mod remote_registry;
+pub use remote_registry::RemoteRegistry;

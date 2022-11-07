@@ -52,6 +52,15 @@ fn main() {
     : .accept       application/vnd.docker.distribution.manifest.v2+json
     : .store
 
+    + .operation test_host
+    : .test_host
+
+    + .operation fetch_guest_state
+    : .process  sh fetch-guest-state.sh
+    : WORK_DIR      .env    .world/test.io/test_host2
+    : TENANT        .env    test
+    : ACCOUNT_NAME  .env    obddemospace
+
     # : .process sh test.sh
     # : .env REGISTRY_HOST
     # : .env REGISTRY_USER

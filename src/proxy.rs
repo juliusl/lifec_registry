@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use crate::{
     Artifact, Authenticate, Discover, FormatOverlayBD, Login, LoginACR,
-    LoginOverlayBD, Mirror, Resolve, Teleport, plugins::{LoginNydus, Store}, ImageIndex, ImageManifest, ArtifactManifest, Descriptor,
+    LoginOverlayBD, Mirror, Resolve, Teleport, plugins::{LoginNydus, Store}, ImageIndex, ImageManifest, ArtifactManifest, Descriptor, RemoteRegistry,
 };
 
 mod proxy_target;
@@ -61,7 +61,19 @@ impl Project for RegistryProxy {
     fn interpret(_: &World, _: &Block) {}
 
     fn parser() -> Parser {
-        default_parser(Self::world()).with_special_attr::<RegistryProxy>()
+        let mut world = Self::world();
+        let mut handlers = Self::node_handlers();
+        {
+            let runtime = world.fetch::<Runtime>();
+
+            for (name, handler) in runtime.iter_handlers() {
+                handlers.insert(name.to_string(), handler.clone());
+            }
+        }
+
+        world.insert(handlers);
+
+        default_parser(world).with_special_attr::<RegistryProxy>()
     }
 
     fn runtime() -> Runtime {
@@ -80,6 +92,7 @@ impl Project for RegistryProxy {
         runtime.install_with_custom::<Discover>("");
         runtime.install_with_custom::<Artifact>("");
         runtime.install_with_custom::<Store>("");
+        runtime.install_with_custom::<RemoteRegistry>("");
         runtime
     }
 
