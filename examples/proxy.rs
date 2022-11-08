@@ -1,20 +1,17 @@
-use std::ops::Deref;
 
 use lifec::{
-    prelude::{Editor, Host, Sequencer, Appendix, WorkspaceEditor, Interpreter},
-    project::{Project, RunmdFile, Workspace}, debugger::Debugger,
+    prelude::{Editor, Host, Sequencer},
+    project::{Project, RunmdFile, Workspace},
 };
 use lifec_registry::RegistryProxy;
-use shinsu::{NodeExtension, SingleIO};
-use specs::WorldExt;
 use tracing_subscriber::EnvFilter;
 
 fn main() {
     tracing_subscriber::fmt::Subscriber::builder()
         .with_env_filter(
             EnvFilter::builder()
-                .from_env()
-                .expect("should work"),
+            .from_env()
+            .expect("should work"),
         )
         .compact()
         .init();
@@ -27,6 +24,7 @@ fn main() {
     ```
     + .config start.mirror
     : skip_hosts_dir_check .true
+    : enable_guest_agent .true
 
     + .operation resolve.test
     : .login        access_token
@@ -52,14 +50,37 @@ fn main() {
     : .accept       application/vnd.docker.distribution.manifest.v2+json
     : .store
 
-    + .operation test_host
-    : .test_host
+    + .operation open_remote_registry
+    : .remote_registry obddemospace
+    : .remote_guest
+
+    + .operation setup_remote_registry
+    : .remote_registry obddemospace
+    : .process sh setup-guest-storage.sh
+
+    + .operation query_remote_registry_state
+    : .remote_registry obddemospace
+    : .process sh query-guest-state.sh
+    : .cache_output
+
+    + .operation query_remote_registry_commands
+    : .remote_registry obddemospace
+    : .process sh query-guest-commands.sh
+    : .cache_output
+
+    + .operation monitor_guest
+    : .remote_registry obddemospace
+    : .process sh monitor-guest.sh
+    : .cache_output
+
+    + .operation send_remote_registry_commands
+    : .remote_registry obddemospace
+    : .process sh send-guest-commands.sh
+    : .cache_output
 
     + .operation fetch_guest_state
-    : .process  sh fetch-guest-state.sh
-    : WORK_DIR      .env    .world/test.io/test_host2
-    : TENANT        .env    test
-    : ACCOUNT_NAME  .env    obddemospace
+    : .remote_registry obddemospace
+    : .process sh fetch-guest-state.sh
 
     # : .process sh test.sh
     # : .env REGISTRY_HOST
@@ -152,17 +173,9 @@ fn main() {
     let files = vec![mirror];
 
     // Manually compile workspace since we don't need settings from the CLI --
-    let mut world = RegistryProxy::compile_workspace(&workspace, files.iter(), None);
-
-    let node_editor = NodeExtension::new(SingleIO::default());
-    node_editor.initialize(&mut world);
+    let world = RegistryProxy::compile_workspace(&workspace, files.iter(), None);
 
     let mut host = Host::from(world);
-    host.prepare::<RegistryProxy>();
     host.link_sequences();
-    host.build_appendix();
-    host.enable_listener::<Debugger>();
-    let appendix = host.world().read_resource::<Appendix>().deref().clone();
-    let workspace_editor = WorkspaceEditor::from(appendix);
-    host.open::<RegistryProxy, _>((node_editor, workspace_editor));
+    host.open_runtime_editor::<RegistryProxy>(true)
 }

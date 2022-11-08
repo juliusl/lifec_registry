@@ -36,6 +36,26 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : .authn            
 : .request          
 ```
+
+# Setup guest storage
+```
++ .operation    setup.guest
+: .remote_registry
+: .process  sh setup-guest-storage.sh
+```
+
+# Open guest
+```
++ .operation    open.guest
+: .remote_registry
+: .remote_guest 
+```
+
+# Check environment 
+```
++ .operation    check.environment
+: .println      Check environment
+```
 "#;
 
 /// Template user's runmd mirror file,

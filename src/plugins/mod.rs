@@ -28,3 +28,5 @@ pub use store::Store;
 
 mod remote_registry;
 pub use remote_registry::RemoteRegistry;
+
+pub mod guest;

@@ -21,16 +21,15 @@ use mirror::default_mirror_root;
 async fn main() {
     let cli = ACR::parse();
     tracing_subscriber::fmt::Subscriber::builder()
-    .with_env_filter(if !cli.debug {
-        EnvFilter::builder()
-            .from_env()
-            .expect("should work")
-    } else {
-        EnvFilter::builder()
-            .with_default_directive("lifec_registry=debug".parse().expect("should parse"))
-            .from_env()
-            .expect("should work")
-    })
+        .with_env_filter(if !cli.debug {
+            EnvFilter::builder().from_env().expect("should work")
+        } else {
+            EnvFilter::builder()
+                .from_env()
+                .expect("should work")
+                .add_directive("lifec_registry=debug".parse().expect("should parse"))
+                .add_directive("lifec=debug".parse().expect("should parse"))
+        })
         .compact()
         .init();
 
@@ -38,6 +37,7 @@ async fn main() {
         ACR {
             registry,
             registry_host,
+            guest,
             command: Some(command),
             ..
         } => {
@@ -64,7 +64,7 @@ async fn main() {
 
             match command {
                 Commands::Open => {
-                    let mut host = Host::load_workspace::<RegistryProxy>(
+                    let host = Host::load_workspace::<RegistryProxy>(
                         None,
                         registry_host,
                         registry,
@@ -72,7 +72,9 @@ async fn main() {
                         None::<String>,
                     );
 
-                    host.enable_listener::<ACR>();
+                    if let Some(guest) = guest.as_ref() {
+                        std::env::set_var("ACCOUNT_NAME", guest);
+                    }
 
                     tokio::task::block_in_place(|| {
                         host.open_runtime_editor::<RegistryProxy>(cli.debug);
@@ -81,6 +83,10 @@ async fn main() {
                 Commands::Mirror(mut host_settings) => {
                     if host_settings.workspace.is_none() {
                         host_settings.set_workspace(format!("{registry}.{registry_host}"));
+                    }      
+                    
+                    if let Some(guest) = guest.as_ref() {
+                        std::env::set_var("ACCOUNT_NAME", guest);
                     }
 
                     host_settings.handle::<RegistryProxy>().await;
@@ -188,12 +194,20 @@ async fn main() {
 #[clap(arg_required_else_help = true)]
 #[clap(about = "Provides extensions and modifications for container runtimes that work with ACR")]
 struct ACR {
-    /// Name of the registry to use
+    /// Name of the registry to use, also referred to as a "Tenant"
+    ///
     #[clap(long)]
     registry: String,
     /// Enable debug logging
     #[clap(long, short, action)]
     debug: bool,
+    /// If guest is passed, the mirror will enable a guest agent in addition to the mirror,
+    ///
+    /// The guest agent communicates over azure storage, and the name passed here will be used
+    /// as the azure storage account name to communicate with.
+    ///
+    #[clap(long)]
+    guest: Option<String>,
     /// Registry host, Ex. azurecr.io, or azurecr-test.io
     #[clap(long, default_value_t=String::from("azurecr.io"))]
     registry_host: String,
@@ -206,7 +220,7 @@ struct ACR {
 #[derive(Subcommand)]
 enum Commands {
     /// Opens an editor,
-    /// 
+    ///
     Open,
     /// Host a mirror server that can extend ACR features,
     ///
@@ -269,20 +283,3 @@ struct MirrorSettings {
     #[clap(skip)]
     artifact_type: Option<String>,
 }
-
-impl Listener for ACR {
-    fn create(_: &World) -> Self {
-        ACR::default()
-    }
-
-    fn on_status_update(&mut self, _: &StatusUpdate) {}
-
-    fn on_operation(&mut self, _: Operation) { }
-
-    fn on_error_context(&mut self, _: &ErrorContext) {}
-
-    fn on_completed_event(&mut self, _: &Entity) {}
-
-    fn on_completion(&mut self, _: lifec::engine::Completion) {}
-}
-

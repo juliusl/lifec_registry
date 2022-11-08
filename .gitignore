@@ -23,3 +23,11 @@ admin_pass
 .vscode
 login-acr.sh
 login-acr-admin.sh
+fetch-guest-commands.sh
+fetch-guest-state.sh
+monitor-guest.sh
+send-guest-commands.sh
+setup-guest-storage.sh
+query-guest-commands.sh
+query-guest-state.sh
+output.resp
