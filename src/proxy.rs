@@ -217,15 +217,15 @@ fn install_guest_agent(root: &mut Workspace) {
 
         ``` start
         + .runtime
-        : .watch            .guest-commands
-        : .create           file
         : .remote_registry
         : .process          sh send-guest-commands.sh
+        : .remote_registry
+        : .process          sh fetch-guest-state.sh
         ```
 
         ``` cooldown
         + .runtime
-        : .timer 500ms
+        : .timer 1s
         ```
         "#,
         ),
@@ -273,7 +273,7 @@ fn install_guest_agent(root: &mut Workspace) {
 
         ``` cooldown
         + .runtime
-        : .timer 5 s
+        : .timer 3 s
         ```
         "#,
         ),
@@ -395,6 +395,14 @@ pub fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest {
     let mut guest = Guest::new::<RegistryProxy>(entity, host, |guest| {
         EventHandler::<()>::default().run_now(guest.protocol().as_ref());
 
+        {
+            let protocol = guest.protocol();
+            let mut state = protocol.as_ref().system_data::<State>();
+            if !state.should_exit() && state.can_continue() {
+                state.tick();
+            }
+        }
+
         if guest.send_commands(guest.workspace().work_dir().join(".guest-commands")) {
             event!(
                 Level::WARN,
@@ -484,6 +492,14 @@ pub fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest {
             );
         }
     });
+
+    {
+        let protocol = guest.protocol();
+        let dispatcher = protocol.as_ref().entities().entity(2);
+        let mut state = protocol.as_ref().system_data::<State>();
+        state.activate(dispatcher);
+    }
+
     guest.enable_remote();
     guest
 }
