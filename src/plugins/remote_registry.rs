@@ -14,13 +14,11 @@ use crate::proxy;
 #[folder = "lib/sh/azure/"]
 #[include = "fetch-guest-commands.sh"]
 #[include = "fetch-guest-state.sh"]
-#[include = "send-guest-status.sh"]
-#[include = "send-guest-performance.sh"]
-#[include = "send-guest-journal.sh"]
+#[include = "send-guest-state.sh"]
 #[include = "send-guest-commands.sh"]
-#[include = "setup-guest-storage.sh"]
 #[include = "query-guest-commands.sh"]
 #[include = "query-guest-state.sh"]
+#[include = "setup-guest-storage.sh"]
 pub struct RemoteRegistry;
 
 impl RemoteRegistry {
@@ -32,25 +30,19 @@ impl RemoteRegistry {
             .unpack_resource::<RemoteRegistry>(tc, &String::from("fetch-guest-commands.sh"))
             .await;
         Resources("")
-            .unpack_resource::<RemoteRegistry>(tc, &String::from("send-guest-journal.sh"))
-            .await;
-        Resources("")
-            .unpack_resource::<RemoteRegistry>(tc, &String::from("send-guest-performance.sh"))
-            .await;
-        Resources("")
-            .unpack_resource::<RemoteRegistry>(tc, &String::from("send-guest-status.sh"))
+            .unpack_resource::<RemoteRegistry>(tc, &String::from("send-guest-state.sh"))
             .await;
         Resources("")
             .unpack_resource::<RemoteRegistry>(tc, &String::from("send-guest-commands.sh"))
-            .await;
-        Resources("")
-            .unpack_resource::<RemoteRegistry>(tc, &String::from("setup-guest-storage.sh"))
             .await;
         Resources("")
             .unpack_resource::<RemoteRegistry>(tc, &String::from("query-guest-state.sh"))
             .await;
         Resources("")
             .unpack_resource::<RemoteRegistry>(tc, &String::from("query-guest-commands.sh"))
+            .await;
+        Resources("")
+            .unpack_resource::<RemoteRegistry>(tc, &String::from("setup-guest-storage.sh"))
             .await;
     }
 }
@@ -98,11 +90,19 @@ impl Plugin for RemoteRegistry {
                     .with_symbol("TENANT", tenant)
                     .with_symbol("WORK_DIR", &work_dir);
 
-                let guest_dir = PathBuf::from(work_dir).join(".guest");
+                let guest_dir = PathBuf::from(&work_dir).join(".guest");
+                let guest_command_dir = PathBuf::from(&work_dir).join(".guest-commands");
                 match tokio::fs::create_dir_all(guest_dir).await {
                     Ok(_) => {}
                     Err(err) => {
                         event!(Level::ERROR, "Could not create .guest dir, {err}");
+                    }
+                }
+
+                match tokio::fs::create_dir_all(guest_command_dir).await {
+                    Ok(_) => {}
+                    Err(err) => {
+                        event!(Level::ERROR, "Could not create .guest-commands dir, {err}");
                     }
                 }
 

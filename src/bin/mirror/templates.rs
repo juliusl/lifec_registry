@@ -51,10 +51,54 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 : .remote_guest 
 ```
 
-# Check environment 
+# Send commands
 ```
-+ .operation    check.environment
-: .println      Check environment
++ .operation    send.commands
+: .remote_registry  
+: .process sh send-guest-commands.sh
+```
+
+# Send performance
+```
++ .operation    send.performance
+: .remote_registry  
+: .process sh send-guest-performance.sh
+```
+
+# Send journal
+```
++ .operation    send.journal
+: .remote_registry  
+: .process sh send-guest-journal.sh
+```
+
+# Send status
+```
++ .operation    send.status
+: .remote_registry  
+: .process sh send-guest-status.sh
+```
+
+# Fetch guest state
+```
++ .operation    fetch.state
+: .remote_registry  
+: .process sh fetch-guest-state.sh
+```
+
+# Fetch guest commands
+```
++ .operation    fetch.commands
+: .remote_registry  
+: .process sh fetch-guest-commands.sh
+: .listen   .guest-commands
+```
+
+# Test operation
+```
++ .operation    print
+: .remote_registry  
+: .println
 ```
 "#;
 

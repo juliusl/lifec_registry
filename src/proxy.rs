@@ -1,11 +1,11 @@
 use lifec::{
     debugger::Debugger,
-    engine::{Cleanup, Profilers, Performance},
-    guest::{Guest, Monitor, Sender, RemoteProtocol},
+    engine::{Cleanup, Performance, Profilers},
+    guest::{Guest, Monitor, RemoteProtocol, Sender},
     host::EventHandler,
     prelude::{
-        Appendix, AttributeParser, Block, Editor, EventRuntime, Host, Parser, Run, Sequencer,
-        SpecialAttribute, State, ThunkContext, Value, World, NodeStatus, Journal,
+        Appendix, AttributeParser, Block, Editor, EventRuntime, Host, Journal, NodeStatus, Parser,
+        Run, Sequencer, SpecialAttribute, State, ThunkContext, Value, World,
     },
     project::{default_parser, default_runtime, default_world, Project, RunmdFile, Workspace},
     runtime::Runtime,
@@ -13,7 +13,7 @@ use lifec::{
 use lifec_poem::{RoutePlugin, WebApp};
 use poem::{Route, RouteMethod};
 use specs::{Join, RunNow, WorldExt};
-use std::{path::PathBuf, sync::Arc, fs::File};
+use std::{fs::File, path::PathBuf, sync::Arc};
 use tracing::{event, Level};
 
 use crate::{
@@ -217,7 +217,7 @@ fn install_guest_agent(root: &mut Workspace) {
 
         ``` start
         + .runtime
-        : .watch            .guest
+        : .watch            .guest-commands
         : .create           file
         : .remote_registry
         : .process          sh send-guest-commands.sh
@@ -228,24 +228,24 @@ fn install_guest_agent(root: &mut Workspace) {
         : .timer 500ms
         ```
         "#,
-        )
+        ),
     ));
-    
+
     root.cache_file(&RunmdFile::new_src(
         "guest",
         format!(
             r#"
         ```
         + .engine
-        : .start    setup
-        : .fork     listener, sync, monitor-status, monitor-performance, monitor-journal
+        : .start        setup
+        : .next      listener
         ```
 
         ``` setup
         + .runtime
         : .remote_registry
-        : .process      sh setup-guest-storage.sh
-        : .println      Starting guest listener/monitor
+        : .process          sh setup-guest-storage.sh
+        : .println          Starting guest listener/monitor
         ```
         "#,
         ),
@@ -264,130 +264,50 @@ fn install_guest_agent(root: &mut Workspace) {
 
         ``` start
         + .runtime
-        : .watch    .guest
-        : .create   file
-        : .listen   .guest
+        : .remote_registry
+        : .process   sh fetch-guest-commands.sh
+        : .listen   .guest-commands
+        : .remote_registry
+        : .process   sh send-guest-state.sh
         ```
 
         ``` cooldown
         + .runtime
-        : .timer 500ms
+        : .timer 5 s
         ```
         "#,
         ),
     ));
 
-    root.cache_file(&RunmdFile::new_src(
-        "sync",
-        format!(
-            r#"
-        ```
-        + .engine
-        : .start        start
-        : .start        cooldown
-        : .loop
-        ```
+    let work_dir = root.work_dir().join(".guest");
 
-        ``` start
-        + .runtime
-        : .watch            .guest
-        : .remove           file
-        : .modify           name
-        : .remote_registry
-        : .process          sh fetch-guest-commands.sh
-        ```
+    match std::fs::create_dir_all(&work_dir) {
+        Ok(_) => {}
+        Err(err) => {
+            event!(Level::ERROR, "could not create dirs, {err}");
+        }
+    }
 
-        ``` cooldown
-        + .runtime
-        : .timer 500ms
-        ```
-        "#,
-        )
-    ));
+    match std::fs::create_dir_all(&work_dir.join("status")) {
+        Ok(_) => {}
+        Err(err) => {
+            event!(Level::ERROR, "could not create dirs, {err}");
+        }
+    }
 
-    root.cache_file(&RunmdFile::new_src(
-        "monitor-status",
-        format!(
-            r#"
-        ```
-        + .engine
-        : .start        start
-        : .start        cooldown
-        : .loop
-        ```
+    match std::fs::create_dir_all(&work_dir.join("performance")) {
+        Ok(_) => {}
+        Err(err) => {
+            event!(Level::ERROR, "could not create dirs, {err}");
+        }
+    }
 
-        ``` start
-        + .runtime
-        : .watch            .guest/status
-        : .remove           file
-        : .modify           name
-        : .remote_registry
-        : .process          sh monitor-guest.sh
-        ```
-
-        ``` cooldown
-        + .runtime
-        : .timer 500ms
-        ```
-        "#,
-        )
-    ));
-
-    root.cache_file(&RunmdFile::new_src(
-        "monitor-performance",
-        format!(
-            r#"
-        ```
-        + .engine
-        : .start        start
-        : .start        cooldown
-        : .loop
-        ```
-
-        ``` start
-        + .runtime
-        : .watch            .guest/performance
-        : .remove           file
-        : .modify           name
-        : .remote_registry
-        : .process          sh monitor-guest.sh
-        ```
-
-        ``` cooldown
-        + .runtime
-        : .timer 500ms
-        ```
-        "#,
-        )
-    ));
-
-    root.cache_file(&RunmdFile::new_src(
-        "monitor-journal",
-        format!(
-            r#"
-        ```
-        + .engine
-        : .start        start
-        : .start        cooldown
-        : .loop
-        ```
-
-        ``` start
-        + .runtime
-        : .watch            .guest/journal
-        : .remove           file
-        : .modify           name
-        : .remote_registry
-        : .process          sh monitor-guest.sh
-        ```
-
-        ``` cooldown
-        + .runtime
-        : .timer 500ms
-        ```
-        "#,
-        )
-    ));
+    match std::fs::create_dir_all(&work_dir.join("journal")) {
+        Ok(_) => {}
+        Err(err) => {
+            event!(Level::ERROR, "could not create dirs, {err}");
+        }
+    }
 }
 
 /// Builds and returns a registry proxy guest agent,
@@ -475,8 +395,7 @@ pub fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest {
     let mut guest = Guest::new::<RegistryProxy>(entity, host, |guest| {
         EventHandler::<()>::default().run_now(guest.protocol().as_ref());
 
-        // 
-        if guest.send_commands(guest.workspace().work_dir().join(".guest")) {
+        if guest.send_commands(guest.workspace().work_dir().join(".guest-commands")) {
             event!(
                 Level::WARN,
                 "Commands not sent, previous commands have not been read"
@@ -558,7 +477,11 @@ pub fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest {
 
             performance_updated | status_updated | journal_updated
         }) {
-            event!(Level::TRACE, "Updated remote guest state, {:?}", guest.workspace().work_dir());
+            event!(
+                Level::TRACE,
+                "Updated remote guest state, {:?}",
+                guest.workspace().work_dir()
+            );
         }
     });
     guest.enable_remote();
