@@ -89,7 +89,13 @@ async fn main() {
                         std::env::set_var("ACCOUNT_NAME", guest);
                     }
 
-                    host_settings.handle::<RegistryProxy>().await;
+                    if let Some(mut host) = host_settings.create_host::<RegistryProxy>().await {
+                        host.enable_listener::<()>();
+                        host.start_with::<RegistryProxy>("mirror");
+                    }  else {
+                        host_settings.handle::<RegistryProxy>().await;
+                    }
+
                 }
                 Commands::Teleport(teleport) => match teleport {
                     TeleportSettings {

@@ -192,7 +192,15 @@ impl From<ThunkContext> for RegistryProxy {
         if context.is_enabled("enable_guest_agent") {
             // Enables guest agent
             // The guest runs seperately from the host's engine
-            if context.enable_guest(build_registry_proxy_guest_agent(&context)) {
+            let guest = build_registry_proxy_guest_agent(&context);
+
+            {
+                let protocol = guest.protocol();
+                let entity = protocol.as_ref().entities().entity(11);
+                protocol.as_ref().system_data::<State>().activate(entity);
+            }
+
+            if context.enable_guest(guest) {
                 event!(Level::INFO, "Guest agent has been enabled");
             }
         }
@@ -219,13 +227,15 @@ fn install_guest_agent(root: &mut Workspace) {
         + .runtime
         : .remote_registry
         : .process          sh send-guest-commands.sh
+        : .silent
         : .remote_registry
         : .process          sh fetch-guest-state.sh
+        : .silent
         ```
 
         ``` cooldown
         + .runtime
-        : .timer 1s
+        : .timer 5 s
         ```
         "#,
         ),
@@ -245,6 +255,7 @@ fn install_guest_agent(root: &mut Workspace) {
         + .runtime
         : .remote_registry
         : .process          sh setup-guest-storage.sh
+        : .silent
         : .println          Starting guest listener/monitor
         ```
         "#,
@@ -266,14 +277,16 @@ fn install_guest_agent(root: &mut Workspace) {
         + .runtime
         : .remote_registry
         : .process   sh fetch-guest-commands.sh
+        : .silent
         : .listen   .guest-commands
         : .remote_registry
         : .process   sh send-guest-state.sh
+        : .silent
         ```
 
         ``` cooldown
         + .runtime
-        : .timer 3 s
+        : .timer 5 s
         ```
         "#,
         ),
@@ -370,7 +383,7 @@ fn build_registry_proxy_guest_agent(tc: &ThunkContext) -> Guest {
 
 /// Builds a guest to interface w/ a remote registry proxy,
 ///
-pub fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest {
+pub async fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest {
     let mut root = tc.workspace().expect("should have a workspace").clone();
     install_guest_agent(&mut root);
 
@@ -392,7 +405,7 @@ pub fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest {
     host.world_mut().insert(appendix.clone());
     let entity = tc.entity().expect("should have an entity");
 
-    let mut guest = Guest::new::<RegistryProxy>(entity, host, |guest| {
+    let mut guest = Guest::new::<RegistryProxy>(entity, host, move |guest| {
         EventHandler::<()>::default().run_now(guest.protocol().as_ref());
 
         {
@@ -448,6 +461,7 @@ pub fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest {
             let control = status_dir.join("control");
             let frames = status_dir.join("frames");
             let blob = status_dir.join("blob");
+
             let status_updated = if control.exists() && frames.exists() && blob.exists() {
                 protocol.clear::<NodeStatus>();
                 protocol.receive::<NodeStatus, _, _>(

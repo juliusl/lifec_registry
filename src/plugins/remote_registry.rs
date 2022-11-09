@@ -107,7 +107,7 @@ impl Plugin for RemoteRegistry {
                 }
 
                 if tc.is_enabled("enable_remote") {
-                    let remote_registry = proxy::build_registry_proxy_guest_agent_remote(&tc);
+                    let remote_registry = proxy::build_registry_proxy_guest_agent_remote(&tc).await;
                     tc.enable_guest(remote_registry);
                 }
 
