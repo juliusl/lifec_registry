@@ -16,10 +16,11 @@ fn main() {
         .compact()
         .init();
 
+    std::env::set_var("ACCOUNT_NAME", "obddemospace");
+    
     let mut workspace = Workspace::new("azurecr.io", None).tenant("obddemo2");
     workspace.set_root_runmd(
         r#"
-    
     # Implementation that will be executed when proxying the request
     ```
     + .config start.mirror
@@ -57,30 +58,6 @@ fn main() {
     + .operation setup_remote_registry
     : .remote_registry obddemospace
     : .process sh setup-guest-storage.sh
-
-    + .operation query_remote_registry_state
-    : .remote_registry obddemospace
-    : .process sh query-guest-state.sh
-    : .cache_output
-
-    + .operation query_remote_registry_commands
-    : .remote_registry obddemospace
-    : .process sh query-guest-commands.sh
-    : .cache_output
-
-    + .operation monitor_guest
-    : .remote_registry obddemospace
-    : .process sh monitor-guest.sh
-    : .cache_output
-
-    + .operation send_remote_registry_commands
-    : .remote_registry obddemospace
-    : .process sh send-guest-commands.sh
-    : .cache_output
-
-    + .operation fetch_guest_state
-    : .remote_registry obddemospace
-    : .process sh fetch-guest-state.sh
 
     # : .process sh test.sh
     # : .env REGISTRY_HOST

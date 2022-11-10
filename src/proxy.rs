@@ -1,23 +1,29 @@
+use imgui::Window;
 use lifec::{
     debugger::Debugger,
+    editor::EventNode,
     engine::{Cleanup, Performance, Profilers},
-    guest::{Guest, Monitor, RemoteProtocol, Sender},
+    guest::{Guest, RemoteProtocol},
     host::EventHandler,
     prelude::{
-        Appendix, AttributeParser, Block, Editor, EventRuntime, Host, Journal, NodeStatus, Parser,
-        Run, Sequencer, SpecialAttribute, State, ThunkContext, Value, World,
+        Appendix, AttributeParser, Block, Editor, EventRuntime, Host, Journal, Node, NodeCommand,
+        NodeStatus, Parser, Plugins, Run, Sequencer, SpecialAttribute, State, ThunkContext, Value,
+        World,
     },
     project::{default_parser, default_runtime, default_world, Project, RunmdFile, Workspace},
     runtime::Runtime,
 };
 use lifec_poem::{RoutePlugin, WebApp};
 use poem::{Route, RouteMethod};
-use specs::{Join, RunNow, WorldExt};
-use std::{fs::File, path::PathBuf, sync::Arc};
+use specs::{Join, RunNow, WorldExt, WriteStorage};
+use std::sync::Arc;
 use tracing::{event, Level};
 
 use crate::{
-    plugins::{LoginNydus, Store},
+    plugins::{
+        guest::{AzureDispatcher, AzureGuest, AzureMonitor},
+        LoginNydus, Store,
+    },
     Artifact, ArtifactManifest, Authenticate, Descriptor, Discover, FormatOverlayBD, ImageIndex,
     ImageManifest, Login, LoginACR, LoginOverlayBD, Mirror, RemoteRegistry, Resolve, Teleport,
 };
@@ -100,6 +106,9 @@ impl Project for RegistryProxy {
         runtime.install_with_custom::<Artifact>("");
         runtime.install_with_custom::<Store>("");
         runtime.install_with_custom::<RemoteRegistry>("");
+        runtime.install_with_custom::<AzureGuest>("");
+        runtime.install_with_custom::<AzureMonitor>("");
+        runtime.install_with_custom::<AzureDispatcher>("");
         runtime
     }
 
@@ -112,6 +121,7 @@ impl Project for RegistryProxy {
         world.register::<Descriptor>();
         world.register::<ImageManifest>();
         world.register::<ArtifactManifest>();
+        world.register::<NodeStatus>();
         world
     }
 }
@@ -193,10 +203,9 @@ impl From<ThunkContext> for RegistryProxy {
             // Enables guest agent
             // The guest runs seperately from the host's engine
             let guest = build_registry_proxy_guest_agent(&context);
-
             {
                 let protocol = guest.protocol();
-                let entity = protocol.as_ref().entities().entity(11);
+                let entity = protocol.as_ref().entities().entity(3);
                 protocol.as_ref().system_data::<State>().activate(entity);
             }
 
@@ -212,43 +221,17 @@ impl From<ThunkContext> for RegistryProxy {
 /// Installs guest agent code,
 ///
 fn install_guest_agent(root: &mut Workspace) {
-    root.cache_file(&RunmdFile::new_src(
-        "dispatcher",
-        format!(
-            r#"
-        ```
-        + .engine
-        : .start        start
-        : .start        cooldown
-        : .loop
-        ```
-
-        ``` start
-        + .runtime
-        : .remote_registry
-        : .process          sh send-guest-commands.sh
-        : .silent
-        : .remote_registry
-        : .process          sh fetch-guest-state.sh
-        : .silent
-        ```
-
-        ``` cooldown
-        + .runtime
-        : .timer 5 s
-        ```
-        "#,
-        ),
-    ));
-
+    let account_name = std::env::var("ACCOUNT_NAME").unwrap_or_default();
     root.cache_file(&RunmdFile::new_src(
         "guest",
         format!(
             r#"
         ```
         + .engine
-        : .start        setup
-        : .next      listener
+        : .start            setup
+        : .start            start,  monitor
+        : .select           recover
+        : .loop
         ```
 
         ``` setup
@@ -256,71 +239,28 @@ fn install_guest_agent(root: &mut Workspace) {
         : .remote_registry
         : .process          sh setup-guest-storage.sh
         : .silent
-        : .println          Starting guest listener/monitor
-        ```
-        "#,
-        ),
-    ));
-
-    root.cache_file(&RunmdFile::new_src(
-        "listener",
-        format!(
-            r#"
-        ```
-        + .engine
-        : .start start
-        : .start cooldown
-        : .loop
         ```
 
         ``` start
         + .runtime
-        : .remote_registry
-        : .process   sh fetch-guest-commands.sh
-        : .silent
-        : .listen   .guest-commands
-        : .remote_registry
-        : .process   sh send-guest-state.sh
-        : .silent
+        : .println          Starting guest listener
+        : .azure_guest      {account_name}
         ```
 
-        ``` cooldown
+        ``` monitor
         + .runtime
-        : .timer 5 s
+        : .println          Starting guest monitor
+        : .azure_monitor    {account_name}
+        ```
+
+        ``` recover
+        + .runtime
+        : .println          Entering recovery mode 
+        : .timer 10s
         ```
         "#,
         ),
     ));
-
-    let work_dir = root.work_dir().join(".guest");
-
-    match std::fs::create_dir_all(&work_dir) {
-        Ok(_) => {}
-        Err(err) => {
-            event!(Level::ERROR, "could not create dirs, {err}");
-        }
-    }
-
-    match std::fs::create_dir_all(&work_dir.join("status")) {
-        Ok(_) => {}
-        Err(err) => {
-            event!(Level::ERROR, "could not create dirs, {err}");
-        }
-    }
-
-    match std::fs::create_dir_all(&work_dir.join("performance")) {
-        Ok(_) => {}
-        Err(err) => {
-            event!(Level::ERROR, "could not create dirs, {err}");
-        }
-    }
-
-    match std::fs::create_dir_all(&work_dir.join("journal")) {
-        Ok(_) => {}
-        Err(err) => {
-            event!(Level::ERROR, "could not create dirs, {err}");
-        }
-    }
 }
 
 /// Builds and returns a registry proxy guest agent,
@@ -349,33 +289,33 @@ fn build_registry_proxy_guest_agent(tc: &ThunkContext) -> Guest {
     let entity = tc.entity().expect("should have an entity");
 
     let guest = Guest::new::<RegistryProxy>(entity, host, |guest| {
-        EventRuntime::default().run_now(guest.protocol().as_ref());
-        Cleanup::default().run_now(guest.protocol().as_ref());
-        EventHandler::<Debugger>::default().run_now(guest.protocol().as_ref());
-        guest
-            .protocol()
-            .as_ref()
-            .system_data::<Profilers>()
-            .profile();
+        guest.update_protocol(|protocol| {
+            EventRuntime::default().run_now(protocol.as_ref());
+            Cleanup::default().run_now(protocol.as_ref());
+            EventHandler::<Debugger>::default().run_now(protocol.as_ref());
 
-        let nodes = guest
-            .protocol()
-            .as_ref()
-            .system_data::<State>()
-            .event_nodes();
-        for node in nodes {
-            guest
-                .protocol()
-                .as_ref()
-                .write_component()
-                .insert(node.status.entity(), node.status)
-                .expect("should be able to insert status");
-        }
+            protocol.as_mut().exec(|mut profilers: Profilers| {
+                profilers.profile();
+            });
 
-        let work_dir = guest.workspace().work_dir().join(".guest");
-        guest.update_performance(&work_dir);
-        guest.update_status(&work_dir);
-        guest.update_journal(&work_dir);
+            protocol.as_mut().exec(
+                |(state, mut node_status): (State, WriteStorage<NodeStatus>)| {
+                    let nodes = state.event_nodes();
+                    for node in nodes {
+                        node_status
+                            .insert(node.status.entity(), node.status)
+                            .expect("should be able to insert status");
+                    }
+                },
+            );
+
+            true
+        });
+    });
+
+    guest.update_protocol(|p| {
+        p.as_mut().insert(Some(guest.subscribe()));
+        true
     });
 
     guest
@@ -403,11 +343,20 @@ pub async fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest
         .expect("should be able to remove appendix");
     let appendix = Arc::new(appendix);
     host.world_mut().insert(appendix.clone());
+
+    let account_name = std::env::var("ACCOUNT_NAME").unwrap_or_default();
+    let workspace = tc.workspace().expect("should have a workspace");
+    let container = workspace.get_tenant().expect("should have a tenant");
+    let mut store = reality_azure::Store::login_azcli(account_name, container).await;
+    store.register::<Journal>("journal");
+    store.register::<NodeStatus>("node_status");
+    store.register::<Performance>("performance");
+    host.world_mut().insert(store);
+
     let entity = tc.entity().expect("should have an entity");
 
     let mut guest = Guest::new::<RegistryProxy>(entity, host, move |guest| {
         EventHandler::<()>::default().run_now(guest.protocol().as_ref());
-
         {
             let protocol = guest.protocol();
             let mut state = protocol.as_ref().system_data::<State>();
@@ -416,103 +365,57 @@ pub async fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest
             }
         }
 
-        if guest.send_commands(guest.workspace().work_dir().join(".guest-commands")) {
-            event!(
-                Level::WARN,
-                "Commands not sent, previous commands have not been read"
-            );
-        }
-
-        let workspace = guest.workspace().clone();
-        if guest.update_protocol(move |protocol| {
-            fn read_stream<'a>(name: &'a PathBuf) -> impl FnOnce() -> File + 'a {
-                move || {
-                    std::fs::OpenOptions::new()
-                        .read(true)
-                        .open(name)
-                        .ok()
-                        .unwrap()
-                }
-            }
-
-            let work_dir = workspace.work_dir().join(".guest");
-            let performance_dir = work_dir.join("performance");
-            let control = performance_dir.join("control");
-            let frames = performance_dir.join("frames");
-            let blob = performance_dir.join("blob");
-
-            let performance_updated = if control.exists() && frames.exists() && blob.exists() {
-                protocol.clear::<Performance>();
-                protocol.receive::<Performance, _, _>(
-                    read_stream(&control),
-                    read_stream(&frames),
-                    read_stream(&blob),
-                );
-
-                std::fs::remove_file(control).ok();
-                std::fs::remove_file(frames).ok();
-                std::fs::remove_file(blob).ok();
-                true
-            } else {
-                false
-            };
-
-            let status_dir = work_dir.join("status");
-            let control = status_dir.join("control");
-            let frames = status_dir.join("frames");
-            let blob = status_dir.join("blob");
-
-            let status_updated = if control.exists() && frames.exists() && blob.exists() {
-                protocol.clear::<NodeStatus>();
-                protocol.receive::<NodeStatus, _, _>(
-                    read_stream(&control),
-                    read_stream(&frames),
-                    read_stream(&blob),
-                );
-
-                std::fs::remove_file(control).ok();
-                std::fs::remove_file(frames).ok();
-                std::fs::remove_file(blob).ok();
-                true
-            } else {
-                false
-            };
-
-            let remote_dir = work_dir.join("journal");
-            let control = remote_dir.join("control");
-            let frames = remote_dir.join("frames");
-            let blob = remote_dir.join("blob");
-            let journal_updated = if control.exists() && frames.exists() && blob.exists() {
-                protocol.clear::<Journal>();
-                protocol.receive::<Journal, _, _>(
-                    read_stream(&control),
-                    read_stream(&frames),
-                    read_stream(&blob),
-                );
-                std::fs::remove_file(control).ok();
-                std::fs::remove_file(frames).ok();
-                std::fs::remove_file(blob).ok();
-                true
-            } else {
-                false
-            };
-
-            performance_updated | status_updated | journal_updated
-        }) {
-            event!(
-                Level::TRACE,
-                "Updated remote guest state, {:?}",
-                guest.workspace().work_dir()
-            );
+        if guest
+            .protocol()
+            .as_ref()
+            .read_component::<NodeCommand>()
+            .join()
+            .count()
+            > 0
+        {
+            guest.update_protocol(|_| true);
         }
     });
 
-    {
-        let protocol = guest.protocol();
-        let dispatcher = protocol.as_ref().entities().entity(2);
-        let mut state = protocol.as_ref().system_data::<State>();
-        state.activate(dispatcher);
-    }
+    guest.add_node(Node {
+        status: NodeStatus::Custom(entity),
+        appendix,
+        remote_protocol: Some(guest.subscribe()),
+        edit: Some(|node, ui| {
+            let mut opened = true;
+            let opened = &mut opened;
+
+            Window::new("Guest controls").opened(opened).build(ui, || {
+                if let Some(rp) = node.remote_protocol.as_ref() {
+                    let remote = rp.remote.borrow();
+                    let state = remote.as_ref().system_data::<State>();
+                    for mut node in state.event_nodes() {
+                        match node.status {
+                            NodeStatus::Event(status) => {
+                                ui.text(node.appendix.name(&status.entity()).unwrap_or_default());
+                                ui.same_line();
+                                node.event_buttons(ui, status);
+
+                                if let Some(command) = node.command.take() {
+                                    event!(Level::DEBUG, "Trying to dispatch, {command}");
+                                    remote
+                                        .as_ref()
+                                        .system_data::<Plugins>()
+                                        .features()
+                                        .broker()
+                                        .try_send_node_command(command, None)
+                                        .ok();
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            });
+            *opened
+        }),
+        ..Default::default()
+    });
 
     guest.enable_remote();
     guest

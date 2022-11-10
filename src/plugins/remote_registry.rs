@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use lifec::{
+    plugins,
     prelude::{BlockObject, BlockProperties, Plugin, ThunkContext},
     resources::Resources,
     state::AttributeIndex,
@@ -8,39 +9,15 @@ use lifec::{
 use rust_embed::RustEmbed;
 use tracing::{event, Level};
 
-use crate::proxy;
+use crate::{plugins::guest::AzureDispatcher, proxy};
 
 #[derive(RustEmbed, Default)]
 #[folder = "lib/sh/azure/"]
-#[include = "fetch-guest-commands.sh"]
-#[include = "fetch-guest-state.sh"]
-#[include = "send-guest-state.sh"]
-#[include = "send-guest-commands.sh"]
-#[include = "query-guest-commands.sh"]
-#[include = "query-guest-state.sh"]
 #[include = "setup-guest-storage.sh"]
 pub struct RemoteRegistry;
 
 impl RemoteRegistry {
     pub async fn unpack_resources(tc: &ThunkContext) {
-        Resources("")
-            .unpack_resource::<RemoteRegistry>(tc, &String::from("fetch-guest-state.sh"))
-            .await;
-        Resources("")
-            .unpack_resource::<RemoteRegistry>(tc, &String::from("fetch-guest-commands.sh"))
-            .await;
-        Resources("")
-            .unpack_resource::<RemoteRegistry>(tc, &String::from("send-guest-state.sh"))
-            .await;
-        Resources("")
-            .unpack_resource::<RemoteRegistry>(tc, &String::from("send-guest-commands.sh"))
-            .await;
-        Resources("")
-            .unpack_resource::<RemoteRegistry>(tc, &String::from("query-guest-state.sh"))
-            .await;
-        Resources("")
-            .unpack_resource::<RemoteRegistry>(tc, &String::from("query-guest-commands.sh"))
-            .await;
         Resources("")
             .unpack_resource::<RemoteRegistry>(tc, &String::from("setup-guest-storage.sh"))
             .await;
@@ -65,7 +42,7 @@ impl Plugin for RemoteRegistry {
     }
 
     fn call(context: &mut lifec::prelude::ThunkContext) -> Option<lifec::prelude::AsyncContext> {
-        context.task(|_| {
+        context.task(|cancel_source| {
             let mut tc = context.clone();
             async {
                 Self::unpack_resources(&tc).await;
@@ -108,7 +85,25 @@ impl Plugin for RemoteRegistry {
 
                 if tc.is_enabled("enable_remote") {
                     let remote_registry = proxy::build_registry_proxy_guest_agent_remote(&tc).await;
-                    tc.enable_guest(remote_registry);
+                    let mut guest_context = tc.clone();
+                    guest_context.with_symbol(
+                        "azure_dispatcher",
+                        tc.find_symbol("ACCOUNT_NAME")
+                            .expect("should have an account name"),
+                    );
+
+                    guest_context.enable_remote(remote_registry.subscribe());
+
+                    if tc.enable_guest(remote_registry) {
+                        event!(Level::INFO, "Guest dispatched to host");
+
+                        return plugins::await_plugin::<AzureDispatcher>(
+                            cancel_source,
+                            &mut guest_context,
+                            |tc| Some(tc),
+                        )
+                        .await;
+                    }
                 }
 
                 Some(tc)
