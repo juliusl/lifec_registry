@@ -27,6 +27,7 @@ async fn main() {
             EnvFilter::builder()
                 .from_env()
                 .expect("should work")
+                .add_directive("reality_azure=debug".parse().expect("should parse"))
                 .add_directive("lifec_registry=debug".parse().expect("should parse"))
                 .add_directive("lifec=debug".parse().expect("should parse"))
         })

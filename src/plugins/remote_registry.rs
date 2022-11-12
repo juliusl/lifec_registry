@@ -60,6 +60,9 @@ impl Plugin for RemoteRegistry {
                 if let Some(account_name) = tc.find_symbol("remote_registry") {
                     if !account_name.is_empty() {
                         tc.with_symbol("ACCOUNT_NAME", account_name);
+                    } else if let Some(account_name) = std::env::var("ACCOUNT_NAME").ok() {
+                        tc.status("Using account name from env variable").await;
+                        tc.with_symbol("ACCOUNT_NAME", account_name);
                     }
                 }
 
