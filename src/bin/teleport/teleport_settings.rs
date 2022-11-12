@@ -8,7 +8,6 @@ use lifec::prelude::{
     AttributeGraph, Block, Engine, Host, Inspector, SecureClient, ThunkContext, WorldExt,
 };
 use lifec_registry::RegistryProxy;
-use tracing::{event, Level};
 
 use crate::MirrorSettings;
 

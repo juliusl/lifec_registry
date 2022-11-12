@@ -7,6 +7,8 @@ use lifec_registry::RegistryProxy;
 use tracing_subscriber::EnvFilter;
 
 fn main() {
+    std::env::set_var("RUST_LOG", "reality_azure=debug,lifec_registry=debug,lifec=debug");
+
     tracing_subscriber::fmt::Subscriber::builder()
         .with_env_filter(
             EnvFilter::builder()
@@ -58,17 +60,14 @@ fn main() {
     + .operation setup_remote_registry
     : .remote_registry obddemospace
     : .process sh setup-guest-storage.sh
-
-    # : .process sh test.sh
-    # : .env REGISTRY_HOST
-    # : .env REGISTRY_USER
-    # : .env REGISTRY_TOKEN
-    # : .env REGISTRY_TENANT
-    # : .env REGISTRY_REPO
-    # : .env REFERENCE
-    # : .env WORK_DIR
     ```
     
+    # Test println
+    ```
+    + .operation test-println
+    : .println Hello World
+    ```
+
     # Test operation to call the mirror
     ```
     + .operation test

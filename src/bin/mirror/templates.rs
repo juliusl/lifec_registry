@@ -6,7 +6,9 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 + .config               start.mirror
 : app_host              .symbol         localhost:8567
 : teleport              .symbol         overlaybd
-: skip_hosts_dir_check  .false
+: skip_hosts_dir_check          .false
+: enable_guest_agent            .false
+: enable_guest_agent_dispatcher .false
 ```
 
 # Resolve manifest handler (/v2/../manifests/..)
@@ -49,49 +51,6 @@ pub static MIRROR_TEMPLATE: &'static str = r#"
 + .operation    open.guest
 : .remote_registry
 : .remote_guest 
-```
-
-# Send commands
-```
-+ .operation    send.commands
-: .remote_registry  
-: .process sh send-guest-commands.sh
-```
-
-# Send performance
-```
-+ .operation    send.performance
-: .remote_registry  
-: .process sh send-guest-performance.sh
-```
-
-# Send journal
-```
-+ .operation    send.journal
-: .remote_registry  
-: .process sh send-guest-journal.sh
-```
-
-# Send status
-```
-+ .operation    send.status
-: .remote_registry  
-: .process sh send-guest-status.sh
-```
-
-# Fetch guest state
-```
-+ .operation    fetch.state
-: .remote_registry  
-: .process sh fetch-guest-state.sh
-```
-
-# Fetch guest commands
-```
-+ .operation    fetch.commands
-: .remote_registry  
-: .process sh fetch-guest-commands.sh
-: .listen   .guest-commands
 ```
 
 # Test operation

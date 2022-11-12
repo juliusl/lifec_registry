@@ -3,9 +3,10 @@ use lifec::{
     state::AttributeIndex,
 };
 
-use std::time::Duration;
-use tokio::{sync::oneshot::error::TryRecvError, time::MissedTickBehavior};
+use tokio::sync::oneshot::error::TryRecvError;
 use tracing::{event, Level};
+
+use super::{PollingRate, get_interval};
 
 /// Plugin to process an azure guest,
 ///
@@ -25,6 +26,10 @@ impl Plugin for AzureGuest {
         "Does not keep track of commands it has dispatched, but will only dispatch if the store being fetched has a different etag then the last store fetched."
     }
 
+    fn compile(parser: &mut lifec::prelude::AttributeParser) {
+        parser.with_custom::<PollingRate>();
+    }
+
     fn call(context: &mut lifec::prelude::ThunkContext) -> Option<lifec::prelude::AsyncContext> {
         context.task(|mut cancel_source| {
             let tc = context.clone();
@@ -37,20 +42,25 @@ impl Plugin for AzureGuest {
                         .cloned()
                         .unwrap_or(String::from("default_guest"));
 
-                    let mut commands = reality_azure::Store::login_azcli(account, format!("{container}-guest")).await;
+                    let mut commands =
+                        reality_azure::Store::login_azcli(account, format!("{container}-guest"))
+                            .await;
                     commands.register::<NodeCommand>("node_commands");
 
-                    let mut interval = tokio::time::interval(Duration::from_millis(800));
-                    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+                    let mut interval = get_interval(&tc);
                     while let Err(TryRecvError::Empty) = cancel_source.try_recv() {
                         if commands.take(&prefix, None).await {
                             for command in commands.objects::<NodeCommand>() {
                                 tc.dispatch_node_command(command.clone());
-                                event!(Level::TRACE, "Dispatched command {}", command);
+                                event!(Level::DEBUG, "Dispatched command {}", command);
                             }
-                        } else {
-                            interval.tick().await;
+
+                            if let Some(commands) = commands.encoder_mut::<NodeCommand>() {
+                                commands.clear();
+                            }
                         }
+
+                        interval.tick().await;
                     }
                 }
 

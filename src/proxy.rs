@@ -1,27 +1,24 @@
-use imgui::Window;
 use lifec::{
     debugger::Debugger,
-    editor::EventNode,
     engine::{Cleanup, Performance, Profilers},
     guest::{Guest, RemoteProtocol},
     host::EventHandler,
     prelude::{
-        Appendix, AttributeParser, Block, Editor, EventRuntime, Host, Journal, Node, NodeCommand,
-        NodeStatus, Parser, Plugins, Run, Sequencer, SpecialAttribute, State, ThunkContext, Value,
-        World,
+        Appendix, AttributeParser, Block, Editor, EventRuntime, Host, Journal,
+        NodeStatus, Parser, Run, Sequencer, SpecialAttribute, State, ThunkContext, Value, World,
     },
     project::{default_parser, default_runtime, default_world, Project, RunmdFile, Workspace},
     runtime::Runtime,
 };
 use lifec_poem::{RoutePlugin, WebApp};
 use poem::{Route, RouteMethod};
-use specs::{Join, RunNow, WorldExt, WriteStorage};
-use std::sync::Arc;
+use specs::{Entity, Join, LazyUpdate, RunNow, WorldExt};
+use std::{collections::HashMap, sync::Arc};
 use tracing::{event, Level};
 
 use crate::{
     plugins::{
-        guest::{AzureDispatcher, AzureGuest, AzureMonitor},
+        guest::{AzureAgent, AzureDispatcher, AzureGuest, AzureMonitor},
         LoginNydus, Store,
     },
     Artifact, ArtifactManifest, Authenticate, Descriptor, Discover, FormatOverlayBD, ImageIndex,
@@ -86,7 +83,8 @@ impl Project for RegistryProxy {
 
         world.insert(handlers);
 
-        default_parser(world).with_special_attr::<RegistryProxy>()
+        default_parser(world)
+            .with_special_attr::<RegistryProxy>()
     }
 
     fn runtime() -> Runtime {
@@ -107,8 +105,9 @@ impl Project for RegistryProxy {
         runtime.install_with_custom::<Store>("");
         runtime.install_with_custom::<RemoteRegistry>("");
         runtime.install_with_custom::<AzureGuest>("");
-        runtime.install_with_custom::<AzureMonitor>("");
+        runtime.install_with_custom::<AzureAgent>("");
         runtime.install_with_custom::<AzureDispatcher>("");
+        runtime.install_with_custom::<AzureMonitor>("");
         runtime
     }
 
@@ -203,9 +202,9 @@ impl From<ThunkContext> for RegistryProxy {
             // Enables guest agent
             // The guest runs seperately from the host's engine
             let guest = build_registry_proxy_guest_agent(&context);
-            {
+            if context.is_enabled("enable_guest_agent_dispatcher") {
                 let protocol = guest.protocol();
-                let entity = protocol.as_ref().entities().entity(3);
+                let entity = protocol.as_ref().entities().entity(2);
                 protocol.as_ref().system_data::<State>().activate(entity);
             }
 
@@ -229,7 +228,7 @@ fn install_guest_agent(root: &mut Workspace) {
         ```
         + .engine
         : .start            setup
-        : .start            start,  monitor
+        : .start            start,  agent
         : .select           recover
         : .loop
         ```
@@ -245,12 +244,14 @@ fn install_guest_agent(root: &mut Workspace) {
         + .runtime
         : .println          Starting guest listener
         : .azure_guest      {account_name}
+        : .polling_rate     800 ms
         ```
 
-        ``` monitor
+        ``` agent
         + .runtime
-        : .println          Starting guest monitor
-        : .azure_monitor    {account_name}
+        : .println          Starting guest agent
+        : .azure_agent      {account_name}
+        : .polling_rate     800 ms
         ```
 
         ``` recover
@@ -261,6 +262,46 @@ fn install_guest_agent(root: &mut Workspace) {
         "#,
         ),
     ));
+
+    // root.cache_file(&RunmdFile::new_src(
+    //     "dispatcher",
+    //     format!(
+    //         r#"
+    //     ```
+    //     + .engine
+    //     : .start            setup
+    //     : .start            start, monitor
+    //     : .select           recover
+    //     : .loop
+    //     ```
+
+    //     ``` setup
+    //     + .runtime
+    //     : .remote_registry
+    //     : .process              sh setup-guest-storage.sh
+    //     : .silent
+    //     ```
+
+    //     ``` start
+    //     + .runtime
+    //     : .println              Starting remote dispatcher
+    //     : .azure_dispatcher     {account_name}
+    //     ```
+
+    //     ``` monitor
+    //     + .runtime
+    //     : .println              Starting remote monitor
+    //     : .azure_monitor        {account_name}
+    //     ```
+
+    //     ``` recover
+    //     + .runtime
+    //     : .println              Entering recovery mode
+    //     : .timer 10s
+    //     ```
+    //     "#,
+    //     ),
+    // ));
 }
 
 /// Builds and returns a registry proxy guest agent,
@@ -274,6 +315,8 @@ fn build_registry_proxy_guest_agent(tc: &ThunkContext) -> Guest {
         .expect("should compile into a world");
     world.insert(None::<RemoteProtocol>);
     world.insert(None::<Debugger>);
+    world.insert(None::<HashMap<Entity, NodeStatus>>);
+    world.insert(None::<Vec<Performance>>);
     let mut host = Host::from(world);
     host.prepare::<RegistryProxy>();
     host.link_sequences();
@@ -289,28 +332,21 @@ fn build_registry_proxy_guest_agent(tc: &ThunkContext) -> Guest {
     let entity = tc.entity().expect("should have an entity");
 
     let guest = Guest::new::<RegistryProxy>(entity, host, |guest| {
-        guest.update_protocol(|protocol| {
-            EventRuntime::default().run_now(protocol.as_ref());
-            Cleanup::default().run_now(protocol.as_ref());
-            EventHandler::<Debugger>::default().run_now(protocol.as_ref());
+        let world = guest.protocol();
+        let lazy_updates = world.as_ref().read_resource::<LazyUpdate>();
 
-            protocol.as_mut().exec(|mut profilers: Profilers| {
-                profilers.profile();
-            });
+        lazy_updates.exec(|world| {
+            EventRuntime::default().run_now(&world);
+            Cleanup::default().run_now(&world);
+            EventHandler::<Debugger>::default().run_now(&world);
 
-            protocol.as_mut().exec(
-                |(state, mut node_status): (State, WriteStorage<NodeStatus>)| {
-                    let nodes = state.event_nodes();
-                    for node in nodes {
-                        node_status
-                            .insert(node.status.entity(), node.status)
-                            .expect("should be able to insert status");
-                    }
-                },
-            );
-
-            true
+            let profilers = world.system_data::<Profilers>();
+            profilers.profile();
         });
+
+        for node in world.as_ref().system_data::<State>().event_nodes() {
+            lazy_updates.insert(node.status.entity(), node.status);
+        }
     });
 
     guest.update_protocol(|p| {
@@ -331,6 +367,8 @@ pub async fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest
         .compile::<RegistryProxy>()
         .expect("should compile into a world");
     world.insert(None::<Debugger>);
+    world.insert(None::<HashMap<Entity, NodeStatus>>);
+    world.insert(None::<Vec<Performance>>);
     let mut host = Host::from(world);
     host.prepare::<RegistryProxy>();
     host.link_sequences();
@@ -344,88 +382,41 @@ pub async fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest
     let appendix = Arc::new(appendix);
     host.world_mut().insert(appendix.clone());
 
-    let account_name = std::env::var("ACCOUNT_NAME").unwrap_or_default();
-    let workspace = tc.workspace().expect("should have a workspace");
-    let container = workspace.get_tenant().expect("should have a tenant");
-    let mut store = reality_azure::Store::login_azcli(account_name, container).await;
-    store.register::<Journal>("journal");
-    store.register::<NodeStatus>("node_status");
-    store.register::<Performance>("performance");
-    host.world_mut().insert(store);
-
     let entity = tc.entity().expect("should have an entity");
 
     let mut guest = Guest::new::<RegistryProxy>(entity, host, move |guest| {
-        EventHandler::<()>::default().run_now(guest.protocol().as_ref());
-        {
-            let protocol = guest.protocol();
-            let mut state = protocol.as_ref().system_data::<State>();
+        let world = guest.protocol();
+        let lazy_updates = world.as_ref().read_resource::<LazyUpdate>();
+
+        lazy_updates.exec(|world| {
+            EventHandler::<()>::default().run_now(&world);
+        });
+
+        lazy_updates.exec(|world| {
+            let mut state = world.system_data::<State>();
             if !state.should_exit() && state.can_continue() {
                 state.tick();
             }
-        }
-
-        if guest
-            .protocol()
-            .as_ref()
-            .read_component::<NodeCommand>()
-            .join()
-            .count()
-            > 0
-        {
-            guest.update_protocol(|_| true);
-        }
+        });
     });
 
-    guest.add_node(Node {
-        status: NodeStatus::Custom(entity),
-        appendix,
-        remote_protocol: Some(guest.subscribe()),
-        edit: Some(|node, ui| {
-            let mut opened = true;
-            let opened = &mut opened;
-
-            Window::new("Guest controls").opened(opened).build(ui, || {
-                if let Some(rp) = node.remote_protocol.as_ref() {
-                    let remote = rp.remote.borrow();
-                    let state = remote.as_ref().system_data::<State>();
-                    for mut node in state.event_nodes() {
-                        match node.status {
-                            NodeStatus::Event(status) => {
-                                ui.text(node.appendix.name(&status.entity()).unwrap_or_default());
-                                ui.same_line();
-                                node.event_buttons(ui, status);
-
-                                if let Some(command) = node.command.take() {
-                                    event!(Level::DEBUG, "Trying to dispatch, {command}");
-                                    remote
-                                        .as_ref()
-                                        .system_data::<Plugins>()
-                                        .features()
-                                        .broker()
-                                        .try_send_node_command(command, None)
-                                        .ok();
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            });
-            *opened
-        }),
-        ..Default::default()
+    guest.update_protocol(|p| {
+        p.ensure_encoder::<Journal>();
+        p.ensure_encoder::<NodeStatus>();
+        p.ensure_encoder::<Performance>();
+        true
     });
+
+    // guest.add_node(guest_control_node(entity, appendix, guest.subscribe()));
 
     guest.enable_remote();
     guest
 }
 
 mod tests {
-
-    #[test]
+    #[tokio::test]
     #[tracing_test::traced_test]
-    fn test_proxy_parsing() {
+    async fn test_proxy_parsing() {
         use crate::RegistryProxy;
         use hyper::Client;
         use hyper::StatusCode;
@@ -462,6 +453,7 @@ mod tests {
         dispatcher.setup(host.world_mut());
 
         let block = Engine::find_block(host.world(), "start proxy").expect("block is created");
+
         let block = {
             let blocks = host.world().read_component::<Block>();
             blocks.get(block).unwrap().clone()
@@ -470,97 +462,93 @@ mod tests {
         let index = block.index().first().expect("should exist").clone();
         let graph = AttributeGraph::new(index);
 
-        tokio::runtime::Runtime::new().unwrap().block_on(async {
-            let world = World::new();
-            let entity = world.entities().create();
-            let https = HttpsConnector::new();
-            let client = Client::builder().build::<_, hyper::Body>(https);
-            let runtime = tokio::runtime::Runtime::new().unwrap();
-            let handle = runtime.handle();
+        let world = World::new();
+        let entity = world.entities().create();
+        let https = HttpsConnector::new();
+        let client = Client::builder().build::<_, hyper::Body>(https);
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let handle = runtime.handle();
 
-            let mut tc = ThunkContext::default()
-                .with_block(&block)
-                .with_state(graph)
-                .enable_https_client(client)
-                .enable_async(entity, handle.clone());
+        let mut tc = ThunkContext::default()
+            .with_block(&block)
+            .with_state(graph)
+            .enable_https_client(client)
+            .enable_async(entity, handle.clone());
 
-            let app = RegistryProxy::create(&mut tc).routes();
-            let cli = poem::test::TestClient::new(app);
+        let app = RegistryProxy::create(&mut tc).routes();
+        let cli = poem::test::TestClient::new(app);
 
-            let resp = cli
-                .get("/v2/library/test/manifests/test_ref?ns=test.com")
-                .send()
-                .await;
-            resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
+        let resp = cli
+            .get("/v2/library/test/manifests/test_ref?ns=test.com")
+            .send()
+            .await;
+        resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
 
-            let resp = cli
-                .get("/v2/library/test/blobs/test_digest?ns=test.com")
-                .send()
-                .await;
-            resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
+        let resp = cli
+            .get("/v2/library/test/blobs/test_digest?ns=test.com")
+            .send()
+            .await;
+        resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
 
-            // TODO add these tests back
-            // let resp = cli.get("/").send().await;
-            // resp.assert_status(StatusCode::NOT_FOUND);
+        // TODO add these tests back
+        // let resp = cli.get("/").send().await;
+        // resp.assert_status(StatusCode::NOT_FOUND);
 
-            // let resp = cli.head("/").send().await;
-            // resp.assert_status(StatusCode::NOT_FOUND);
+        // let resp = cli.head("/").send().await;
+        // resp.assert_status(StatusCode::NOT_FOUND);
 
-            // let resp = cli.get("/v2").send().await;
-            // resp.assert_status_is_ok();
+        // let resp = cli.get("/v2").send().await;
+        // resp.assert_status_is_ok();
 
-            // let resp = cli.get("/v2/").send().await;
-            // resp.assert_status_is_ok();
+        // let resp = cli.get("/v2/").send().await;
+        // resp.assert_status_is_ok();
 
-            // let resp = cli.head("/v2").send().await;
-            // resp.assert_status_is_ok();
+        // let resp = cli.head("/v2").send().await;
+        // resp.assert_status_is_ok();
 
-            // let resp = cli.head("/v2/").send().await;
-            // resp.assert_status_is_ok();
+        // let resp = cli.head("/v2/").send().await;
+        // resp.assert_status_is_ok();
 
-            // let resp = cli
-            //     .head("/v2/library/test/manifests/test_ref?ns=test.com")
-            //     .send()
-            //     .await;
-            // resp.assert_status_is_ok();
+        // let resp = cli
+        //     .head("/v2/library/test/manifests/test_ref?ns=test.com")
+        //     .send()
+        //     .await;
+        // resp.assert_status_is_ok();
 
-            // let resp = cli
-            //     .put("/v2/library/test/manifests/test_ref?ns=test.com")
-            //     .send()
-            //     .await;
-            // resp.assert_status_is_ok();
+        // let resp = cli
+        //     .put("/v2/library/test/manifests/test_ref?ns=test.com")
+        //     .send()
+        //     .await;
+        // resp.assert_status_is_ok();
 
-            // let resp = cli
-            //     .delete("/v2/library/test/manifests/test_ref?ns=test.com")
-            //     .send()
-            //     .await;
-            // resp.assert_status_is_ok();
+        // let resp = cli
+        //     .delete("/v2/library/test/manifests/test_ref?ns=test.com")
+        //     .send()
+        //     .await;
+        // resp.assert_status_is_ok();
 
-            // let resp = cli
-            //     .post("/v2/library/test/blobs/uploads?ns=test.com")
-            //     .send()
-            //     .await;
-            // resp.assert_status_is_ok();
+        // let resp = cli
+        //     .post("/v2/library/test/blobs/uploads?ns=test.com")
+        //     .send()
+        //     .await;
+        // resp.assert_status_is_ok();
 
-            // let resp = cli
-            //     .patch("/v2/library/test/blobs/uploads/test?ns=test.com")
-            //     .send()
-            //     .await;
-            // resp.assert_status_is_ok();
+        // let resp = cli
+        //     .patch("/v2/library/test/blobs/uploads/test?ns=test.com")
+        //     .send()
+        //     .await;
+        // resp.assert_status_is_ok();
 
-            // let resp = cli
-            //     .put("/v2/library/test/blobs/uploads/test?ns=test.com")
-            //     .send()
-            //     .await;
-            // resp.assert_status_is_ok();
+        // let resp = cli
+        //     .put("/v2/library/test/blobs/uploads/test?ns=test.com")
+        //     .send()
+        //     .await;
+        // resp.assert_status_is_ok();
 
-            // let resp = cli
-            //     .get("/v2/library/test/tags/list?ns=test.com")
-            //     .send()
-            //     .await;
-            // resp.assert_status_is_ok();
-
-            runtime.shutdown_background();
-        });
+        // let resp = cli
+        //     .get("/v2/library/test/tags/list?ns=test.com")
+        //     .send()
+        //     .await;
+        // resp.assert_status_is_ok();
     }
 }

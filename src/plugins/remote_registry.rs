@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use lifec::{
     plugins,
     prelude::{BlockObject, BlockProperties, Plugin, ThunkContext},
@@ -7,9 +5,13 @@ use lifec::{
     state::AttributeIndex,
 };
 use rust_embed::RustEmbed;
+use tokio::{select, sync::oneshot};
 use tracing::{event, Level};
 
-use crate::{plugins::guest::AzureDispatcher, proxy};
+use crate::{
+    plugins::guest::{AzureDispatcher, AzureMonitor},
+    proxy,
+};
 
 #[derive(RustEmbed, Default)]
 #[folder = "lib/sh/azure/"]
@@ -67,42 +69,55 @@ impl Plugin for RemoteRegistry {
                     .with_symbol("TENANT", tenant)
                     .with_symbol("WORK_DIR", &work_dir);
 
-                let guest_dir = PathBuf::from(&work_dir).join(".guest");
-                let guest_command_dir = PathBuf::from(&work_dir).join(".guest-commands");
-                match tokio::fs::create_dir_all(guest_dir).await {
-                    Ok(_) => {}
-                    Err(err) => {
-                        event!(Level::ERROR, "Could not create .guest dir, {err}");
-                    }
-                }
-
-                match tokio::fs::create_dir_all(guest_command_dir).await {
-                    Ok(_) => {}
-                    Err(err) => {
-                        event!(Level::ERROR, "Could not create .guest-commands dir, {err}");
-                    }
-                }
-
                 if tc.is_enabled("enable_remote") {
                     let remote_registry = proxy::build_registry_proxy_guest_agent_remote(&tc).await;
                     let mut guest_context = tc.clone();
-                    guest_context.with_symbol(
-                        "azure_dispatcher",
-                        tc.find_symbol("ACCOUNT_NAME")
-                            .expect("should have an account name"),
-                    );
-
                     guest_context.enable_remote(remote_registry.subscribe());
 
                     if tc.enable_guest(remote_registry) {
                         event!(Level::INFO, "Guest dispatched to host");
 
-                        return plugins::await_plugin::<AzureDispatcher>(
-                            cancel_source,
-                            &mut guest_context,
+                        let (dispatcher_cancel, dispatcher_source) = oneshot::channel();
+                        let mut dispatcher_context = guest_context.clone();
+                        let dispatcher_context = dispatcher_context.with_symbol(
+                            "azure_dispatcher",
+                            tc.find_symbol("ACCOUNT_NAME")
+                                .expect("should have an account name"),
+                        );
+                        let dispatcher = plugins::await_plugin::<AzureDispatcher>(
+                            dispatcher_source,
+                            dispatcher_context,
                             |tc| Some(tc),
-                        )
-                        .await;
+                        );
+
+                        let (monitor_cancel, monitor_source) = oneshot::channel();
+                        let mut monitor_context = guest_context.clone();
+                        let monitor_context = monitor_context.with_symbol(
+                            "azure_monitor",
+                            tc.find_symbol("ACCOUNT_NAME")
+                                .expect("should have an account name"),
+                        );
+                        let monitor = plugins::await_plugin::<AzureMonitor>(
+                            monitor_source,
+                            monitor_context,
+                            |tc| Some(tc),
+                        );
+
+                        return select! {
+                            tc = dispatcher => {
+                                monitor_cancel.send(()).ok();
+                                tc
+                            },
+                            tc = monitor => {
+                                dispatcher_cancel.send(()).ok();
+                                tc
+                            },
+                            _ = cancel_source => {
+                                monitor_cancel.send(()).ok();
+                                dispatcher_cancel.send(()).ok();
+                                None
+                            },
+                        };
                     }
                 }
 

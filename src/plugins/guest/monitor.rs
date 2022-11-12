@@ -1,15 +1,15 @@
-use std::{ops::Deref, time::Duration};
-
+use std::collections::HashMap;
 use lifec::{
-    engine::{Performance, Runner},
-    prelude::{Journal, NodeStatus, Plugin, BlockObject, BlockProperties},
+    engine::Performance,
+    prelude::{BlockObject, BlockProperties, Journal, NodeStatus, Plugin},
     state::AttributeIndex,
 };
-use specs::{Join, WorldExt};
-use tokio::{sync::oneshot::error::TryRecvError, time::MissedTickBehavior};
-use tracing::{event, Level};
+use specs::{Entity, LazyUpdate, WorldExt};
+use tokio::sync::oneshot::error::TryRecvError;
 
-/// Plugin that monitors guest state and uploads when changes occur,
+use super::{PollingRate, get_interval};
+
+/// Plugin to monitor perf/status data from a remote agent,
 ///
 #[derive(Default)]
 pub struct AzureMonitor;
@@ -20,7 +20,11 @@ impl Plugin for AzureMonitor {
     }
 
     fn description() -> &'static str {
-        "This plugin will watch and wait for changes to the remote_protocol object in it's thunk context, and then encode and upload state"
+        "Monitors a status, performance, etc from a store being updated by a remote agent"
+    }
+
+    fn compile(parser: &mut lifec::prelude::AttributeParser) {
+        parser.with_custom::<PollingRate>();
     }
 
     fn call(context: &mut lifec::prelude::ThunkContext) -> Option<lifec::prelude::AsyncContext> {
@@ -40,56 +44,42 @@ impl Plugin for AzureMonitor {
                     store.register::<NodeStatus>("node_status");
                     store.register::<Performance>("performance");
 
-                    let mut interval = tokio::time::interval(Duration::from_millis(800));
-                    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-                    
+                    let mut interval = get_interval(&tc);
                     while let Err(TryRecvError::Empty) = cancel_source.try_recv() {
-                        if let Some(remote_protocol) = tc.remote().as_ref() {
-                            let mut remote = remote_protocol.remote.clone();
+                        if store.commit(&prefix).await && store.fetch(&prefix).await {
+                            if let Some(remote) = tc.remote() {
+                                let remote = remote.remote.borrow();
+                                let lazy_updates = remote.as_ref().read_resource::<LazyUpdate>();
 
-                            match remote.changed().await {
-                                Ok(_) => {
-                                    let state = remote.borrow();
-                                    let mut runner = state.as_ref().system_data::<Runner>();
-                                    if let Some(encoder) = store.encoder_mut::<Performance>() {
-                                        for (_, perf) in runner.take_performance() {
-                                            encoder.encode(&perf, state.as_ref());
-                                        }
-                                    }
-                                    let journal = state.as_ref().read_resource::<Journal>();
-                                    if let Some(encoder) = store.encoder_mut::<Journal>() {
-                                        encoder.encode(journal.deref(), state.as_ref());
+                                let performance = store.objects::<Performance>();
+                                lazy_updates.exec_mut(move |world| {
+                                    world.insert(Some(performance));
+                                });
+
+                                let statuses = store.objects::<NodeStatus>();
+                                lazy_updates.exec_mut(|world| {
+                                    let mut map = HashMap::<Entity, NodeStatus>::default();
+                                    for status in statuses {
+                                        map.insert(status.entity(), status);
                                     }
 
-                                    let status = state.as_ref().read_component::<NodeStatus>();
-                                    if let Some(encoder) = store.encoder_mut::<NodeStatus>() {
-                                        for status in status.join() {
-                                            encoder.encode(status, state.as_ref());
-                                        }
-                                    }
+                                    world.insert(Some(map));
+                                });
+
+                                if let Some(journal) = store.objects::<Journal>().first() {
+                                    let journal = journal.clone();
+                                    lazy_updates.exec_mut(move |world| {
+                                        world.insert(journal);
+                                    });
                                 }
-                                Err(err) => {
-                                    event!(
-                                        Level::ERROR,
-                                        "Error waiting for change in remote protocol, {err}"
-                                    );
-                                }
-                            }
 
-                            store.upload(&prefix).await;
-
-                            if let Some(encoder) = store.encoder_mut::<Journal>() {
-                                encoder.clear();
-                            }
-
-                            if let Some(encoder) = store.encoder_mut::<NodeStatus>() {
-                                encoder.clear();
-                            }
-
-                            if let Some(encoder) = store.encoder_mut::<Performance>() {
-                                encoder.clear();
+                                store.take_encoder::<NodeStatus>();
+                                store.take_encoder::<Journal>();
+                                store.take_encoder::<Performance>();
                             }
                         }
+
+                        interval.tick().await;
                     }
                 }
 

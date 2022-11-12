@@ -1,11 +1,14 @@
-use std::time::Duration;
+use lifec::{
+    engine::Runner,
+    prelude::{BlockObject, BlockProperties, NodeCommand, Plugin},
+    state::AttributeIndex,
+};
+use tokio::sync::oneshot::error::TryRecvError;
 
-use lifec::{prelude::{Plugin, NodeCommand, BlockObject, BlockProperties}, state::AttributeIndex, engine::Runner};
-use tokio::{time::MissedTickBehavior, sync::oneshot::error::TryRecvError};
-use tracing::{event, Level};
+use super::{get_interval, PollingRate};
 
 /// Plugin to dispatch commands to azure storage,
-/// 
+///
 #[derive(Default)]
 pub struct AzureDispatcher;
 
@@ -16,6 +19,10 @@ impl Plugin for AzureDispatcher {
 
     fn description() -> &'static str {
         "Listens for changes to the remote_protocol and dispatches those changes to store"
+    }
+
+    fn compile(parser: &mut lifec::prelude::AttributeParser) {
+        parser.with_custom::<PollingRate>();
     }
 
     fn call(context: &mut lifec::prelude::ThunkContext) -> Option<lifec::prelude::AsyncContext> {
@@ -30,36 +37,33 @@ impl Plugin for AzureDispatcher {
                         .cloned()
                         .unwrap_or(String::from("default_guest"));
 
-                    let mut commands = reality_azure::Store::login_azcli(account, format!("{container}-guest")).await;
+                    let mut commands =
+                        reality_azure::Store::login_azcli(account, format!("{container}-guest"))
+                            .await;
                     commands.register::<NodeCommand>("node_commands");
 
-                    let mut interval = tokio::time::interval(Duration::from_millis(800));
-                    interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+                    let mut interval = get_interval(&tc);
                     while let Err(TryRecvError::Empty) = cancel_source.try_recv() {
-                        if let Some(mut remote) = tc.remote() {
-                            match remote.remote.changed().await {
-                                Ok(_) => {
-                                    if let Some(encoder) = commands.encoder_mut::<NodeCommand>() {
-                                        let state = remote.remote.borrow();
-                                        let mut runner = state.as_ref().system_data::<Runner>();
-                                        for (_, command) in runner.take_commands() {
-                                            encoder.encode(&command, state.as_ref());
-                                        }
-                                    }
+                        let mut has_commands = false;
+
+                        if let Some(remote) = tc.remote() {
+                            if let Some(encoder) = commands.encoder_mut::<NodeCommand>() {
+                                let state = remote.remote.borrow();
+                                let mut runner = state.as_ref().system_data::<Runner>();
+                                for (_, command) in runner.take_commands() {
+                                    encoder.encode(&command, state.as_ref());
+                                    has_commands = true;
                                 }
-                                Err(err) => {
-                                    event!(
-                                        Level::ERROR,
-                                        "Error waiting for change in remote protocol, {err}"
-                                    );
+                            }
+
+                            if has_commands && commands.upload(&prefix).await {
+                                if let Some(encoder) = commands.encoder_mut::<NodeCommand>() {
+                                    encoder.clear();
                                 }
                             }
                         }
 
-                        commands.upload(&prefix).await;
-                        if let Some(encoder) = commands.encoder_mut::<NodeCommand>() {
-                            encoder.clear();
-                        }
+                        interval.tick().await;
                     }
                 }
 

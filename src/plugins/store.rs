@@ -1,22 +1,16 @@
-use std::sync::Arc;
-
 use hyper::{body::HttpBody, Body, Response};
-use imgui::{Ui, Window};
 use lifec::{
-    debugger::Debugger,
-    guest::Guest,
     prelude::{
-        Appendix, BlockObject, BlockProperties, Editor, Host, Node, Plugin, Sequencer, ThunkContext,
+        BlockObject, BlockProperties, Plugin,
     },
 };
 use serde::Deserialize;
 use sha2::Digest;
-use specs::{Component, WorldExt};
 use tracing::{event, Level};
 
 use crate::{
     content::{DOCKER_MANIFEST_LIST, DOCKER_V1_MANIFEST, DOCKER_V2_MANIFEST, OCI_IMAGE_MANIFEST},
-    ArtifactManifest, Descriptor, ImageIndex, ImageManifest, RegistryProxy,
+    ArtifactManifest, Descriptor, ImageIndex, ImageManifest,
     OCI_ARTIFACTS_MANIFEST_MEDIA_TYPE, ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE,
 };
 
@@ -151,7 +145,7 @@ impl Plugin for Store {
                             if let Some((desc, manifest)) =
                                 Store::read_content::<ImageManifest>(response).await
                             {
-                                t(tc.clone(), desc, manifest);
+                               //  t(tc.clone(), desc, manifest);
                             }
                         }
                         Some(DOCKER_MANIFEST_LIST) => {
@@ -166,83 +160,6 @@ impl Plugin for Store {
             }
         })
     }
-}
-
-fn t<T>(tc: ThunkContext, desc: Descriptor, comp: T)
-where
-    T: Component,
-{
-    let world = tc
-        .workspace()
-        .expect("should have a workspace")
-        .compile::<RegistryProxy>()
-        .expect("should compile into a world");
-    let mut host = Host::from(world);
-    host.prepare::<RegistryProxy>();
-    host.link_sequences();
-    host.build_appendix();
-    host.enable_listener::<Debugger>();
-    host.prepare::<RegistryProxy>();
-    let appendix = host
-        .as_mut()
-        .remove::<Appendix>()
-        .expect("should be able to remove appendix");
-    let appendix = Arc::new(appendix);
-    host.world_mut().insert(appendix.clone());
-    let entity = tc.entity().expect("should have an entity");
-    let guest_entity = host.world().entities().entity(entity.id());
-
-    host.world()
-        .write_component()
-        .insert(guest_entity, comp)
-        .expect("should be able to insert manifest");
-
-    host.world()
-        .write_component()
-        .insert(guest_entity, desc)
-        .expect("should be able to insert");
-
-    let mut guest = Guest::new::<RegistryProxy>(entity, host, |g| {});
-
-    guest.add_node(Node {
-        appendix,
-        remote_protocol: Some(guest.subscribe()),
-        status: lifec::prelude::NodeStatus::Custom(entity),
-        edit: Some(|n, ui| {
-            let opened = true;
-            Window::new("Registry Object").build(ui, || {
-                if let Some(r) = n.remote_protocol.as_ref() {
-                    if let Some(desc) = r
-                        .remote
-                        .borrow()
-                        .as_ref()
-                        .read_component::<Descriptor>()
-                        .get(n.status.entity())
-                    {
-                        ui.input_text("digest", &mut desc.digest.clone())
-                            .read_only(true)
-                            .build();
-                        ui.input_text("size (bytes)", &mut format!("{}", &desc.size))
-                            .read_only(true)
-                            .build();
-                        ui.input_text("media_type", &mut desc.media_type.clone())
-                            .read_only(true)
-                            .build();
-                        if let Some(artifact_type) = desc.artifact_type.as_ref() {
-                            ui.input_text("artifact_type", &mut artifact_type.clone())
-                                .read_only(true)
-                                .build();
-                        }
-                    }
-                }
-            });
-            opened
-        }),
-        ..Default::default()
-    });
-    guest.enable_remote();
-
-    if tc.enable_guest(guest) {}
 }
 
 impl BlockObject for Store {
