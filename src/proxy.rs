@@ -1,19 +1,22 @@
+use imgui::Window;
 use lifec::{
     debugger::Debugger,
     engine::{Cleanup, Performance, Profilers},
     guest::{Guest, RemoteProtocol},
     host::EventHandler,
     prelude::{
-        Appendix, AttributeParser, Block, Editor, EventRuntime, Host, Journal,
-        NodeStatus, Parser, Run, Sequencer, SpecialAttribute, State, ThunkContext, Value, World,
+        Appendix, AttributeParser, Block, Editor, EventRuntime, Host, Journal, Node, NodeStatus,
+        Parser, Plugins, Run, Sequencer, SpecialAttribute, State, ThunkContext, Value, World,
     },
     project::{default_parser, default_runtime, default_world, Project, RunmdFile, Workspace},
     runtime::Runtime,
 };
 use lifec_poem::{RoutePlugin, WebApp};
 use poem::{Route, RouteMethod};
+use reality_azure::StoreIndex;
 use specs::{Entity, Join, LazyUpdate, RunNow, WorldExt};
 use std::{collections::HashMap, sync::Arc};
+use tokio::io::AsyncReadExt;
 use tracing::{event, Level};
 
 use crate::{
@@ -83,8 +86,7 @@ impl Project for RegistryProxy {
 
         world.insert(handlers);
 
-        default_parser(world)
-            .with_special_attr::<RegistryProxy>()
+        default_parser(world).with_special_attr::<RegistryProxy>()
     }
 
     fn runtime() -> Runtime {
@@ -407,7 +409,62 @@ pub async fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest
         true
     });
 
-    // guest.add_node(guest_control_node(entity, appendix, guest.subscribe()));
+    guest.add_node(Node {
+        appendix,
+        status: NodeStatus::Custom(entity),
+        display: Some(|state, ui| {
+            let mut opened = true;
+            Window::new("Proxy store")
+                .size([800.0, 600.0], imgui::Condition::Appearing)
+                .opened(&mut opened)
+                .build(ui, || {
+                    if let Some(rp) = state.remote_protocol.as_ref() {
+                        let world = rp.remote.borrow();
+                        let index = world.as_ref().try_fetch::<StoreIndex>();
+                        let plugins = world.as_ref().system_data::<Plugins>();
+                        if let Some(index) = index.as_ref() {
+                            if let Some(t) = ui.begin_table("files", 2) {
+                                for e in index.entries() {
+                                    let name = format!(
+                                        "{}.{}",
+                                        e.name().cloned().unwrap_or_default(),
+                                        e.symbol().cloned().unwrap_or_default()
+                                    );
+                                    ui.table_next_row();
+                                    ui.table_next_column();
+                                    ui.text(&name);
+
+                                    ui.table_next_column();
+                                    if ui.button(format!("Download {name}")) {
+                                        let blob = plugins
+                                            .features()
+                                            .handle()
+                                            .block_on(async move { e.bytes().await });
+
+                                        plugins.features().handle().spawn(async move {
+                                            let mut buf = vec![];
+                                            blob.as_ref().read_to_end(&mut buf).await.ok();
+
+                                            match tokio::fs::write(name, &buf).await {
+                                                Ok(_) => {}
+                                                Err(err) => {
+                                                    event!(Level::ERROR, "Error {err}");
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                                t.end();
+                            }
+                        }
+                    }
+                });
+
+            opened
+        }),
+        remote_protocol: Some(guest.subscribe()),
+        ..Default::default()
+    });
 
     guest.enable_remote();
     guest

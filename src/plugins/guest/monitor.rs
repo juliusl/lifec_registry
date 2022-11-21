@@ -1,13 +1,15 @@
-use std::collections::HashMap;
 use lifec::{
+    debugger::Debugger,
     engine::Performance,
     prelude::{BlockObject, BlockProperties, Journal, NodeStatus, Plugin},
     state::AttributeIndex,
 };
+use reality_azure::WireObject;
 use specs::{Entity, LazyUpdate, WorldExt};
+use std::collections::HashMap;
 use tokio::sync::oneshot::error::TryRecvError;
 
-use super::{PollingRate, get_interval};
+use super::{get_interval, PollingRate};
 
 /// Plugin to monitor perf/status data from a remote agent,
 ///
@@ -43,6 +45,19 @@ impl Plugin for AzureMonitor {
                     store.register::<Journal>("journal");
                     store.register::<NodeStatus>("node_status");
                     store.register::<Performance>("performance");
+                    store.register::<Debugger>("debugger");
+
+                    let index = store.index(&prefix).await;
+                    if let Some(remote) = tc.remote() {
+                        let world = remote.remote.borrow();
+                        let world = world.as_ref();
+                        let lazy_updates = world.read_resource::<LazyUpdate>();
+                        if let Some(index) = index {
+                            lazy_updates.exec_mut(move |world| {
+                                world.insert(index);
+                            });
+                        }
+                    }
 
                     let mut interval = get_interval(&tc);
                     while let Err(TryRecvError::Empty) = cancel_source.try_recv() {
@@ -71,6 +86,14 @@ impl Plugin for AzureMonitor {
                                     lazy_updates.exec_mut(move |world| {
                                         world.insert(journal);
                                     });
+                                }
+
+                                if let Some(encoder) = store.take_encoder::<Debugger>() {
+                                    let decoder = reality_azure::Decoder::new(&encoder);
+                                    let debugger = Debugger::decode_v2(remote.as_ref(), decoder);
+                                    lazy_updates.exec_mut(move |world| {
+                                        world.insert(Some(debugger));
+                                    })
                                 }
 
                                 store.take_encoder::<NodeStatus>();

@@ -3,9 +3,9 @@ use std::{ops::Deref, collections::HashMap};
 use lifec::{
     engine::{Performance, Runner},
     prelude::{Journal, NodeStatus, Plugin, BlockObject, BlockProperties},
-    state::AttributeIndex,
+    state::AttributeIndex, debugger::Debugger,
 };
-use specs::{Join, WorldExt, Entity};
+use specs::{Join, WorldExt, Entity, LazyUpdate};
 use tokio::sync::oneshot::error::TryRecvError;
 
 use super::{PollingRate, get_interval};
@@ -44,7 +44,8 @@ impl Plugin for AzureAgent {
                     store.register::<Journal>("journal");
                     store.register::<NodeStatus>("node_status");
                     store.register::<Performance>("performance");
-                    
+                    store.register::<Debugger>("debugger");
+
                     let mut interval = get_interval(&tc);
                     while let Err(TryRecvError::Empty) = cancel_source.try_recv() {
                         if let Some(remote_protocol) = tc.remote().as_ref() {
@@ -73,6 +74,22 @@ impl Plugin for AzureAgent {
                                 encoder.clear();
                                 for status in status.join() {
                                     encoder.encode(status, state.as_ref());
+                                }
+                            }
+
+                            let lazy_update = state.as_ref().read_resource::<LazyUpdate>();
+                            lazy_update.exec_mut(|world| {
+                                let mut debugger = world.read_resource::<Option<Debugger>>().deref().clone();
+                                if let Some(debugger) = debugger.take() {
+                                    world.insert(debugger);
+                                }
+                            });
+                            
+                            let debugger = state.as_ref().try_fetch::<Debugger>();
+                            if let Some(debugger) = debugger.as_ref() {
+                                if let Some(encoder) = store.encoder_mut::<Debugger>() {
+                                    encoder.clear();
+                                    encoder.encode(debugger.deref(), state.as_ref());
                                 }
                             }
                         }

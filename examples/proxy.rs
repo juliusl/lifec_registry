@@ -7,7 +7,7 @@ use lifec_registry::RegistryProxy;
 use tracing_subscriber::EnvFilter;
 
 fn main() {
-    std::env::set_var("RUST_LOG", "reality_azure=debug,lifec_registry=debug,lifec=debug");
+    std::env::set_var("RUST_LOG", "reality=debug,reality_azure=debug,lifec_registry=debug,lifec=trace");
 
     tracing_subscriber::fmt::Subscriber::builder()
         .with_env_filter(
@@ -27,14 +27,14 @@ fn main() {
     ```
     + .config start.mirror
     : skip_hosts_dir_check .true
-    : enable_guest_agent .true
+    : enable_guest_agent   .true
 
     + .operation resolve.test
     : .login        access_token
     : .authn    
     : .request
-    : .resolve
-    : .discover     teleport.link.v1
+    # : .resolve
+    # .discover     teleport.link.v1
     # : .teleport     overlaybd
 
     + .operation download.test
@@ -73,7 +73,7 @@ fn main() {
     + .operation test
     : .process curl
     : .arg localhost:8578/v2/d/redis/manifests/6.0.2?ns=obddemo2.azurecr.io
-    : .arg -v
+    : .arg -silent
     : .flag -X GET
     : .flag -H Accept:application/vnd.docker.distribution.manifest.v2+json
     : .redirect output.resp
