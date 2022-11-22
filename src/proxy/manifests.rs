@@ -6,7 +6,7 @@ use lifec_poem::RoutePlugin;
 use poem::{
     delete, get, handler, head,
     web::{Data, Path, Query},
-    EndpointExt, Response, RouteMethod,
+    EndpointExt, Response, RouteMethod, post, Body,
 };
 use serde::{Deserialize, Serialize};
 use specs::{Component, VecStorage, WorldExt};
@@ -150,6 +150,10 @@ impl RoutePlugin for Manifests {
                     event!(Level::DEBUG, "adding path GET {path}");
                     route.get(manifest_api.data(self.clone()).data(self.host.clone()).data(self.context.clone()))
                 }
+                Some(Method::POST) => {
+                    event!(Level::DEBUG, "adding path POST {path}");
+                    route.post(manifest_api.data(self.clone()).data(self.host.clone()).data(self.context.clone()))
+                }
                 Some(Method::HEAD) => {
                     event!(Level::DEBUG, "adding path HEAD {path}");
                     route.head(manifest_api.data(self.clone()).data(self.host.clone()).data(self.context.clone()))
@@ -167,6 +171,10 @@ impl RoutePlugin for Manifests {
                 Some(Method::GET) => {
                     event!(Level::DEBUG, "adding path GET {path}");
                     get(manifest_api.data(self.clone()).data(self.host.clone()).data(self.context.clone()))
+                }
+                Some(Method::POST) => {
+                    event!(Level::DEBUG, "adding path POST {path}");
+                    post(manifest_api.data(self.clone()).data(self.host.clone()).data(self.context.clone()))
                 }
                 Some(Method::HEAD) => {
                     event!(Level::DEBUG, "adding path HEAD {path}");
@@ -195,6 +203,7 @@ impl RoutePlugin for Manifests {
 #[handler]
 async fn manifest_api(
     request: &poem::Request,
+    body: Body,
     Path((repo, reference)): Path<(String, String)>,
     Query(Manifests { ns, .. }): Query<Manifests>,
     resolve: Data<&Manifests>,
@@ -211,7 +220,7 @@ async fn manifest_api(
                 .clone()
                 .expect("should have an operation name"),
             request,
-            None,
+            Some(body.into()),
             ns,
             repo.trim_end_matches("/manifests"),
             reference,

@@ -197,7 +197,7 @@ async fn blobs_api(
     request: &poem::Request,
     Path((repo, reference)): Path<(String, String)>,
     Query(Blobs { ns, .. }): Query<Blobs>,
-    resolve: Data<&Blobs>,
+    blobs: Data<&Blobs>,
     host: Data<&Arc<Host>>,
     context: Data<&ThunkContext>,
 ) -> Response {
@@ -206,8 +206,7 @@ async fn blobs_api(
     registry
         .proxy_request::<Blobs>(
             &context,
-            resolve
-                .operation
+            blobs.operation
                 .clone()
                 .expect("should have an operation name"),
             request,

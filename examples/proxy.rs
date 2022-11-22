@@ -34,7 +34,7 @@ fn main() {
     : .authn    
     : .request
     # : .resolve
-    # .discover     teleport.link.v1
+    # : .discover     teleport.link.v1
     # : .teleport     overlaybd
 
     + .operation download.test
