@@ -1,5 +1,6 @@
 use hyper::{Body, StatusCode, Uri};
-use lifec::prelude::{NodeCommand, SpecialAttribute, ThunkContext};
+use lifec::engine::NodeCommand;
+use lifec::prelude::{SpecialAttribute, ThunkContext};
 use lifec::project::Workspace;
 use lifec::state::AttributeIndex;
 use lifec_poem::RoutePlugin;

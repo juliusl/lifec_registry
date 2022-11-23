@@ -1,6 +1,6 @@
 use lifec::{
-    prelude::{BlockObject, BlockProperties, NodeCommand, Plugin},
-    state::AttributeIndex,
+    prelude::{BlockObject, BlockProperties, Plugin},
+    state::AttributeIndex, engine::NodeCommand,
 };
 
 use tokio::sync::oneshot::error::TryRecvError;

@@ -5,11 +5,11 @@ use lifec::{
     guest::{Guest, RemoteProtocol},
     host::EventHandler,
     prelude::{
-        Appendix, AttributeParser, Block, Editor, EventRuntime, Host, Journal, Node, NodeStatus,
+        AttributeParser, Block, EventRuntime, Host, Journal, Node, NodeStatus,
         Parser, Plugins, Run, Sequencer, SpecialAttribute, State, ThunkContext, Value, World,
     },
     project::{default_parser, default_runtime, default_world, Project, RunmdFile, Workspace},
-    runtime::Runtime,
+    runtime::Runtime, appendix::Appendix,
 };
 use lifec_poem::{RoutePlugin, WebApp};
 use poem::{Route, RouteMethod};
