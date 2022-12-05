@@ -1,100 +1,159 @@
----
-ArtifactType: nupkg, executable, azure-web-app, azure-cloud-service, etc. More requirements for artifact type standardization may come later.
-Documentation: URL
-Language: typescript, csharp, java, js, python, golang, powershell, markdown, etc. More requirements for language names standardization may come later.
-Platform: windows, node, linux, ubuntu16, azure-function, etc. More requirements for platform standardization may come later.
-Stackoverflow: URL
-Tags: comma,separated,list,of,tags
----
+# Lifec Registry 
 
-# Project Title. MUST BE topmost header
+This project provides tools to extend registries on the client side. It includes a mirror/proxy server, as well as additional tools for extending what a registry can do.
 
-One Paragraph of project description goes here. Including links to other user docs or a project website is good here as well. This paragraph will be used as a blurb on CodeHub. Please make the first paragraph short and to the point.
+## Getting Started w/ the Mirror 
 
-You can expand on project description in subsequent paragraphs. It is a good practice to explain how this project is used and what other projects depend on it.
+*Note*, currently only `acr` registries are supported, with additional registry support planned.
+*Note*, also, currently only Linux/Macos are supported w/ Windows support on the way.
 
-## Getting Started
+### Installing from source
 
-These instructions will get you a copy of the project up and running on your local machine for development and testing purposes. See deployment for notes on how to deploy the project on a live system.
+To install from source, first you'll need to install Rust. The best way to do that is here: https://rustup.rs
 
-### Prerequisites
-
-What things you need to install the software and how to install them
-
-``` powershell
-Give examples
-```
-
-### Installing
-
-A step by step series of examples that tell you how to get a development environment running
-
-1. Describe what needs to be done first
-
-    ``` batch
-    Give an example of performing step 1
-    ```
-
-2. And then repeat for each step
-
-    ``` sh
-    Another example, this time for step 2
-    ```
-
-## Running the tests
-
-Explain how to run the tests for this project that are relevant to users. You can also link to the testing portion of [CONTRIBUTING.md](CONTRIBUTING.md) for tests relevant to contributors.
-
-### End-to-end tests
-
-Explain what these tests test and why
+Next, clone this repo and from the root run, 
 
 ```
-Give an example
+cargo install --path .
 ```
 
-### Unit tests
-
-Explain what these test and why
+or,
 
 ```
-Give examples
+cargo install --git https://github.com/juliusl/lifec_registry --branch pr/v2_api
+```
+ 
+This will install a binary called `acr` on your PATH. 
+
+
+## (TODO) Install dependencies
+
+## Setting up an environment for the mirror
+
+Next, pick a directory you would like to work with. This directory will be the "home" directory, and config files
+will be "installed" here. 
+
+Once you've done that, run the command `acr --registry {your-registry-name} init`. 
+
+This will output a `mirror.runmd` file which has all of the config. You can open this file and render it in Markdown if you'd like a better viewing experience.
+
+## Starting the mirror
+
+Now to start the mirror, run this command, `acr --registry {your-registry-name} mirror start`, 
+
+(If you'd like to run this in the background, `acr --registry {your-registry-name} mirror start &`)
+
+
+## Try it out 
+
+If you'd like you can now use the `--hosts-dir` flag with `ctr` and pulling from the registry should be authenticated through the proxy. That being said, you can also try it out with jsut `curl`. For example, to get a manifest the format would be, 
+
+```sh
+curl 'localhost:{port}/v2/{repo}/manifests/{tag or digest}?ns={registry-name}.{registry-host}'
 ```
 
-## Deployment
+So it would look something like this, 
 
-Add additional notes about how to deploy this on a live system
+```sh
+curl 'localhost:8578/v2/redis/manifests/example?ns=example.azurecr.io'
+```
 
-## Built With
+You can try out other parts of the registry too if you enable the proxy on other resources.
 
-Documenting some of the main tools used to build this project, manage dependencies, etc will help users get more information if they are trying to understand or having difficulties getting the project up and running.
 
-* Link to some dependency manager
-* Link to some framework or build tool
-* Link to some compiler, linting tool, bundler, etc
+### Troubleshooting start
 
-## Contributing
+It might be the case you'd like to customize the engine sequence, and in that case you might want to start at a different place. In that case, if you run `acr --registry {your-registry-name} dump`, you will get a map that looks like this: 
 
-Please read our [CONTRIBUTING.md](CONTRIBUTING.md) which outlines all of our policies, procedures, and requirements for contributing to this project.
+```
+1: mirror
+  2: install mirror
+    3: process "lifec"
+      arg List([Symbol("--runmd-path"), Symbol("lib/overlaybd/setup_env"), Symbol("start"), Symbol("--engine-name"), Symbol("ubuntu")])
 
-## Versioning and changelog
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](link-to-tags-or-other-release-location).
+  4: start mirror
+        # file_src: Symbol(".world/azurecr.io/example/access_token")::Reference(17620018548555559471)
+        # src_dir: Symbol(".")::Reference(4027234349407905632)
+        # work_dir: Symbol(".world/azurecr.io/example")::Reference(10460137960410825781)
+    5: login-acr "example"
 
-It is a good practice to keep `CHANGELOG.md` file in repository that can be updated as part of a pull request.
+    6: install "access_token"
 
-## Authors
+    7: mirror "example.azurecr.io"
+      app_host Single(Symbol("localhost:8578"))
+      feature_localhost:8578 List([Symbol("resolve"), Symbol("pull")])
 
-List main authors of this project with a couple of words about their contribution.
 
-Also insert a link to the `owners.txt` file if it exists as well as any other dashboard or other resources that lists all contributors to the project.
 
-## License
+Engine control block: ``` mirror @ Entity(1, Generation(1))
+  Loop(Entity(1, Generation(1)))
+```
 
-This project is licensed under the < INSERT LICENSE NAME > - see the [LICENSE](LICENSE) file for details
+If you pass the `--id {id}` flag with `start`, you can start at any of the plugin calls. For example to start at the `.install` plugin, you would use `acr --registry {your-registry-name} mirror start --id 6`.
 
-## Acknowledgments
+## Customizing the mirror
 
-* Hat tip to anyone whose code was used
-* Inspiration
-* etc
+The `mirror.runmd` is self explanatory, and will have the most up to date information on how to configure the mirror. However, here are some high-level concepts to understand.
+
+The runtime for this code is based on `lifec` which is a plugin based runtime. The only thing that is important to know, is that plugins typically are declared with a `dot` + `name of the plugin`, and then some input to the plugin. 
+
+For example, `.println hello world`,
+
+Here is an example mirror/proxy configuration,
+
+```
++ .runtime
+: .login-acr    example
+: .install      access_token
+: .mirror       example.azurecr.io
+: .host         localhost:8578, resolve, pull
+
++ .proxy          localhost:8578
+: .manifests      head, get
+:   .login        access_token
+:   .authn        oauth2
+:   .resolve      application/vnd.docker.distribution.manifest.list.v2+json
+:   .discover     dadi.image.v1
+:   .teleport     overlaybd
+: .blobs          get
+:   .login        access_token
+:   .authn        oauth2
+:   .pull         
+```
+
+Just to re-iterate, the generated `mirror.runmd` is a better illustration of all the pieces put together. This is to give context to the following list of plugins this repository provides and a short explanation about each, 
+
+* `.login-acr` - This plugin will use az cli to get an access token for the mirror to use for authn.
+    - The input should be the name of the registry (`acr init` will handle this)
+
+* `.login` - This plugin will add credentials to the plugin state for subsequent calls to use. 
+    - The input should be the name of the credential to use. This credential is expected to be a file stored in the same directory as the `mirror.runmd` file. (This handled for you by default). 
+
+* `.authn` - This plugin will authenticate with the registry with the original api that was received by the mirror.
+    - The input is expected to be the authn type, (*TODO* Only `oauth2` is currently supported, but this will be updated in the future to support other types of authn)
+
+* `.mirror` - This plugin will setup the mirror config w/ containerd. This includes generating a `hosts.toml` and copying it over to the correct directory. The `hosts.toml` file is generated before the mirror starts, and outputs to `.work/etc/containerd/certs.d/{registry-name}.{registry-host}/hosts.toml` 
+    - The expected input is the full registry host name, i.e. {registry-name}.{registry-host} (`acr init` will handle this)
+    - This plugin also installs a custom attribute called `.host`. This is attribute can be used to configure each mirror and their capabilities. Example usage is, `.host localhost:8555, resolve, pull`. (`acr init` will provide a default setting as an example)
+    - TODO - There are additional custom attributes available such as `https` and `server`, need to document these.
+
+* `.proxy` - This isn't exactly a plugin, it's more of a sub-engine that the `.mirror` plugin will use in order to customize each api that is being mirrored. 
+    - The input it expects is the address of the proxy server. TODO (document how to enable tls)
+    - This attribute will install 3 custom attributes, `.manifests`, `.blobs`, `.tags`. Each custom attribute expects the REST methods to implement, for example `.manifests head, get`. (`acr init` will create a default setting)
+
+* `.resolve` - This plugin will call the upstream server from the original api, and save the response to state for subsequent plugins to operate on. 
+    - The input is the media type(s) to accept (TODO currently this will override the original accept, WIP), it will be a 1:1 mapping to the Accept header, so that is the format the input should be in.
+
+* `.discover` - This will use the ORAS referrer's api to search for artifacts for the current subject `digest` in state. If an artifact is found, it will attach it to state as the name of the artifact. 
+    - The expected input is the name of the artifact type 
+
+* `.teleport` - This is an experimental plugin that will resolve image references to a streamable format if such a reference exists. It will check for artifacts added by `.discover`
+    - The expected input is the name of the format, currently only `overlaybd` is supported. 
+    - This plugin also expects the current snapshotter pulling the image is capable of streaming the image in the first place. 
+
+* `.pull` - This plugin will call the upstream server to download a blob. Only used in the context of the proxy.
+
+## Getting started w/ Teleport 
+
+(TODO)
