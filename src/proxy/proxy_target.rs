@@ -724,7 +724,7 @@ impl TryFrom<&ThunkContext> for ProxyTarget {
                                 accept
                             }
                         })
-                    } else if let Some(_) = tc.search().find_binary("body") {
+                    } else if let Some(_) = tc.cached_body() {
                         let content_type = tc
                             .search()
                             .find_symbol("content-type")

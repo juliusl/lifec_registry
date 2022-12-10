@@ -198,7 +198,8 @@ impl WebApp for RegistryProxy {
             route = route.at(path, blob_route);
         }
 
-        Route::default().nest("/v2", route)
+        Route::default()
+            .nest("/v2", route)
     }
 }
 

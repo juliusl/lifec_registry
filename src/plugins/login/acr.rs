@@ -1,5 +1,5 @@
 use lifec::prelude::{
-    AsyncContext, AttributeIndex, BlockObject, Plugin, Process, Resources, ThunkContext,
+    AsyncContext, AttributeIndex, BlockObject, Plugin, Process, Resources, ThunkContext, AddDoc,
 };
 use lifec::prelude::{AttributeParser, BlockProperties, CustomAttribute};
 use rust_embed::RustEmbed;
@@ -71,7 +71,7 @@ impl Plugin for LoginACR {
     }
 
     fn description() -> &'static str {
-        "Calls a login script, and outputs an access_token"
+        "Calls a login script, and outputs an access_token file"
     }
 
     fn call(context: &mut ThunkContext) -> Option<AsyncContext> {
@@ -119,11 +119,15 @@ impl Plugin for LoginACR {
     }
 
     fn compile(parser: &mut AttributeParser) {
-        parser.add_custom_with("admin", |p, _| {
-            if let Some(last_entity) = p.last_child_entity() {
-                p.define_child(last_entity, "admin", true);
-            }
-        });
+        if let Some(mut docs) = Self::start_docs(parser) {
+            let docs = &mut docs;
+            docs.as_mut().add_custom_with("admin", |p, _| {
+                if let Some(last_entity) = p.last_child_entity() {
+                    p.define_child(last_entity, "admin", true);
+                }
+            })
+            .add_doc(docs, "Use admin account credentials to authn with ACR");
+        }
     }
 }
 

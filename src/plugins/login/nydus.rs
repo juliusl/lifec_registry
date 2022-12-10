@@ -1,4 +1,4 @@
-use lifec::{prelude::{Plugin, ThunkContext, AsyncContext, AttributeParser, Value, BlockObject, BlockProperties, CustomAttribute}, state::AttributeIndex};
+use lifec::{prelude::{Plugin, ThunkContext, AsyncContext, AttributeParser, Value, BlockObject, BlockProperties, CustomAttribute, AddDoc}, state::AttributeIndex};
 use serde_json::json;
 use tracing::{event, Level};
 
@@ -70,11 +70,16 @@ impl Plugin for LoginNydus {
     }
 
     fn compile(parser: &mut AttributeParser) {
-        parser.add_custom_with("registry", |p, content| {
-            if let Some(last_entity) = p.last_child_entity() {
-                p.define_child(last_entity, "registry", Value::Symbol(content));
-            }
-        });
+        if let Some(mut docs) = Self::start_docs(parser) {
+            let docs = &mut docs;
+
+            docs.as_mut().add_custom_with("registry", |p, content| {
+                if let Some(last_entity) = p.last_child_entity() {
+                    p.define_child(last_entity, "registry", Value::Symbol(content));
+                }
+            })
+            .add_doc(docs, "The registry to login with nydus");
+        }
     }
 }
 

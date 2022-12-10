@@ -1,4 +1,4 @@
-use lifec::prelude::{AsyncContext, ThunkContext, AttributeParser, CustomAttribute};
+use lifec::prelude::{AsyncContext, ThunkContext, AttributeParser, CustomAttribute, AddDoc};
 use lifec::prelude::{AttributeIndex, BlockObject, BlockProperties, Plugin, Value};
 use serde_json::json;
 use tracing::event;
@@ -69,11 +69,15 @@ impl Plugin for LoginOverlayBD {
     }
 
     fn compile(parser: &mut AttributeParser) {
-        parser.add_custom_with("registry", |p, content| {
-            if let Some(last_entity) = p.last_child_entity() {
-                p.define_child(last_entity, "registry", Value::Symbol(content));
-            }
-        });
+        if let Some(mut docs) = Self::start_docs(parser) {
+            let docs = &mut docs;
+            docs.as_mut().add_custom_with("registry", |p, content| {
+                if let Some(last_entity) = p.last_child_entity() {
+                    p.define_child(last_entity, "registry", Value::Symbol(content));
+                }
+            })
+            .add_doc(docs, "The registry to add to overlaybd's credentials");
+        }
     }
 }
 

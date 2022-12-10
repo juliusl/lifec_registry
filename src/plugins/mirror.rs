@@ -165,60 +165,66 @@ Design of containerd registry mirror feature
     /// ```
     ///
     fn compile(parser: &mut AttributeParser) {
-        // This attribute handles setting the
-        parser.add_custom(CustomAttribute::new_with(
-            "server",
-            |p, content| match Uri::from_str(&content) {
-                Ok(upstream) => {
-                    let last = p.last_child_entity().expect("child required to edit");
-                    p.define_child(last, "server", Value::Symbol(upstream.to_string()));
-                }
-                Err(err) => {
-                    event!(Level::ERROR, "Could not parse uri {}, {err}", content);
-                }
-            },
-        ));
 
-        parser.add_custom(CustomAttribute::new_with("host", |p, content| {
-            let args = content.split_once(",");
+        if let Some(mut docs) = Self::start_docs(parser) {
+            let docs = &mut docs;
+            
+            // This attribute handles setting the
+            docs.as_mut().add_custom(CustomAttribute::new_with(
+                "server",
+                |p, content| match Uri::from_str(&content) {
+                    Ok(upstream) => {
+                        let last = p.last_child_entity().expect("child required to edit");
+                        p.define_child(last, "server", Value::Symbol(upstream.to_string()));
+                    }
+                    Err(err) => {
+                        event!(Level::ERROR, "Could not parse uri {}, {err}", content);
+                    }
+                },
+            ));
 
-            if let Some((proxy_to, capabilities)) = args {
-                let last = p
-                    .last_child_entity()
-                    .expect("child entity required to edit");
-                p.define_child(last, "app_host", Value::Symbol(proxy_to.to_string()));
+            docs.as_mut().add_custom(CustomAttribute::new_with("host", |p, content| {
+                let args = content.split_once(",");
 
-                let mut lexer = HostCapability::lexer(capabilities);
-                let feature_name = format!("feature_{}", proxy_to);
-                while let Some(feature) = lexer.next() {
-                    match feature {
-                        HostCapability::Resolve => {
-                            p.define_child(
+                if let Some((proxy_to, capabilities)) = args {
+                    let last = p
+                        .last_child_entity()
+                        .expect("child entity required to edit");
+                    p.define_child(last, "app_host", Value::Symbol(proxy_to.to_string()));
+
+                    let mut lexer = HostCapability::lexer(capabilities);
+                    let feature_name = format!("feature_{}", proxy_to);
+                    while let Some(feature) = lexer.next() {
+                        match feature {
+                            HostCapability::Resolve => {
+                                p.define_child(
                                 last,
                                 &feature_name,
-                                Value::Symbol("resolve".to_string()),
-                            );
+                                    Value::Symbol("resolve".to_string()),
+                                );
+                            }
+                            HostCapability::Push => {
+                                p.define_child(last, &feature_name, Value::Symbol("push".to_string()));
+                            }
+                            HostCapability::Pull => {
+                                p.define_child(last, &feature_name, Value::Symbol("pull".to_string()));
+                            }
+                            HostCapability::Error => continue,
                         }
-                        HostCapability::Push => {
-                            p.define_child(last, &feature_name, Value::Symbol("push".to_string()));
-                        }
-                        HostCapability::Pull => {
-                            p.define_child(last, &feature_name, Value::Symbol("pull".to_string()));
-                        }
-                        HostCapability::Error => continue,
                     }
                 }
-            }
-        }));
+            }));
 
-        parser.add_custom(CustomAttribute::new_with("https", |p, content| {
-            let path = PathBuf::from(content);
-            let path = path.canonicalize().expect("must exist");
-            let last = p.last_child_entity().expect("child entity required");
-            p.define_child(last, "https", Value::Symbol(format!("{:?}", path)));
-        }));
+            docs.as_mut().add_custom(CustomAttribute::new_with("https", |p, content| {
+                let path = PathBuf::from(content);
+                let path = path.canonicalize().expect("must exist");
+                let last = p.last_child_entity().expect("child entity required");
+                p.define_child(last, "https", Value::Symbol(format!("{:?}", path)));
+            }));
 
-        parser.with_custom::<RegistryProxy>();
+            docs.as_mut().with_custom::<RegistryProxy>();
+        }
+
     }
 }
 
