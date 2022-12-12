@@ -43,7 +43,14 @@ impl Plugin for Login {
                         .state()
                         .find_symbol("REGISTRY_USER")
                         .unwrap_or("00000000-0000-0000-0000-000000000000".to_string());
-                    match tokio::fs::read_to_string(token_src).await {
+                    
+                    let token_src = tc.work_dir()
+                        .expect("should have a work dir")
+                        .join(token_src)
+                        .canonicalize()
+                        .expect("should exist");
+
+                    match tokio::fs::read_to_string(token_src.as_path()).await {
                         Ok(token) => {
                             event!(Level::DEBUG, "Writing credentials to context");
                             tc.state_mut()
@@ -51,7 +58,7 @@ impl Plugin for Login {
                                 .with_symbol("REGISTRY_TOKEN", token.trim());
                         }
                         Err(err) => {
-                            event!(Level::ERROR, "Issue reading {token_src} -- {err}");
+                            event!(Level::ERROR, "Issue reading {:?} -- {err}", token_src.as_path());
                         }
                     }
                 } else {

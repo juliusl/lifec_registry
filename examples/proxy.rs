@@ -1,4 +1,3 @@
-
 use lifec::{
     prelude::{Editor, Host, Sequencer},
     project::{Project, RunmdFile, Workspace},
@@ -19,7 +18,7 @@ fn main() {
         .init();
 
     std::env::set_var("ACCOUNT_NAME", "obddemospace");
-    
+
     let mut workspace = Workspace::new("azurecr.io", None).tenant("obddemo2");
     workspace.set_root_runmd(
         r#"

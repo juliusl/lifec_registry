@@ -66,6 +66,7 @@ impl Plugin for Artifact {
                                 .expect("should be able to start request")
                                 .uri_str(&artifact_uri)
                                 .content_type(&artifact_manifest.media_type)
+                                .header("authorization", tc.search().find_symbol("Authorization").expect("should have authorization"))
                                 .method(Method::PUT)
                                 .body(body);
 
@@ -74,8 +75,9 @@ impl Plugin for Artifact {
                                     if !resp.status().is_success() {
                                         event!(
                                             Level::ERROR,
-                                            "Could not put manifest {}",
-                                            artifact_uri
+                                            "Could not put manifest {}, {:?}",
+                                            artifact_uri,
+                                            resp
                                         );
                                     } else {
                                         event!(

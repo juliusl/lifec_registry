@@ -121,7 +121,6 @@ impl<'a> Registry<'a> {
     where
         S: SpecialAttribute,
     {
-        let headers = request.headers();
         let mut context = context.clone();
         let workspace = context
             .workspace()
@@ -156,7 +155,8 @@ impl<'a> Registry<'a> {
                 "api",
                 format!("https://{namespace}/v2/{repo}/{resource}/{reference}"),
             );
-
+            
+        let headers = request.headers();
         for (name, value) in headers
             .iter()
             .filter(|(n, _)| n.to_string() != "host" && n.to_string() != "user-agent")

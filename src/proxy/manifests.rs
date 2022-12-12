@@ -106,6 +106,26 @@ impl SpecialAttribute for Manifests {
                 .expect("should be able to insert component");
         });
 
+        parser.add_custom_with("post", |p, c| {
+            let last_entity = p.last_child_entity().expect("should have an entity");
+            let world = p.world().expect("should have a world");
+
+            let manifests = {
+                let manifests = world.read_component::<Manifests>();
+                let manifests = manifests.get(last_entity).expect("should have a manifest");
+                manifests.clone()
+            };
+
+            let mut route = manifests.clone();
+            route.method = Some(Method::POST);
+            route.operation = Some(c);
+            let route_entity = world.entities().create();
+            world
+                .write_component()
+                .insert(route_entity, route)
+                .expect("should be able to insert component");
+        });
+
         parser.add_custom_with("head", |p, c| {
             let last_entity = p.last_child_entity().expect("should have an entity");
             let world = p.world().expect("should have a world");

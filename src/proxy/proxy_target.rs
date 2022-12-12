@@ -336,12 +336,19 @@ impl ProxyTarget {
             .search()
             .find_symbol("accept")
             .expect("should have accept");
+        
+        let auth = self
+            .context
+            .search()
+            .find_symbol("Authorization")
+            .expect("should have authorization");
 
         let request = self
             .start_request()
             .expect("should be able to start a request")
             .uri_str(uri.as_ref())
             .header("accept", &accept)
+            .header("authorization", &auth)
             .method(Method::HEAD)
             .finish();
 
@@ -391,19 +398,7 @@ impl ProxyTarget {
     /// Starts an authenticated requets to the proxy target,
     ///
     pub fn start_request(&self) -> Option<RequestBuilder> {
-        match Authorization::bearer(
-            self.context
-                .search()
-                .find_symbol("access_token")
-                .expect("should have an access token")
-                .as_str(),
-        ) {
-            Ok(auth_header) => Some(Request::builder().typed_header(auth_header)),
-            Err(err) => {
-                event!(Level::ERROR, "Could not parse auth header, {err}");
-                None
-            }
-        }
+       Some(Request::builder())
     }
 
     /// Sends a request (https only),
