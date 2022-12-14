@@ -128,7 +128,7 @@ impl ProxyTarget {
                 let content_type = resp
                     .headers()
                     .get("content-type")
-                    .expect("should have a content tyype")
+                    .expect("should have a content type")
                     .to_str()
                     .expect("should be a string");
 

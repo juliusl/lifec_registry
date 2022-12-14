@@ -26,7 +26,7 @@ pub trait RouteParameters: Default + Clone + Send + Sync + 'static {
     fn ident() -> &'static str;
 }
 
-/// Trait for a fn that adds a new proxy route to an app
+/// Trait for a fn that adds a new proxy route to an app,
 /// 
 pub trait AddRoute {
     /// Adds a proxy route to an app,
@@ -140,14 +140,15 @@ impl<R: RouteParameters> SpecialAttribute for ProxyRoute<R> {
             Value::Symbol(content.as_ref().to_string()),
         );
 
-        parser.add_custom_with("get", parse::<R, GETKEY>);
-        parser.add_custom_with("post", parse::<R, POSTKEY>);
-        parser.add_custom_with("put", parse::<R, PUTKEY>);
-        parser.add_custom_with("head", parse::<R, HEADKEY>);
-        parser.add_custom_with("delete", parse::<R, DELETEKEY>);
+        add::<R, GETKEY>(parser);
+        add::<R, POSTKEY>(parser);
+        add::<R, PUTKEY>(parser);
+        add::<R, HEADKEY>(parser);
+        add::<R, DELETEKEY>(parser);
     }
 }
 
+/// This is to keep the parse function DRY, otherwise a parse method would need to be written per method type
 const CONNECTKEY: usize = 0;
 const DELETEKEY: usize = 1;
 const GETKEY: usize = 2;
@@ -158,18 +159,37 @@ const POSTKEY: usize = 6;
 const PUTKEY: usize = 7;
 const TRACEKEY: usize = 8;
 
-fn parse<R: RouteParameters, const M: usize>(p: &mut AttributeParser, c: String) {
+fn add<R: RouteParameters, const METHODKEY: usize>(parser: &mut AttributeParser) {
+    parser.add_custom_with(ident::<METHODKEY>(), parse::<R, METHODKEY>);
+}
+
+fn ident<const METHODKEY: usize>() -> &'static str {
+    match METHODKEY {
+        CONNECTKEY => "connect",
+        DELETEKEY => "delete",
+        GETKEY => "get",
+        HEADKEY => "head",
+        OPTIONSKEY => "options",
+        PATCHKEY => "patch",
+        POSTKEY => "post",
+        PUTKEY => "put",
+        TRACEKEY => "trace",
+        _ => unimplemented!()
+    }
+}
+
+fn parse<R: RouteParameters, const METHODKEY: usize>(p: &mut AttributeParser, c: String) {
         let last_entity = p.last_child_entity().expect("should have an entity");
         let world = p.world().expect("should have a world");
 
         let route = {
             let route = world.read_component::<ProxyRoute<R>>();
-            let route = route.get(last_entity).expect("should have a manifest");
+            let route = route.get(last_entity).expect("should have a route component");
             route.clone()
         };
 
         let mut route = route.clone();
-        route.method = match M {
+        route.method = match METHODKEY {
             CONNECTKEY => Some(Method::CONNECT),
             DELETEKEY => Some(Method::DELETE),
             GETKEY => Some(Method::GET),
@@ -216,7 +236,7 @@ impl<R: RouteParameters> RoutePlugin for ProxyRoute<R> {
                     route.delete(proxy_api::<R>::default().data(self.clone()).data(self.host.clone()).data(self.context.clone()))
                 }
                 _ => {
-                    panic!("Unsupported method, {:?}", self.method)
+                    unimplemented!("Unsupported method, {:?}", self.method)
                 }
             }
         } else {
@@ -242,7 +262,7 @@ impl<R: RouteParameters> RoutePlugin for ProxyRoute<R> {
                     delete(proxy_api::<R>::default().data(self.clone()).data(self.host.clone()).data(self.context.clone()))
                 }
                 _ => {
-                    panic!("Unsupported method, {:?}", self.method)
+                    unimplemented!("Unsupported method, {:?}", self.method)
                 }
             }
         }
@@ -252,11 +272,14 @@ impl<R: RouteParameters> RoutePlugin for ProxyRoute<R> {
         if let Some(response) = context.take_response() {
             response.into()
         } else {
+            event!(Level::WARN, "Context did not generate a response, returning a 503");
             Registry::soft_fail()
         }
     }
 }
 
+/// Default registry proxy handler,
+/// 
 #[handler]
 async fn proxy_api<R>(
     request: &poem::Request,
@@ -286,4 +309,3 @@ where
             reference,
         ).await
 }
-
