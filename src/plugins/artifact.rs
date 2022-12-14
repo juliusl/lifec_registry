@@ -63,10 +63,8 @@ impl Plugin for Artifact {
 
                             let put = proxy_target
                                 .start_request()
-                                .expect("should be able to start request")
                                 .uri_str(&artifact_uri)
                                 .content_type(&artifact_manifest.media_type)
-                                .header("authorization", tc.search().find_symbol("Authorization").expect("should have authorization"))
                                 .method(Method::PUT)
                                 .body(body);
 

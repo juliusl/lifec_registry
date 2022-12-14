@@ -56,7 +56,6 @@ impl ProxyTarget {
 
         let req = self
             .start_request()
-            .expect("should return a request builder")
             .uri_str(resource_url)
             .header("accept", media_type)
             .finish();
@@ -92,18 +91,10 @@ impl ProxyTarget {
             .find_symbol("accept")
             .expect("should have accept");
         
-        let auth = self
-            .context
-            .search()
-            .find_symbol("Authorization")
-            .expect("should have authorization");
-
         let request = self
             .start_request()
-            .expect("should be able to start a request")
             .uri_str(uri.as_ref())
             .header("accept", &accept)
-            .header("authorization", &auth)
             .method(Method::HEAD)
             .finish();
 
@@ -152,8 +143,14 @@ impl ProxyTarget {
 
     /// Starts an authenticated requets to the proxy target,
     ///
-    pub fn start_request(&self) -> Option<RequestBuilder> {
-       Some(Request::builder())
+    pub fn start_request(&self) -> RequestBuilder {
+        let auth = self
+            .context
+            .search()
+            .find_symbol("Authorization")
+            .expect("should have authorization");
+            
+       Request::builder().header("authorization", &auth)
     }
 
     /// Sends a request (https only),
