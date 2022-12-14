@@ -28,17 +28,17 @@ impl<'a> Registry<'a> {
     pub async fn proxy_request<P>(
         &mut self,
         context: &ThunkContext,
-        operation_name: impl AsRef<str>,
+        operation_name: impl Into<String>,
         request: &Request,
         body: Option<Body>,
-        namespace: impl AsRef<str>,
-        repo: impl AsRef<str>,
-        reference: impl AsRef<str>,
+        namespace: impl Into<String>,
+        repo: impl Into<String>,
+        reference: impl Into<String>,
     ) -> Response
     where
         P: RoutePlugin + SpecialAttribute,
     {
-        let operation_name = operation_name.as_ref();
+        let operation_name = operation_name.into();
         let operation_name = if let Some(tag) = self
             .workspace
             .as_ref()
@@ -113,9 +113,9 @@ impl<'a> Registry<'a> {
     pub fn prepare_registry_context<S>(
         &self,
         request: &Request,
-        namespace: impl AsRef<str>,
-        repo: impl AsRef<str>,
-        reference: impl AsRef<str>,
+        namespace: impl Into<String>,
+        repo: impl Into<String>,
+        reference: impl Into<String>,
         context: &ThunkContext,
     ) -> ThunkContext
     where
@@ -132,10 +132,10 @@ impl<'a> Registry<'a> {
             .to_string();
 
         let host = workspace.get_host().to_string();
-        let repo = repo.as_ref().to_string();
+        let repo = repo.into();
         let resource = S::ident();
-        let reference = reference.as_ref().to_string();
-        let namespace = namespace.as_ref().to_string();
+        let reference = reference.into();
+        let namespace = namespace.into();
 
         context
             .with_symbol("REGISTRY_NAMESPACE", &namespace)
@@ -159,7 +159,7 @@ impl<'a> Registry<'a> {
         let headers = request.headers();
         for (name, value) in headers
             .iter()
-            .filter(|(n, _)| n.to_string() != "host" && n.to_string() != "user-agent")
+            .filter(|(n, _)| n.as_str() != "host" && n.as_str() != "user-agent")
         {
             context
                 .state_mut()

@@ -14,6 +14,8 @@ use lifec::{prelude::{SpecialAttribute, ThunkContext, TimerSettings, Value}, sta
 use logos::Logos;
 pub use monitor::AzureMonitor;
 
+/// Pointer-type the implements a special attribute for configuring a polling rate,
+/// 
 pub struct PollingRate;
 
 /// Interprets and gets a new interval struct from a polling_rate attribute,

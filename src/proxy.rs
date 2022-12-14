@@ -11,11 +11,11 @@ use lifec::{
     project::{default_parser, default_runtime, default_world, Project, RunmdFile, Workspace},
     runtime::Runtime, appendix::Appendix,
 };
-use lifec_poem::{RoutePlugin, WebApp};
-use poem::{Route, RouteMethod};
+use lifec_poem::WebApp;
+use poem::Route;
 use reality::store::StoreIndex;
 use reality_azure::AzureBlockClient;
-use specs::{Entity, Join, LazyUpdate, RunNow, WorldExt};
+use specs::{Entity, LazyUpdate, RunNow, WorldExt};
 use std::{collections::HashMap, sync::Arc};
 use tokio::io::AsyncReadExt;
 use tracing::{event, Level};
@@ -41,11 +41,16 @@ pub use blobs::Blobs;
 mod blobs_uploads;
 pub use blobs_uploads::BlobsUploads;
 
+mod proxy_route;
+pub use proxy_route::ProxyRoute;
+use proxy_route::AddRoute;
+
 /// Struct for creating a customizable registry proxy,
 ///
 #[derive(Default)]
 pub struct RegistryProxy {
     host: Arc<Host>,
+    /// Initial thunk context,
     context: ThunkContext,
 }
 
@@ -62,16 +67,12 @@ impl SpecialAttribute for RegistryProxy {
         "proxy"
     }
 
-    /// This alias is so that `.proxy` stable attributes are not interpreted
-    /// by the normal `.engine` interpreter. However, we still want access to the world's runtime
-    /// on `parse()`
-    ///
     fn parse(parser: &mut AttributeParser, content: impl AsRef<str>) {
         parser.define("app_host", Value::Symbol(content.as_ref().to_string()));
 
-        parser.with_custom::<Manifests>();
-        parser.with_custom::<Blobs>();
-        parser.with_custom::<BlobsUploads>();
+        parser.with_custom::<ProxyRoute<Manifests>>();
+        parser.with_custom::<ProxyRoute<Blobs>>();
+        parser.with_custom::<ProxyRoute<BlobsUploads>>();
     }
 }
 
@@ -100,9 +101,8 @@ impl Project for RegistryProxy {
         runtime.install_with_custom::<LoginACR>("");
         runtime.install_with_custom::<LoginNydus>("");
         runtime.install_with_custom::<LoginOverlayBD>("");
+        runtime.install_with_custom::<FormatOverlayBD>("");
         runtime.install_with_custom::<Teleport>("");
-        runtime.install_with_custom::<FormatOverlayBD>("");
-        runtime.install_with_custom::<FormatOverlayBD>("");
         runtime.install_with_custom::<Login>("");
         runtime.install_with_custom::<Authenticate>("");
         runtime.install_with_custom::<Mirror>("");
@@ -121,9 +121,9 @@ impl Project for RegistryProxy {
     fn world() -> World {
         let mut world = default_world();
         world.insert(Self::runtime());
-        world.register::<Manifests>();
-        world.register::<Blobs>();
-        world.register::<BlobsUploads>();
+        world.register::<ProxyRoute<Manifests>>();
+        world.register::<ProxyRoute<Blobs>>();
+        world.register::<ProxyRoute<BlobsUploads>>();
         world.register::<ImageIndex>();
         world.register::<Descriptor>();
         world.register::<ImageManifest>();
@@ -139,65 +139,11 @@ impl WebApp for RegistryProxy {
     }
 
     fn routes(&mut self) -> poem::Route {
-        let mut route = Route::default();
-
-        let mut manifest_route = None::<RouteMethod>;
-        for manifest in self.host.world().read_component::<Manifests>().join() {
-            if manifest.can_route() {
-                let mut manifest = manifest.clone();
-                manifest.set_host(self.host.clone());
-                manifest.set_context(self.context.clone());
-
-                if let Some(m) = manifest_route.take() {
-                    manifest_route = Some(manifest.route(Some(m)));
-                } else {
-                    manifest_route = Some(manifest.route(None));
-                }
-            }
-        }
-        let path = "/:repo<[a-zA-Z0-9/_-]+(?:manifests)>/:reference";
-        if let Some(manifest_route) = manifest_route.take() {
-            route = route.at(path, manifest_route);
-        }
-
-        let mut blob_route = None::<RouteMethod>;
-        for blob in self.host.world().read_component::<Blobs>().join() {
-            if blob.can_route() {
-                let mut blob = blob.clone();
-                blob.set_host(self.host.clone());
-                blob.set_context(self.context.clone());
-
-                if let Some(m) = blob_route.take() {
-                    blob_route = Some(blob.route(Some(m)));
-                } else {
-                    blob_route = Some(blob.route(None));
-                }
-            }
-        }
-        let path = "/:repo<[a-zA-Z0-9/_-]+(?:blobs)>/:reference";
-        if let Some(blob_route) = blob_route.take() {
-            route = route.at(path, blob_route);
-        }
-
-        let mut blob_route = None::<RouteMethod>;
-        for blob in self.host.world().read_component::<BlobsUploads>().join() {
-            if blob.can_route() {
-                let mut blob = blob.clone();
-                blob.set_host(self.host.clone());
-                blob.set_context(self.context.clone());
-
-                if let Some(m) = blob_route.take() {
-                    blob_route = Some(blob.route(Some(m)));
-                } else {
-                    blob_route = Some(blob.route(None));
-                }
-            }
-        }
-        let path = "/:repo<[a-zA-Z0-9/_-]+>/blobs/uploads/";
-        if let Some(blob_route) = blob_route.take() {
-            route = route.at(path, blob_route);
-        }
-
+        let route = Route::default()
+            .add_route::<Blobs>(&self.host, &self.context)
+            .add_route::<Manifests>(&self.host, &self.context)
+            .add_route::<BlobsUploads>(&self.host, &self.context);
+        
         Route::default()
             .nest("/v2", route)
     }
@@ -502,10 +448,10 @@ mod tests {
     async fn test_proxy_parsing() {
         use crate::RegistryProxy;
         use hyper::Client;
-        use hyper::StatusCode;
         use hyper_tls::HttpsConnector;
         use lifec::prelude::*;
-        use lifec_poem::WebApp;
+        // use lifec_poem::WebApp;
+        // use hyper::StatusCode;
 
         let mut host = Host::load_content::<RegistryProxy>(
             r#"

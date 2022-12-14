@@ -128,7 +128,7 @@ impl Plugin for Artifact {
                     p.define_child(last, "oci", true);
                 }
             })
-            .add_doc(docs, "Use the OCI artifact media type instead of ORAS artifact media type");
+            .add_doc(docs, "Uses the OCI artifact media type instead of ORAS artifact media type");
         }
     }
 }
