@@ -234,6 +234,7 @@ impl Interpreter for Mirror {
     }
 
     fn interpret(&self, _world: &World, block: &Block) {
+        // By this point the world should have a workspace assigned
         // Only interpret blocks with mirror symbol
         if block.symbol() == "mirror" && !block.name().is_empty() {
             let output_dir = PathBuf::from(".work/etc/containerd/certs.d");

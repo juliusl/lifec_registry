@@ -96,7 +96,6 @@ async fn main() {
                     }  else {
                         host_settings.handle::<RegistryProxy>().await;
                     }
-
                 }
                 Commands::Teleport(teleport) => match teleport {
                     TeleportSettings {

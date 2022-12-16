@@ -13,7 +13,7 @@ use lifec::{
 };
 use lifec_poem::WebApp;
 use poem::Route;
-use reality::store::StoreIndex;
+use reality::{store::StoreIndex, Interpreter};
 use reality_azure::AzureBlockClient;
 use specs::{Entity, LazyUpdate, RunNow, WorldExt};
 use std::{collections::HashMap, sync::Arc};
@@ -77,7 +77,10 @@ impl SpecialAttribute for RegistryProxy {
 }
 
 impl Project for RegistryProxy {
-    fn interpret(_: &World, _: &Block) {}
+    fn interpret(world: &World, block: &Block) {
+        // Interpret mirror plugins
+        Mirror::default().interpret(world, block);
+    }
 
     fn parser() -> Parser {
         let mut world = Self::world();
@@ -458,21 +461,9 @@ mod tests {
         # Example proxy definition
         ``` start proxy
         # Proxy setup
-        + .proxy                  localhost:8567
-
-        : .manifests head, get
-        : .println test
-        : .println that
-        : .println manifests
-        : .println sequence
-        : .println works
-
-        : .blobs head, get
-        : .println test
-        : .println that
-        : .println blobs
-        : .println sequence
-        : .println works
+        + .proxy localhost:8567
+        : .manifests
+        : .blobs
         ```
         "#,
         );
