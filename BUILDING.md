@@ -22,7 +22,7 @@ One liner,
 sudo apt-get install -y build-essential pkg-config libssl-dev libxcb-composite0-dev cmake fontconfig libfontconfig-dev libxkbcommon-dev libwayland-dev vulkan-tools nvidia-driver-525
 ```
 
-Also, in order for the UI dev tools to render correctly drivers need to be updated, run the following
+Also, in order for the UI dev tools to render performantly, drivers need to be updated, run the following
 
 ```
 sudo add-apt-repository ppa:oibaf/graphics-drivers -y
