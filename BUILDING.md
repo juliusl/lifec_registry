@@ -3,18 +3,34 @@
 These steps are required for building and running mirror code from source.
 
 1) Install Rust, https://rustup.rs
-2) (Linux/Ubuntu/Debian) Install Development Libraries, (TODO: Still working on this list)
+2) (Linux/Ubuntu/Debian) Install Development Libraries, 
     - `build-essential`
     - `pkg-config`
     - `libssl-dev`
     - `libxcb-composite0-dev`
-    - `libxcursor-dev`
-    - `libxrandr-dev`
-    - `libxi-dev`
-    - `libx11-dev`
-    - `libx11-xcb-dev`
     - `cmake`
     - `fontconfig`
+    - `libfontconfig-dev`
+    - `libxkbcommon-dev`
+    - `libwayland-dev`
+    - `vulkan-tools`
+    - `nvidia-driver-525`
+
+One liner, 
+
+```
+sudo apt-get install -y build-essential pkg-config libssl-dev libxcb-composite0-dev cmake fontconfig libfontconfig-dev libxkbcommon-dev libwayland-dev vulkan-tools nvidia-driver-525
+```
+
+Also, in order for the UI dev tools to render correctly drivers need to be updated, run the following
+
+```
+sudo add-apt-repository ppa:oibaf/graphics-drivers -y
+sudo apt-get update
+sudo apt-get upgrade
+```
+
+This will update the drivers.
 
 3) Run `cargo update` (You'll want to do this every once in a while to update deps)
 4) Run `cargo build`
