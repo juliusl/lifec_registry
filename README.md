@@ -7,26 +7,7 @@ This project provides tools to extend registries on the client side. It includes
 *Note*, currently only `acr` registries are supported, with additional registry support planned.
 *Note*, also, currently only Linux/Macos are supported w/ Windows support on the way.
 
-### Installing from source
 
-To install from source, first you'll need to install Rust. The best way to do that is here: https://rustup.rs
-
-Next, clone this repo and from the root run, 
-
-```
-cargo install --path .
-```
-
-or,
-
-```
-cargo install --git https://github.com/juliusl/lifec_registry --branch pr/v2_api
-```
- 
-This will install a binary called `acr` on your PATH. 
-
-
-## (TODO) Install dependencies
 
 ## Setting up an environment for the mirror
 

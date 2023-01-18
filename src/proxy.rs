@@ -1,4 +1,3 @@
-use imgui::Window;
 use lifec::{
     debugger::Debugger,
     engine::{Cleanup, Performance, Profilers},
@@ -389,10 +388,10 @@ pub async fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest
         status: NodeStatus::Custom(entity),
         display: Some(|state, ui| {
             let mut opened = true;
-            Window::new("Proxy store")
+            ui.window("Proxy store")
                 .size([800.0, 600.0], imgui::Condition::Appearing)
                 .opened(&mut opened)
-                .build(ui, || {
+                .build(|| {
                     if let Some(rp) = state.remote_protocol.as_ref() {
                         let world = rp.remote.borrow();
                         let index = world.as_ref().try_fetch::<StoreIndex<AzureBlockClient>>();
