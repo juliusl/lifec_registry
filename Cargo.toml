@@ -16,7 +16,7 @@ reality = { git = "https://github.com/juliusl/reality.git", branch = "pr/workspa
 reality_azure = { git = "https://github.com/juliusl/reality.git", branch = "pr/workspace-refactor" }
 # shinsu = { git = "https://github.com/juliusl/shinsu.git", branch = "pr/v2_api" }
 # lifec = { path = "../lifec" }
-specs = { version = "0.18.0", features = ["default", "derive", "shred-derive"] }
+specs = { git = "https://github.com/amethyst/specs", features = ["default", "derive", "shred-derive"] }
 logos = "0.12.1"
 native-tls = "0.2.10"
 poem = { version = "1.3.32", features = ["server", "static-files", "native-tls", "test"] }
