@@ -30,4 +30,6 @@ pub use proxy::Manifests;
 pub use proxy::Blobs;
 
 mod config;
+pub use config::Host as RegistryHost;
+pub use config::HostCapability;
 pub use config::HostsConfig;

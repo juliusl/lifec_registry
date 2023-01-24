@@ -1,89 +1,170 @@
-use std::{collections::{BTreeSet, BTreeMap}, path::{Path, PathBuf}};
 use logos::Logos;
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fmt::Display,
+    path::PathBuf,
+};
+use tracing::error;
 
 /// Struct for creating a hosts.toml file for containerd hosts configuration,
-/// 
+///
 pub struct HostsConfig {
     /// If set, this will be the upstream server fallback if all hosts cannot be used
-    server: String, 
+    server: Option<String>,
     /// List of hosts in priority order that will be used to serve registry requests
     hosts: Vec<Host>,
 }
 
+impl HostsConfig {
+    /// Returns a new hosts config that can serialize into compatible toml for containerd hosts.toml feature,
+    ///
+    pub fn new(server: Option<impl Into<String>>) -> Self {
+        Self {
+            server: server.map(|s| s.into()),
+            hosts: vec![],
+        }
+    }
+
+    /// Adds host to list of hosts, chainable
+    ///
+    pub fn add_host(mut self, host: Host) -> Self {
+        self.hosts.push(host);
+        self
+    }
+}
+
+impl Display for HostsConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(server) = self.server.as_ref() {
+            writeln!(f, r#"server = "{}""#, server)?;
+            writeln!(f, "")?;
+        }
+
+        for host in self.hosts.iter() {
+            writeln!(f, "{}", host)?;
+            writeln!(f, "")?;
+        }
+
+        Ok(())
+    }
+}
+
 /// Host capabilities for configuring hosts.toml
-/// 
-#[derive(Logos)]
+///
+#[derive(Logos, PartialEq, PartialOrd, Ord, Eq)]
 pub enum HostCapability {
     /// Resolve means the host can resolve a tag to a digest
-    /// 
+    ///
     #[token("resolve")]
     Resolve,
     /// Push means that the host can push content to the registry
-    /// 
+    ///
     #[token("push")]
     Push,
     /// Pull means that the host can pull content from a registry
-    /// 
+    ///
     #[token("pull")]
     Pull,
     /// Unknown token
-    /// 
+    ///
     #[error]
     #[regex(r"[ ,\t\n\f]+", logos::skip)]
     Error,
 }
 
-struct Host {
+impl Display for HostCapability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            HostCapability::Resolve => write!(f, "resolve"),
+            HostCapability::Push => write!(f, "push"),
+            HostCapability::Pull => write!(f, "pull"),
+            HostCapability::Error => panic!("value must be either 'resolve', 'push', or 'pull'"),
+        }
+    }
+}
+
+/// Struct that defines properties of a Hosts config file,
+///
+pub struct Host {
     /// Host URI that will be the base for registry requests,
     host: String,
     /// Supported registry features this host can serve, ex. resolve, pull, push
     features: BTreeSet<HostCapability>,
     /// If the host URI protocol is over http, this will need to be set to true in order to allow http
-    skip_verify: bool, 
-    /// .crt name or absolute path to .crt to support TLS (https) connections to the host
-    ca: Option<Path>,
+    skip_verify: bool,
+    /// .pem/.crt name or absolute path to .pem/.crt to support TLS (https) connections to the host
+    ca: Option<PathBuf>,
+    /// .pem/.crt name or absolute path to .pem/.crt to support client cert authentication w/ the host
+    client: Option<(PathBuf, Option<PathBuf>)>,
     /// Headers to pass w/ registry requests to this host
     headers: Option<BTreeMap<String, String>>,
 }
 
 impl Host {
-    fn new(host: impl Into<String>) -> Self {
+    /// Returns a new host config,
+    ///
+    pub fn new(host: impl Into<String>) -> Self {
         Self {
             host: host.into(),
             features: BTreeSet::default(),
             skip_verify: false,
             ca: None,
+            client: None,
             headers: None,
         }
     }
 
-    fn skip_verify(mut self) -> Self {
+    /// Enables the skip_verify option to support http connections, chainable
+    ///
+    pub fn skip_verify(mut self) -> Self {
         self.skip_verify = true;
         self
     }
 
-    fn enable_pull(mut self) -> Self {
+    /// Enables pull capability, chainable
+    ///
+    pub fn enable_pull(self) -> Self {
         self.enable_capability(HostCapability::Pull)
     }
 
-    fn enable_push(mut self) -> Self {
+    /// Enables push capability, chainable
+    ///
+    pub fn enable_push(self) -> Self {
         self.enable_capability(HostCapability::Push)
     }
 
-    fn enable_resolve(mut self) -> Self {
+    /// Enables resolve capability, chainable
+    ///
+    pub fn enable_resolve(self) -> Self {
         self.enable_capability(HostCapability::Resolve)
     }
 
-    fn enable_ca(mut self, crt: impl AsRef<PathBuf>) -> Self {
-        self.ca = Some(crt.as_ref().as_path().clone());
+    /// Enables the ca option to enable TLS support, chainable
+    ///
+    pub fn enable_ca(mut self, ca: impl Into<PathBuf>) -> Self {
+        self.ca = Some(ca.into());
+        self
     }
 
-    fn add_header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+    /// Enables the client option, to enable client cert authn, chainable
+    ///
+    pub fn enable_client(
+        mut self,
+        client: impl Into<PathBuf>,
+        key: Option<impl Into<PathBuf>>,
+    ) -> Self {
+        self.client = Some((client.into(), key.map(|k| k.into())));
+        self
+    }
+
+    /// Enables header option to pass w/ each registry request,
+    ///
+    pub fn add_header(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         if let Some(headers) = self.headers.as_mut() {
-            headers.insert(key, value)
+            headers.insert(key.into(), value.into());
         } else {
             let mut headers = BTreeMap::default();
-            headers.insert(key, value);
+            headers.insert(key.into(), value.into());
             self.headers = Some(headers);
         }
 
@@ -94,69 +175,191 @@ impl Host {
         self.features.insert(capability);
         self
     }
-
-    fn create_config(&self) -> Result<String, std::io::Error> {
-        todo!()
-    }
 }
 
-impl HostsConfig {
-    fn write() -> String {
-        let mut hosts_config = Map::new();
+impl Display for Host {
+    /// We can't directly serialize the struct type because the hosts have a specific order that they must be declared in
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The header for a host is in format of `[host."<server-uri>"]`
+        let host_header = format!(r#"[host."{}"]"#, self.host);
+        writeln!(f, "{}", host_header)?;
 
-        let app_hosts = properties
-            .property("app_host")
-            .and_then(|p| p.symbol_vec())
-            .expect("app_host is required for mirror");
+        let mut host_capabilities = toml::value::Array::new();
 
-        for app_host in app_hosts {
-            let feature_name = format!("feature_{}", app_host);
-            let features = properties
-                .property(feature_name)
-                .and_then(|p| p.symbol_vec())
-                .unwrap_or(vec![]);
-            let mut host_settings = Map::new();
-            let features = toml::Value::Array(
-                features
-                    .iter()
-                    .map(|f| toml::Value::String(f.to_string()))
-                    .collect::<Vec<_>>(),
-            );
-            host_settings.insert("capabilities".to_string(), features);
-            let https = properties.property("https").and_then(|p| p.symbol());
-            if let Some(https) = https {
-                let host_key = format!(r#"host."https://{}""#, app_host);
-                host_settings
-                    .insert("ca".to_string(), toml::Value::String(https.to_string()));
-                hosts_config.insert(host_key, toml::Value::Table(host_settings));
-            } else {
-                let host_key = format!(r#"host."http://{}""#, app_host);
-                host_settings
-                    .insert("skip_verify".to_string(), toml::Value::Boolean(true));
-                hosts_config.insert(host_key, toml::Value::Table(host_settings));
+        for c in self.features.iter() {
+            host_capabilities.push(toml::Value::String(c.to_string()));
+        }
+
+        let host_capabilities = toml::to_string(&host_capabilities);
+        match host_capabilities {
+            Ok(c) => {
+                writeln!(f, r#"  capabilities = {}"#, c)?;
+            }
+            Err(err) => {
+                error!("Error serializing host capabilities, {err}");
+                return Err(std::fmt::Error {});
             }
         }
 
-        let mut content = toml::ser::to_string(&hosts_config)
-            .expect("should serialize")
-            .lines()
-            .map(|l| {
-                if l.trim().starts_with("[") {
-                    l.replace(r#"[""#, "[")
-                        .replace(r#"\""#, r#"""#)
-                        .replace(r#""]"#, "]")
-                } else {
-                    l.to_string()
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let server = properties.property("server").and_then(|p| p.symbol());
-        if let Some(server) = server {
-            content.insert(0, format!(r#"server = "{server}""#));
-            content.insert(1, String::default());
+        if self.skip_verify {
+            writeln!(f, r#"  skip_verify = true"#)?;
+        } else if let Some(ca) = self.ca.as_ref() {
+            writeln!(f, r#"  ca = {:?}"#, ca)?;
+        } else if self.host.starts_with("http://") {
+            error!(
+                "Host {} is listening w/ http but did not enable skip_verify",
+                self.host
+            );
         }
 
-        content.join('\n')
+        if let Some((client, client_key)) = self.client.as_ref() {
+            writeln!(
+                f,
+                r#"  client = [{:?}, {:?}]"#,
+                client,
+                client_key.as_ref().unwrap_or(&PathBuf::default())
+            )?;
+        }
+
+        if let Some(headers) = self.headers.as_ref() {
+            writeln!(f, r#"  [host."{}".header]"#, self.host)?;
+
+            for (name, value) in headers.iter() {
+                writeln!(f, r#"    {} = "{}""#, name, value)?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+mod tests {
+    #[test]
+    fn test_display_host_config() {
+        use crate::HostsConfig;
+
+        let host_config = HostsConfig::new(Some("https://test.azurecr.io"));
+
+        let host_config = host_config.add_host(
+            super::Host::new("http://localhost:6879")
+                .enable_resolve()
+                .enable_pull()
+                .skip_verify()
+                .add_header("x-ms-acr-tenant", "test")
+                .add_header("x-ms-acr-tenant-host", "azurecr.io"),
+        );
+
+        assert_eq!(
+            r#"
+server = "https://test.azurecr.io"
+
+[host."http://localhost:6879"]
+  capabilities = ["resolve", "pull"]
+  skip_verify = true
+  [host."http://localhost:6879".header]
+    x-ms-acr-tenant = "test"
+    x-ms-acr-tenant-host = "azurecr.io"
+
+
+"#
+            .trim_start(),
+            format!("{}", host_config)
+        );
+
+        
+        let host_config = HostsConfig::new(None::<String>);
+
+        let host_config = host_config.add_host(
+            super::Host::new("http://localhost:6879")
+                .enable_resolve()
+                .enable_pull()
+                .skip_verify()
+                .add_header("x-ms-acr-tenant", "test")
+                .add_header("x-ms-acr-tenant-host", "azurecr.io"),
+        );
+
+        assert_eq!(
+            r#"
+[host."http://localhost:6879"]
+  capabilities = ["resolve", "pull"]
+  skip_verify = true
+  [host."http://localhost:6879".header]
+    x-ms-acr-tenant = "test"
+    x-ms-acr-tenant-host = "azurecr.io"
+
+
+"#
+            .trim_start(),
+            format!("{}", host_config)
+        );
+    }
+
+    #[test]
+    #[tracing_test::traced_test]
+    fn test_display_host() {
+        use super::Host;
+        use std::path::PathBuf;
+
+        let host = Host::new("http://localhost:6879");
+
+        let host = host
+            .enable_resolve()
+            .enable_pull()
+            .skip_verify()
+            .add_header("x-ms-acr-tenant", "test")
+            .add_header("x-ms-acr-tenant-host", "azurecr.io");
+
+        let toml_config = format!("{}", host);
+
+        assert_eq!(
+            r#"
+[host."http://localhost:6879"]
+  capabilities = ["resolve", "pull"]
+  skip_verify = true
+  [host."http://localhost:6879".header]
+    x-ms-acr-tenant = "test"
+    x-ms-acr-tenant-host = "azurecr.io"
+"#
+            .trim_start(),
+            toml_config
+        );
+
+        // Test logging error when skip_verify isn't included
+        let host = Host::new("http://localhost:6879");
+        let host = host
+            .enable_resolve()
+            .enable_pull()
+            .add_header("x-ms-acr-tenant", "test")
+            .add_header("x-ms-acr-tenant-host", "azurecr.io");
+        let _ = format!("{}", host);
+        assert!(logs_contain(
+            "is listening w/ http but did not enable skip_verify"
+        ));
+
+        let host = Host::new("https://localhost:6879");
+
+        let host = host
+            .enable_resolve()
+            .enable_pull()
+            .enable_ca("test.pem")
+            .enable_client("test-client.pem", None::<PathBuf>)
+            .add_header("x-ms-acr-tenant", "test")
+            .add_header("x-ms-acr-tenant-host", "azurecr.io");
+
+        let toml_config = format!("{}", host);
+
+        assert_eq!(
+            r#"
+[host."https://localhost:6879"]
+  capabilities = ["resolve", "pull"]
+  ca = "test.pem"
+  client = ["test-client.pem", ""]
+  [host."https://localhost:6879".header]
+    x-ms-acr-tenant = "test"
+    x-ms-acr-tenant-host = "azurecr.io"
+"#
+            .trim_start(),
+            toml_config
+        );
     }
 }
