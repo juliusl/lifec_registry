@@ -28,3 +28,6 @@ pub use proxy::RegistryProxy;
 pub use proxy::ProxyTarget;
 pub use proxy::Manifests;
 pub use proxy::Blobs;
+
+mod config;
+pub use config::HostsConfig;
