@@ -14,6 +14,8 @@ lifec = { git = "https://github.com/juliusl/lifec.git", branch = "pr/refactor-wo
 lifec_poem = { git = "https://github.com/juliusl/lifec.git", branch = "pr/refactor-workspace" }
 reality = { git = "https://github.com/juliusl/reality.git", branch = "pr/workspace-refactor" }
 reality_azure = { git = "https://github.com/juliusl/reality.git", branch = "pr/workspace-refactor" }
+azure_identity = { git = "https://github.com/juliusl/azure-sdk-for-rust.git", branch="pr/block-id-conversion" }
+azure_core = { git = "https://github.com/juliusl/azure-sdk-for-rust.git", branch="pr/block-id-conversion" }
 # shinsu = { git = "https://github.com/juliusl/shinsu.git", branch = "pr/v2_api" }
 # lifec = { path = "../lifec" }
 specs = { git = "https://github.com/amethyst/specs", features = ["default", "derive", "shred-derive"] }
@@ -30,3 +32,4 @@ tracing = "0.1.35"
 tracing-subscriber =  { version = "0.3", features = [ "env-filter" ] }
 tracing-test = "0.2.3"
 sha2 = "0.10.6"
+serde_urlencoded = "0.7.1"

@@ -11,9 +11,7 @@ use crate::content::Descriptor;
 mod object;
 pub use object::Object;
 
-/// Wrapper struct w/ important properties from the proxied request,
-///
-/// This represents the upstream server.
+/// Wrapper struct representing properties of the upstream server,
 ///
 #[derive(Debug)]
 pub struct ProxyTarget {

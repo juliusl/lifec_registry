@@ -9,7 +9,6 @@ pub use discover::Discover;
 
 mod teleport;
 pub use teleport::Teleport;
-pub use teleport::FormatOverlayBD;
 
 mod authenticate;
 pub use authenticate::Authenticate;
@@ -22,9 +21,6 @@ pub use login::LoginOverlayBD;
 
 mod resolve;
 pub use resolve::Resolve;
-
-mod store;
-pub use store::Store;
 
 mod remote_registry;
 pub use remote_registry::RemoteRegistry;

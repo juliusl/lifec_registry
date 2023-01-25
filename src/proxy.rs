@@ -22,9 +22,9 @@ use tracing::{event, Level};
 use crate::{
     plugins::{
         guest::{AzureAgent, AzureDispatcher, AzureGuest, AzureMonitor},
-        LoginNydus, Store,
+        LoginNydus
     },
-    Artifact, ArtifactManifest, Authenticate, Descriptor, Discover, FormatOverlayBD, ImageIndex,
+    Artifact, ArtifactManifest, Authenticate, Descriptor, Discover, ImageIndex,
     ImageManifest, Login, LoginACR, LoginOverlayBD, Mirror, RemoteRegistry, Resolve, Teleport,
 };
 
@@ -103,7 +103,6 @@ impl Project for RegistryProxy {
         runtime.install_with_custom::<LoginACR>("");
         runtime.install_with_custom::<LoginNydus>("");
         runtime.install_with_custom::<LoginOverlayBD>("");
-        runtime.install_with_custom::<FormatOverlayBD>("");
         runtime.install_with_custom::<Teleport>("");
         runtime.install_with_custom::<Login>("");
         runtime.install_with_custom::<Authenticate>("");
@@ -111,7 +110,6 @@ impl Project for RegistryProxy {
         runtime.install_with_custom::<Resolve>("");
         runtime.install_with_custom::<Discover>("");
         runtime.install_with_custom::<Artifact>("");
-        runtime.install_with_custom::<Store>("");
         runtime.install_with_custom::<RemoteRegistry>("");
         runtime.install_with_custom::<AzureGuest>("");
         runtime.install_with_custom::<AzureAgent>("");

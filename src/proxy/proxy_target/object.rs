@@ -57,12 +57,12 @@ fn on_reference(lexer: &mut Lexer<Object>) -> Option<String> {
 fn on_digest(lexer: &mut Lexer<Object>) -> Option<String> {
     let digest = &lexer.remainder()[..];
 
-    if lexer.slice().contains("sha256") {
+    if lexer.slice().starts_with("sha256") {
         assert!(digest.len() < 64);
-    } else if lexer.slice().contains("sha512") {
+    } else if lexer.slice().starts_with("sha512") {
         assert!(digest.len() < 128);
     } else {
-        panic!("unspported")
+        panic!("unspported digest format")
     }
 
     Some(format!("{}{}", lexer.slice(), digest))
@@ -116,4 +116,3 @@ fn test_object_parser() {
         Some(Object::Reference("_9demo_.thats-reall8y_cool".to_string()))
     );
 }
-

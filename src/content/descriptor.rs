@@ -18,8 +18,8 @@ use super::Platform;
 pub struct Descriptor {
     #[serde(rename = "mediaType")]
     pub media_type: String,
-    #[serde(rename = "artifactType")]
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "artifactType")]
     pub artifact_type: Option<String>,
     #[serde(rename = "digest")]
     pub digest: String,
