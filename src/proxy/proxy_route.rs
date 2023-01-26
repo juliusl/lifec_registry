@@ -10,7 +10,7 @@ use poem::{
 };
 use serde::{Deserialize, Serialize};
 use specs::{Component, VecStorage, WorldExt, Join};
-use tracing::{event, Level};
+use tracing::{event, Level, debug};
 
 use crate::Registry;
 
@@ -45,7 +45,6 @@ impl AddRoute for poem::Route {
         for r in host.world().read_component::<ProxyRoute<R>>().join() {
             if r.can_route() {
                 let mut r = r.clone();
-                r.set_host(host.clone());
                 r.set_context(context.clone());
 
                 if let Some(m) = proxy_route.take() {
@@ -91,9 +90,6 @@ pub struct ProxyRoute<R: RouteParameters> {
     /// Command dispatcher,
     #[serde(skip)]
     context: ThunkContext,
-    /// Host,
-    #[serde(skip)]
-    host: Arc<Host>,
     #[serde(skip)]
     _r: PhantomData<R>,
 }
@@ -103,12 +99,6 @@ impl<R: RouteParameters> ProxyRoute<R> {
     /// 
     fn can_route(&self) -> bool {
         self.method.is_some() && self.operation.is_some()
-    }
-
-    /// Sets the host,
-    /// 
-    fn set_host(&mut self, host: Arc<Host>) {
-        self.host = host;
     }
 
     /// Sets the context,
@@ -212,28 +202,32 @@ fn parse<R: RouteParameters, const METHODKEY: usize>(p: &mut AttributeParser, c:
 impl<R: RouteParameters> RoutePlugin for ProxyRoute<R> {
     fn route(&self, mut route: Option<RouteMethod>) -> RouteMethod {
         let path = R::path();
+        let api = proxy_api::<R>::default()
+            .data(self.clone())
+            .data(Registry::default())
+            .data(self.context.clone());
 
         if let Some(route) = route.take() {
             match self.method {
                 Some(Method::GET) => {
                     event!(Level::DEBUG, "adding path GET {path}");
-                    route.get(proxy_api::<R>::default().data(self.clone()).data(self.host.clone()).data(self.context.clone()))
+                    route.get(api)
                 }
                 Some(Method::POST) => {
                     event!(Level::DEBUG, "adding path POST {path}");
-                    route.post(proxy_api::<R>::default().data(self.clone()).data(self.host.clone()).data(self.context.clone()))
+                    route.post(api)
                 }
                 Some(Method::PUT) => {
                     event!(Level::DEBUG, "adding path PUT {path}");
-                    route.put(proxy_api::<R>::default().data(self.clone()).data(self.host.clone()).data(self.context.clone()))
+                    route.put(api)
                 }
                 Some(Method::HEAD) => {
                     event!(Level::DEBUG, "adding path HEAD {path}");
-                    route.head(proxy_api::<R>::default().data(self.clone()).data(self.host.clone()).data(self.context.clone()))
+                    route.head(api)
                 }
                 Some(Method::DELETE) => {
                     event!(Level::DEBUG, "adding path DELETE {path}");
-                    route.delete(proxy_api::<R>::default().data(self.clone()).data(self.host.clone()).data(self.context.clone()))
+                    route.delete(api)
                 }
                 _ => {
                     unimplemented!("Unsupported method, {:?}", self.method)
@@ -243,23 +237,23 @@ impl<R: RouteParameters> RoutePlugin for ProxyRoute<R> {
             match self.method {
                 Some(Method::GET) => {
                     event!(Level::DEBUG, "adding path GET {path}");
-                    get(proxy_api::<R>::default().data(self.clone()).data(self.host.clone()).data(self.context.clone()))
+                    get(api)
                 }
                 Some(Method::POST) => {
                     event!(Level::DEBUG, "adding path POST {path}");
-                    post(proxy_api::<R>::default().data(self.clone()).data(self.host.clone()).data(self.context.clone()))
+                    post(api)
                 }
                 Some(Method::PUT) => {
                     event!(Level::DEBUG, "adding path PUT {path}");
-                    put(proxy_api::<R>::default().data(self.clone()).data(self.host.clone()).data(self.context.clone()))
+                    put(api)
                 }
                 Some(Method::HEAD) => {
                     event!(Level::DEBUG, "adding path HEAD {path}");
-                    head(proxy_api::<R>::default().data(self.clone()).data(self.host.clone()).data(self.context.clone()))
+                    head(api)
                 }
                 Some(Method::DELETE) => {
                     event!(Level::DEBUG, "adding path DELETE {path}");
-                    delete(proxy_api::<R>::default().data(self.clone()).data(self.host.clone()).data(self.context.clone()))
+                    delete(api)
                 }
                 _ => {
                     unimplemented!("Unsupported method, {:?}", self.method)
@@ -284,17 +278,15 @@ impl<R: RouteParameters> RoutePlugin for ProxyRoute<R> {
 async fn proxy_api<R>(
     request: &poem::Request,
     body: Body,
-    Path((repo, reference)): Path<(String, String)>,
+    Path((repo, reference)): Path<(String, Option<String>)>,
     Query(ProxyRoute { ns, .. }): Query<ProxyRoute<R>>,
     resolve: Data<&ProxyRoute<R>>,
-    host: Data<&Arc<Host>>,
+    registry: Data<&Registry>,
     context: Data<&ThunkContext>,
 ) -> Response 
 where
     R: RouteParameters
-{
-    let mut registry = host.world().system_data::<Registry>();
-
+{ 
     registry
         .proxy_request::<ProxyRoute<R>>(
             &context,
@@ -306,6 +298,6 @@ where
             Some(body.into()),
             ns,
             repo.trim_end_matches(R::ident().replace("_", "/").as_str()).trim_end_matches("/"),
-            reference,
+            reference.filter(|r| !r.is_empty()),
         ).await
 }

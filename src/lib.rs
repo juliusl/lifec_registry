@@ -6,9 +6,8 @@ pub use content::Descriptor;
 pub use content::ArtifactManifest;
 pub use content::ImageIndex;
 pub use content::ImageManifest;
-pub use content::OCI_ARTIFACTS_MANIFEST_MEDIA_TYPE;
-pub use content::ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE;
 pub use content::Registry;
+pub use content::consts;
 
 mod plugins;
 pub use plugins::Mirror;

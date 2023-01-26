@@ -1,59 +1,48 @@
 use hyper::{Body, StatusCode, Uri};
 use lifec::engine::NodeCommand;
 use lifec::prelude::{SpecialAttribute, ThunkContext};
-use lifec::project::Workspace;
 use lifec::state::AttributeIndex;
 use lifec_poem::RoutePlugin;
 use poem::{Request, Response};
-use specs::{prelude::*, SystemData};
-use std::collections::HashMap;
-use tracing::{event, Level};
+use tracing::{event, Level, debug};
 
-/// System data for registry components,
-///
-#[derive(SystemData)]
-pub struct Registry<'a> {
-    workspace: Read<'a, Option<Workspace>>,
-    entity_index: Read<'a, HashMap<String, Entity>>,
-    // contents: Contents<'a>,
-    // artifacts: WriteStorage<'a, ArtifactManifest>,
-    // referrers: WriteStorage<'a, ReferrersList>,
-    // indexes: WriteStorage<'a, ImageIndex>,
-    // images: WriteStorage<'a, ImageManifest>,
+pub mod consts {
+    pub const UPGRADE_IF_STREMABLE_HEADER: &'static str = "x-ms-upgrade-if-streamable";
 }
 
-impl<'a> Registry<'a> {
+/// Pointer struct for fn implementations,
+///
+#[derive(Default, Clone)]
+pub struct Registry;
+
+impl Registry {
     /// Takes a request and a route_plugin and handles proxying the response,
     ///
     pub async fn proxy_request<P>(
-        &mut self,
+        &self,
         context: &ThunkContext,
         operation_name: impl Into<String>,
         request: &Request,
         body: Option<Body>,
         namespace: impl Into<String>,
         repo: impl Into<String>,
-        reference: impl Into<String>,
+        reference: Option<impl Into<String>>,
     ) -> Response
     where
         P: RoutePlugin + SpecialAttribute,
     {
-        let operation_name = operation_name.into();
-        let operation_name = if let Some(tag) = self
-            .workspace
-            .as_ref()
-            .expect("should have a workspace")
-            .tag()
-        {
-            format!("adhoc-{operation_name}#{tag}")
-        } else {
-            format!("adhoc-{operation_name}")
-        };
+        let repo = repo.into();
 
-        let operation = self
-            .entity_index
-            .get(&operation_name)
-            .expect("should have an operation entity");
+        let workspace =  context.workspace().map(|w| if let Some(format) = request.header(crate::consts::UPGRADE_IF_STREMABLE_HEADER).filter(|f| f.len() < 256) {
+            w.use_tag(format)
+        } else {
+            w.to_owned()
+        }).unwrap();
+
+        let operation_name = operation_name.into();
+        let operation = workspace.find_operation(&operation_name).expect(&format!("should have an operation entity for {}", &operation_name));
+
+        debug!("Found operation {}, entity: {:?}, tag: {:?}", operation_name, &operation, workspace.tag());
 
         let context =
             self.prepare_registry_context::<P>(request, namespace, repo, reference, context);
@@ -115,7 +104,7 @@ impl<'a> Registry<'a> {
         request: &Request,
         namespace: impl Into<String>,
         repo: impl Into<String>,
-        reference: impl Into<String>,
+        reference: Option<impl Into<String>>,
         context: &ThunkContext,
     ) -> ThunkContext
     where
@@ -128,14 +117,16 @@ impl<'a> Registry<'a> {
             .clone();
         let tenant = workspace
             .get_tenant()
-            .expect("should have a tenant")
-            .to_string();
+            .map(|t| t.to_string())
+            .unwrap_or_default();
 
         let host = workspace.get_host().to_string();
         let repo = repo.into();
         let resource = S::ident();
-        let reference = reference.into();
+        let reference = reference.map(|r| r.into()).unwrap_or_default();
         let namespace = namespace.into();
+        
+        debug!("Preparing proxy context - host: {}, namespace: {} repo: {}, reference: {}", &host, &namespace, &repo, &reference);
 
         context
             .with_symbol("REGISTRY_NAMESPACE", &namespace)

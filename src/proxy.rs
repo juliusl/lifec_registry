@@ -1,14 +1,15 @@
 use lifec::{
+    appendix::Appendix,
     debugger::Debugger,
     engine::{Cleanup, Performance, Profilers},
     guest::{Guest, RemoteProtocol},
     host::EventHandler,
     prelude::{
-        AttributeParser, Block, EventRuntime, Host, Journal,
-        Parser, Plugins, Run, Sequencer, SpecialAttribute, State, ThunkContext, Value, World, NodeStatus, Node,
+        AttributeParser, Block, EventRuntime, Host, Journal, Node, NodeStatus, Parser, Plugins,
+        Run, Sequencer, SpecialAttribute, State, ThunkContext, Value, World,
     },
     project::{default_parser, default_runtime, default_world, Project, RunmdFile, Workspace},
-    runtime::Runtime, appendix::Appendix,
+    runtime::Runtime,
 };
 use lifec_poem::WebApp;
 use poem::Route;
@@ -22,10 +23,10 @@ use tracing::{event, Level};
 use crate::{
     plugins::{
         guest::{AzureAgent, AzureDispatcher, AzureGuest, AzureMonitor},
-        LoginNydus
+        LoginNydus,
     },
-    Artifact, ArtifactManifest, Authenticate, Descriptor, Discover, ImageIndex,
-    ImageManifest, Login, LoginACR, LoginOverlayBD, Mirror, RemoteRegistry, Resolve, Teleport,
+    Artifact, ArtifactManifest, Authenticate, Descriptor, Discover, ImageIndex, ImageManifest,
+    Login, LoginACR, LoginOverlayBD, Mirror, RemoteRegistry, Resolve, Teleport,
 };
 
 mod proxy_target;
@@ -41,24 +42,17 @@ mod blobs_uploads;
 pub use blobs_uploads::BlobsUploads;
 
 mod proxy_route;
-pub use proxy_route::ProxyRoute;
 use proxy_route::AddRoute;
+pub use proxy_route::ProxyRoute;
 
 /// Struct for creating a customizable registry proxy,
 ///
+/// This proxy is a server that intercepts registry requests intended for upstream registries,
+///
 #[derive(Default)]
 pub struct RegistryProxy {
-    host: Arc<Host>,
-    /// Initial thunk context,
+    /// Thunk context is used to communicate with the underlying runtime,
     context: ThunkContext,
-}
-
-impl RegistryProxy {
-    /// Returns the host,
-    ///
-    pub fn host(&self) -> Arc<Host> {
-        self.host.clone()
-    }
 }
 
 impl SpecialAttribute for RegistryProxy {
@@ -67,8 +61,10 @@ impl SpecialAttribute for RegistryProxy {
     }
 
     fn parse(parser: &mut AttributeParser, content: impl AsRef<str>) {
+        // This sets the local host address
         parser.define("app_host", Value::Symbol(content.as_ref().to_string()));
 
+        // This allows for specific methods under registry resources to be configured
         parser.with_custom::<ProxyRoute<Manifests>>();
         parser.with_custom::<ProxyRoute<Blobs>>();
         parser.with_custom::<ProxyRoute<BlobsUploads>>();
@@ -98,7 +94,9 @@ impl Project for RegistryProxy {
     }
 
     fn runtime() -> Runtime {
+        // The default runtime gives us all of the built-in plugins from the framework,
         let mut runtime = default_runtime();
+
         runtime.install_with_custom::<Run<RegistryProxy>>("");
         runtime.install_with_custom::<LoginACR>("");
         runtime.install_with_custom::<LoginNydus>("");
@@ -119,8 +117,13 @@ impl Project for RegistryProxy {
     }
 
     fn world() -> World {
+        // The default_world registers built-in Component types from the framework, as well as some build-in Resources
         let mut world = default_world();
+
+        // The runtime is a resource that can be used to generate executable events
         world.insert(Self::runtime());
+
+        // Component types specific to the registry
         world.register::<ProxyRoute<Manifests>>();
         world.register::<ProxyRoute<Blobs>>();
         world.register::<ProxyRoute<BlobsUploads>>();
@@ -128,47 +131,42 @@ impl Project for RegistryProxy {
         world.register::<Descriptor>();
         world.register::<ImageManifest>();
         world.register::<ArtifactManifest>();
+
+        // This is to enable custom tooling ui
         world.register::<NodeStatus>();
         world
     }
 }
 
+/// The proxy is a server so it implements the WebApp trait that will setup routes/handlers
+///
 impl WebApp for RegistryProxy {
     fn create(context: &mut ThunkContext) -> Self {
         Self::from(context.clone())
     }
 
     fn routes(&mut self) -> poem::Route {
-        let route = Route::default()
-            .add_route::<Blobs>(&self.host, &self.context)
-            .add_route::<Manifests>(&self.host, &self.context)
-            .add_route::<BlobsUploads>(&self.host, &self.context);
-        
-        Route::default()
-            .nest("/v2", route)
+        let workspace = self.context.workspace().expect("should have a work_dir");
+
+        if let Some(world) = workspace.compile::<RegistryProxy>() {
+            let host = Host::from(world);
+            let host = Arc::new(host);
+
+            let route = Route::default()
+                .add_route::<Blobs>(&host, &self.context)
+                .add_route::<Manifests>(&host, &self.context)
+                .add_route::<BlobsUploads>(&host, &self.context);
+
+            Route::default().nest("/v2", route)
+        } else {
+            panic!("Cannot start w/o config")
+        }
     }
 }
 
 impl From<ThunkContext> for RegistryProxy {
     fn from(context: ThunkContext) -> Self {
-        let workspace = context.workspace().expect("should have a work_dir");
-        let registry_host = workspace.get_host().to_string();
-        let registry_tenant = workspace
-            .get_tenant()
-            .expect("should have tenant")
-            .to_string();
-
-        let mut host = Host::load_workspace::<RegistryProxy>(
-            None,
-            &registry_host,
-            &registry_tenant,
-            None::<String>,
-            context.tag(),
-        );
-        host.prepare::<RegistryProxy>();
-
         let proxy = Self {
-            host: Arc::new(host),
             context: context.clone(),
         };
 
@@ -230,7 +228,7 @@ fn install_guest_agent(root: &mut Workspace) {
 
         ``` recover
         + .runtime
-        : .println          Entering recovery mode 
+        : .println          Entering recovery mode
         : .timer 10s
         ```
         "#,
@@ -447,128 +445,99 @@ mod tests {
     #[tracing_test::traced_test]
     async fn test_proxy_parsing() {
         use crate::RegistryProxy;
-        use hyper::Client;
-        use hyper_tls::HttpsConnector;
+        use hyper::StatusCode;
         use lifec::prelude::*;
-        // use lifec_poem::WebApp;
-        // use hyper::StatusCode;
+        use lifec_poem::WebApp;
+        use std::ops::Deref;
+        use std::time::Duration;
+        use tokio::time::Instant;
+        use tracing::debug;
 
-        let mut host = Host::load_content::<RegistryProxy>(
-            r#"
+        let root = r#"
         # Example proxy definition
-        ``` start proxy
+        ```
+        + .operation test_manifest
+        : .println not_teleporting manifest
+
+        + .operation test_blobs
+        : .println not_teleporting blobs
+
+        + overlaybd .operation test_manifest
+        : .println teleporting manifest
+
+        + overlaybd .operation test_blobs
+        : .println teleporting blobs
+
         # Proxy setup
         + .proxy localhost:8567
         : .manifests
+        : .get      test_manifest
         : .blobs
+        : .get      test_blobs
         ```
-        "#,
-        );
+        "#;
 
-        let mut dispatcher = Host::dispatcher_builder().build();
+        let mut workspace = Workspace::new("test.com", Some(std::path::PathBuf::from(".test")));
+        workspace.set_root_runmd(root);
 
-        dispatcher.setup(host.world_mut());
+        let mut world = RegistryProxy::compile_workspace(&workspace, vec![].iter(), None);
+        let mut host = Host::from(world);
+        host.link_sequences();
+        let mut dispatcher = host.prepare::<RegistryProxy>();
+        let mut context = host.world().system_data::<State>().new_context();
 
-        let block = Engine::find_block(host.world(), "start proxy").expect("block is created");
+        {
+            // Test that operation map is what we expect
+            let operation_map = host
+                .world()
+                .fetch::<std::collections::HashMap<String, Entity>>();
+            debug!("operation_map: {:?}", operation_map.deref());
+            assert!(operation_map.get("adhoc-test_manifest#overlaybd").is_some());
+            assert!(operation_map.get("adhoc-test_blobs#overlaybd").is_some());
+            assert!(operation_map.get("adhoc-test_manifest").is_some());
+            assert!(operation_map.get("adhoc-test_blobs").is_some());
+        }
 
-        let block = {
-            let blocks = host.world().read_component::<Block>();
-            blocks.get(block).unwrap().clone()
-        };
+        let app = RegistryProxy::create(&mut context).routes();
+        let cli = poem::test::TestClient::new(app);
+        let cli = std::sync::Arc::new(cli);
 
-        let index = block.index().first().expect("should exist").clone();
-        let graph = AttributeGraph::new(index);
+        // Test a request that doesn't have the upgrade to streaming header
+        let test_1 = cli.clone();
+        tokio::spawn(async move {
+            let resp = test_1
+                .get("/v2/library/test/manifests/testref?ns=test.com")
+                .send()
+                .await;
+            resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
+            logs_contain("tag: None");
+        });
 
-        let world = World::new();
-        let entity = world.entities().create();
-        let https = HttpsConnector::new();
-        let client = Client::builder().build::<_, hyper::Body>(https);
+        // Test a request that does have the upgrade to streaming header
+        let test_2 = cli.clone();
+        tokio::spawn(async move {
+            let resp = test_2
+                .get("/v2/library/test/manifests/testref?ns=test.com")
+                .header("x-ms-upgrade-if-streamable", "overlaybd")
+                .send()
+                .await;
+            resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
+            logs_contain(r#"tag: Some("overlaybd")"#);
+        });
 
+        // It's important that all requests start before this line, otherwise the host will exit immediately b/c there will be no operations pending
+        host.async_wait_for_exit(
+            Some(Instant::now() + Duration::from_millis(100)),
+            Duration::from_secs(1000),
+            &mut dispatcher,
+        )
+        .await;
+
+        // TODO: Weird test bug, likely won't affect actual runtime but should investigate
+        let entity = host.world().entities().entity(7);
+        host.start_event(entity);
+        host.wait_for_exit(&mut dispatcher);
+        
         host.exit();
-        // let runtime = tokio::runtime::Runtime::new().unwrap();
-        // let handle = runtime.handle();
-
-        // let mut tc = ThunkContext::default()
-        //     .with_block(&block)
-        //     .with_state(graph)
-        //     .enable_https_client(client)
-        //     .enable_async(entity, handle.clone());
-
-        // Temp disable test
-        // let app = RegistryProxy::create(&mut tc).routes();
-        // let cli = poem::test::TestClient::new(app);
-
-        // let resp = cli
-        //     .get("/v2/library/test/manifests/test_ref?ns=test.com")
-        //     .send()
-        //     .await;
-        // resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
-
-        // let resp = cli
-        //     .get("/v2/library/test/blobs/test_digest?ns=test.com")
-        //     .send()
-        //     .await;
-        // resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
-
-        // TODO add these tests back
-        // let resp = cli.get("/").send().await;
-        // resp.assert_status(StatusCode::NOT_FOUND);
-
-        // let resp = cli.head("/").send().await;
-        // resp.assert_status(StatusCode::NOT_FOUND);
-
-        // let resp = cli.get("/v2").send().await;
-        // resp.assert_status_is_ok();
-
-        // let resp = cli.get("/v2/").send().await;
-        // resp.assert_status_is_ok();
-
-        // let resp = cli.head("/v2").send().await;
-        // resp.assert_status_is_ok();
-
-        // let resp = cli.head("/v2/").send().await;
-        // resp.assert_status_is_ok();
-
-        // let resp = cli
-        //     .head("/v2/library/test/manifests/test_ref?ns=test.com")
-        //     .send()
-        //     .await;
-        // resp.assert_status_is_ok();
-
-        // let resp = cli
-        //     .put("/v2/library/test/manifests/test_ref?ns=test.com")
-        //     .send()
-        //     .await;
-        // resp.assert_status_is_ok();
-
-        // let resp = cli
-        //     .delete("/v2/library/test/manifests/test_ref?ns=test.com")
-        //     .send()
-        //     .await;
-        // resp.assert_status_is_ok();
-
-        // let resp = cli
-        //     .post("/v2/library/test/blobs/uploads?ns=test.com")
-        //     .send()
-        //     .await;
-        // resp.assert_status_is_ok();
-
-        // let resp = cli
-        //     .patch("/v2/library/test/blobs/uploads/test?ns=test.com")
-        //     .send()
-        //     .await;
-        // resp.assert_status_is_ok();
-
-        // let resp = cli
-        //     .put("/v2/library/test/blobs/uploads/test?ns=test.com")
-        //     .send()
-        //     .await;
-        // resp.assert_status_is_ok();
-
-        // let resp = cli
-        //     .get("/v2/library/test/tags/list?ns=test.com")
-        //     .send()
-        //     .await;
-        // resp.assert_status_is_ok();
     }
 }

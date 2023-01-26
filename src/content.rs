@@ -1,8 +1,6 @@
 
 mod artifact_manifest;
 pub use artifact_manifest::ArtifactManifest;
-pub use artifact_manifest::OCI_ARTIFACTS_MANIFEST_MEDIA_TYPE;
-pub use artifact_manifest::ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE;
 
 mod descriptor;
 pub use descriptor::Descriptor;
@@ -37,3 +35,9 @@ pub use upstream::Upstream;
 
 mod local;
 pub use local::Local;
+
+pub mod consts {
+    pub use super::artifact_manifest::consts::OCI_ARTIFACTS_MANIFEST_MEDIA_TYPE;
+    pub use super::artifact_manifest::consts::ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE;
+    pub use super::registry::consts::UPGRADE_IF_STREMABLE_HEADER;
+}

@@ -93,12 +93,16 @@ impl ArtifactManifest {
         }
     }
 }
-/// Media type for artifact manifests, documented here https://github.com/oras-project/artifacts-spec/blob/main/artifact-manifest.md
-///
-pub const ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE: &'static str =
-    "application/vnd.cncf.oras.artifact.manifest.v1+json";
 
-/// Media type for artifacts manifests, documented here https://github.com/opencontainers/image-spec/blob/main/artifact.md
-///
-pub const OCI_ARTIFACTS_MANIFEST_MEDIA_TYPE: &'static str =
-    "application/vnd.oci.artifact.manifest.v1+json";
+pub mod consts {
+    /// Media type for artifact manifests, documented here https://github.com/oras-project/artifacts-spec/blob/main/artifact-manifest.md
+    ///
+    pub const ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE: &'static str =
+        "application/vnd.cncf.oras.artifact.manifest.v1+json";
+    
+    /// Media type for artifacts manifests, documented here https://github.com/opencontainers/image-spec/blob/main/artifact.md
+    ///
+    pub const OCI_ARTIFACTS_MANIFEST_MEDIA_TYPE: &'static str =
+        "application/vnd.oci.artifact.manifest.v1+json";
+}
+

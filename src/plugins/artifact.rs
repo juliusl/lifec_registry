@@ -1,4 +1,4 @@
-use crate::{ArtifactManifest, ProxyTarget, ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE, OCI_ARTIFACTS_MANIFEST_MEDIA_TYPE};
+use crate::{ArtifactManifest, ProxyTarget, consts::{OCI_ARTIFACTS_MANIFEST_MEDIA_TYPE, ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE}};
 use hyper::Method;
 use lifec::prelude::{
     AddDoc, AsyncContext, AttributeIndex, AttributeParser, BlockObject, BlockProperties,

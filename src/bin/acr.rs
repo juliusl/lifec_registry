@@ -8,9 +8,6 @@ use tracing::event;
 use tracing::Level;
 use tracing_subscriber::EnvFilter;
 
-mod teleport;
-use teleport::TeleportSettings;
-
 mod mirror;
 use mirror::default_mirror_engine;
 use mirror::default_mirror_root;
@@ -42,7 +39,11 @@ async fn main() {
             command: Some(command),
             ..
         } => {
-            let world_dir = PathBuf::from(".world").join(&registry_host).join(&registry);
+            let mut world_dir = PathBuf::from(".world").join(&registry_host);
+            if let Some(registry) = registry.as_ref() {
+                world_dir = world_dir.join(&registry);
+            }
+
             let mirror_runmd = world_dir.join("mirror.runmd");
 
             tokio::fs::create_dir_all(&world_dir)
@@ -56,7 +57,7 @@ async fn main() {
                     if !mirror_runmd.exists() {
                         event!(
                             Level::ERROR,
-                            "mirror_runmd not found, run `acr --registry {registry} init`"
+                            "mirror_runmd not found, run `acr --registry {{registry}} init`"
                         );
                         panic!("Uninitialized directory");
                     }
@@ -65,13 +66,17 @@ async fn main() {
 
             match command {
                 Commands::Open => {
-                    let host = Host::load_workspace::<RegistryProxy>(
-                        None,
-                        registry_host,
-                        registry,
-                        None::<String>,
-                        None::<String>,
-                    );
+                    let host = if let Some(registry) = registry.as_ref() {
+                        Host::load_workspace::<RegistryProxy>(
+                            None,
+                            registry_host,
+                            registry,
+                            None::<String>,
+                            None::<String>,
+                        )
+                    } else {
+                        Host::load_default_workspace::<RegistryProxy>(None, registry_host, None::<String>)
+                    };
 
                     if let Some(guest) = guest.as_ref() {
                         std::env::set_var("ACCOUNT_NAME", guest);
@@ -83,8 +88,10 @@ async fn main() {
                 }
                 Commands::Mirror(mut host_settings) => {
                     if host_settings.workspace.is_none() {
+                        let registry = registry.as_ref().map_or(String::default(), |v| v.to_string());
+
                         host_settings.set_workspace(format!("{registry}.{registry_host}"));
-                    }      
+                    }
                     
                     if let Some(guest) = guest.as_ref() {
                         std::env::set_var("ACCOUNT_NAME", guest);
@@ -97,51 +104,6 @@ async fn main() {
                         host_settings.handle::<RegistryProxy>().await;
                     }
                 }
-                Commands::Teleport(teleport) => match teleport {
-                    TeleportSettings {
-                        repo,
-                        command: teleport::Commands::Info,
-                        ..
-                    } => {
-                        let repo_dir =
-                            PathBuf::from(format!(".world/{registry_host}/{registry}/{repo}"));
-
-                        teleport.command.info(&repo_dir).await;
-                    }
-                    TeleportSettings {
-                        format,
-                        repo,
-                        command: teleport::Commands::Init(mut init),
-                    } => {
-                        init.registry_host = registry_host;
-                        init.registry_name = registry;
-                        init.repo = repo;
-                        init.format = format;
-                        init.init().await;
-                    }
-                    TeleportSettings {
-                        format,
-                        repo,
-                        command,
-                    } => {
-                        let repo_dir =
-                            PathBuf::from(format!(".world/{registry_host}/{registry}/{repo}"));
-
-                        match &command {
-                            teleport::Commands::Format
-                            | teleport::Commands::Import
-                            | teleport::Commands::Convert
-                            | teleport::Commands::Link => {
-                                command
-                                    .execute(format, registry_host, registry, &repo_dir)
-                                    .await;
-                            }
-                            _ => {
-                                todo!()
-                            }
-                        }
-                    }
-                },
                 Commands::Init(_mirror_settings) => {
                     if mirror_runmd.exists() {
                         event!(Level::WARN, "Overwriting existing file {:?}", mirror_runmd);
@@ -200,10 +162,12 @@ async fn main() {
 #[clap(arg_required_else_help = true)]
 #[clap(about = "Provides extensions and modifications for container runtimes that work with ACR")]
 struct ACR {
-    /// Name of the registry to use, also referred to as a "Tenant"
+    /// Name of the registry to use, also referred to as a "Tenant",
+    /// 
+    /// If None, then the context is set to the default host workspace,
     ///
     #[clap(long)]
-    registry: String,
+    registry: Option<String>,
     /// Enable debug logging
     #[clap(long, short, action)]
     debug: bool,
@@ -231,12 +195,6 @@ enum Commands {
     /// Host a mirror server that can extend ACR features,
     ///
     Mirror(HostSettings),
-    /// Enable image streaming for an image in acr,
-    ///
-    /// ## Current Streaming Formats
-    /// * Overlaybd - (TODO add more info)
-    ///
-    Teleport(TeleportSettings),
     /// Initialize mirror settings for a particular acr registry,
     ///
     Init(MirrorSettings),
