@@ -13,6 +13,12 @@ use crate::RegistryProxy;
 mod host_capabilities;
 use host_capabilities::HostCapability;
 
+mod default_host;
+pub use default_host::DefaultHost;
+
+mod mirror_host;
+pub use mirror_host::MirrorHost;
+
 
 /// Designed to be used w/ containerd's registry config described here:
 /// https://github.com/containerd/containerd/blob/main/docs/hosts.md

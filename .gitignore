@@ -369,3 +369,4 @@ setup-guest-storage.sh
 query-guest-commands.sh
 query-guest-state.sh
 output.resp
+.test

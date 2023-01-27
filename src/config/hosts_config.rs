@@ -2,14 +2,19 @@ use logos::Logos;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Display,
-    path::PathBuf,
+    path::PathBuf, io::Write
 };
 use tracing::error;
+
+/// Folder name of the default hosts_config folder used by containerd,
+/// 
+const HOSTS_CONFIG_FOLDER: &'static str = "etc/containerd/certs.d";
 
 /// Struct for creating a hosts.toml file for containerd hosts configuration,
 ///
 pub struct HostsConfig {
-    /// If set, this will be the upstream server fallback if all hosts cannot be used
+    /// If set, this will be the upstream server fallback if all hosts cannot be used,
+    /// https is hardcoded protocol is hardcoded for this
     server: Option<String>,
     /// List of hosts in priority order that will be used to serve registry requests
     hosts: Vec<Host>,
@@ -31,12 +36,37 @@ impl HostsConfig {
         self.hosts.push(host);
         self
     }
+
+    /// Serializes and writes the current config to
+    /// 
+    pub fn install(&self, root_dir: Option<impl Into<PathBuf>>) -> Result<PathBuf, std::io::Error> {
+        let path = root_dir.map(|r| r.into()).unwrap_or(PathBuf::from("/"));
+        let path = path.join(HOSTS_CONFIG_FOLDER);
+
+        let path = if let Some(server) = self.server.as_ref() {
+            path.join(server)
+        } else {
+            path.join("_default")
+        };
+
+        std::fs::create_dir_all(&path)?;
+
+        let path = path.join("hosts.toml");
+
+        let mut file = std::fs::File::create(&path)?;
+
+        file.write_all(format!("{}", self).as_bytes())?;
+
+        // TODO -- Make readonly?
+
+        Ok(path)
+    }
 }
 
 impl Display for HostsConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(server) = self.server.as_ref() {
-            writeln!(f, r#"server = "{}""#, server)?;
+            writeln!(f, r#"server = "https://{}""#, server)?;
             writeln!(f, "")?;
         }
 
@@ -238,8 +268,8 @@ mod tests {
     fn test_display_host_config() {
         use crate::HostsConfig;
 
-        let host_config = HostsConfig::new(Some("https://test.azurecr.io"));
-
+        // Test w/ server=
+        let host_config = HostsConfig::new(Some("test.azurecr.io"));
         let host_config = host_config.add_host(
             super::Host::new("http://localhost:6879")
                 .enable_resolve()
@@ -265,10 +295,11 @@ server = "https://test.azurecr.io"
             .trim_start(),
             format!("{}", host_config)
         );
-
+        let location = host_config.install(Some(".test")).expect("should be able to install");
+        eprintln!("{:?}", location);
         
+        // Test w/o server=
         let host_config = HostsConfig::new(None::<String>);
-
         let host_config = host_config.add_host(
             super::Host::new("http://localhost:6879")
                 .enable_resolve()
@@ -277,7 +308,6 @@ server = "https://test.azurecr.io"
                 .add_header("x-ms-acr-tenant", "test")
                 .add_header("x-ms-acr-tenant-host", "azurecr.io"),
         );
-
         assert_eq!(
             r#"
 [host."http://localhost:6879"]
@@ -292,6 +322,9 @@ server = "https://test.azurecr.io"
             .trim_start(),
             format!("{}", host_config)
         );
+
+        let location = host_config.install(Some(".test")).expect("should be able to install");
+        eprintln!("{:?}", location);
     }
 
     #[test]

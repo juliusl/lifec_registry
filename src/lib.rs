@@ -21,6 +21,11 @@ pub use plugins::Teleport;
 pub use plugins::Resolve;
 pub use plugins::RemoteRegistry;
 
+pub mod hosts_config {
+    pub use crate::plugins::MirrorHost;
+    pub use crate::plugins::DefaultHost;
+}
+
 mod proxy;
 pub use proxy::RegistryProxy;
 pub use proxy::ProxyTarget;

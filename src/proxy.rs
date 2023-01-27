@@ -480,7 +480,7 @@ mod tests {
         let mut workspace = Workspace::new("test.com", Some(std::path::PathBuf::from(".test")));
         workspace.set_root_runmd(root);
 
-        let mut world = RegistryProxy::compile_workspace(&workspace, vec![].iter(), None);
+        let world = RegistryProxy::compile_workspace(&workspace, vec![].iter(), None);
         let mut host = Host::from(world);
         host.link_sequences();
         let mut dispatcher = host.prepare::<RegistryProxy>();
@@ -510,7 +510,6 @@ mod tests {
                 .send()
                 .await;
             resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
-            logs_contain("tag: None");
         });
 
         // Test a request that does have the upgrade to streaming header
@@ -522,7 +521,31 @@ mod tests {
                 .send()
                 .await;
             resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
-            logs_contain(r#"tag: Some("overlaybd")"#);
+        });
+
+        // Test a request w accept if suffix header rejects irrelevant host
+        let test_3 = cli.clone();
+        tokio::spawn(async move {
+            let resp = test_3
+                .get("/v2/library/test/manifests/testref?ns=tenant.test.com")
+                .header("x-ms-upgrade-if-streamable", "overlaybd")
+                .header("x-ms-accept-if-suffix", "registry.io")
+                .send()
+                .await;
+            resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
+        });
+
+        // Test a request w accept if suffix header accepts relevant host, and enables teleport file
+        let test_4 = cli.clone();
+        tokio::spawn(async move {
+            let resp = test_4
+                .get("/v2/library/test/manifests/testref?ns=tenant.registry.io")
+                .header("x-ms-upgrade-if-streamable", "overlaybd")
+                .header("x-ms-accept-if-suffix", "registry.io")
+                .header("x-ms-enable-mirror-if-suffix", "registry.io")
+                .send()
+                .await;
+            resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
         });
 
         // It's important that all requests start before this line, otherwise the host will exit immediately b/c there will be no operations pending
@@ -537,7 +560,11 @@ mod tests {
         let entity = host.world().entities().entity(7);
         host.start_event(entity);
         host.wait_for_exit(&mut dispatcher);
-        
+
+        assert!(logs_contain("tag: None"));
+        assert!(logs_contain(r#"tag: Some("overlaybd")"#));
+        assert!(logs_contain(r#"Rejecting host "tenant.test.com""#));
+        assert!(!logs_contain(r#"Rejecting host "tenant.registry.io""#));
         host.exit();
     }
 }

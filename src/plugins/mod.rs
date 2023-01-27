@@ -1,5 +1,7 @@
 mod mirror;
 pub use mirror::Mirror;
+pub use mirror::DefaultHost;
+pub use mirror::MirrorHost;
 
 mod artifact;
 pub use artifact::Artifact;

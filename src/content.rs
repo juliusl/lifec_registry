@@ -39,5 +39,7 @@ pub use local::Local;
 pub mod consts {
     pub use super::artifact_manifest::consts::OCI_ARTIFACTS_MANIFEST_MEDIA_TYPE;
     pub use super::artifact_manifest::consts::ORAS_ARTIFACTS_MANIFEST_MEDIA_TYPE;
-    pub use super::registry::consts::UPGRADE_IF_STREMABLE_HEADER;
+    pub use super::registry::consts::UPGRADE_IF_STREAMABLE_HEADER;
+    pub use super::registry::consts::ACCEPT_IF_SUFFIX_HEADER;
+    pub use super::registry::consts::ENABLE_MIRROR_IF_SUFFIX_HEADER;
 }
