@@ -1,6 +1,8 @@
 use clap::{Args, Parser, Subcommand};
 use lifec::host::HostSettings;
 use lifec::prelude::*;
+use lifec_registry::hosts_config::DefaultHost;
+use lifec_registry::hosts_config::MirrorHost;
 use lifec_registry::RegistryProxy;
 use serde::Serialize;
 use std::path::PathBuf;
@@ -75,7 +77,11 @@ async fn main() {
                             None::<String>,
                         )
                     } else {
-                        Host::load_default_workspace::<RegistryProxy>(None, registry_host, None::<String>)
+                        Host::load_default_workspace::<RegistryProxy>(
+                            None,
+                            registry_host,
+                            None::<String>,
+                        )
                     };
 
                     if let Some(guest) = guest.as_ref() {
@@ -88,11 +94,13 @@ async fn main() {
                 }
                 Commands::Mirror(mut host_settings) => {
                     if host_settings.workspace.is_none() {
-                        let registry = registry.as_ref().map_or(String::default(), |v| v.to_string());
+                        let registry = registry
+                            .as_ref()
+                            .map_or(String::default(), |v| v.to_string());
 
                         host_settings.set_workspace(format!("{registry}.{registry_host}"));
                     }
-                    
+
                     if let Some(guest) = guest.as_ref() {
                         std::env::set_var("ACCOUNT_NAME", guest);
                     }
@@ -100,13 +108,51 @@ async fn main() {
                     if let Some(mut host) = host_settings.create_host::<RegistryProxy>().await {
                         host.enable_listener::<()>();
                         host.start_with::<RegistryProxy>("mirror");
-                    }  else {
+                    } else {
                         host_settings.handle::<RegistryProxy>().await;
                     }
                 }
-                Commands::Init(_mirror_settings) => {
+                Commands::Init(MirrorSettings {
+                    mirror_address,
+                    teleport_format,
+                    registry_host,
+                    fs_root,
+                    hosts_config_only,
+                    ..
+                }) => {
                     if mirror_runmd.exists() {
                         event!(Level::WARN, "Overwriting existing file {:?}", mirror_runmd);
+                    }
+
+                    let hosts_config = if let Some(registry) = registry.as_ref() {
+                        MirrorHost::get_hosts_config(
+                            format!("{registry}.{registry_host}"),
+                            mirror_address,
+                            true,
+                            Some(teleport_format),
+                        )
+                    } else {
+                        DefaultHost::get_hosts_config(
+                            mirror_address,
+                            true,
+                            Some(registry_host),
+                            Some(teleport_format),
+                        )
+                    };
+                    
+                    match hosts_config.install(fs_root)
+                    {
+                        Ok(path) => event!(
+                            Level::INFO,
+                            "Wrote hosts.toml for host, {:?}",
+                            path
+                        ),
+                        Err(err) => panic!("Could not write hosts.toml {err}"),
+                    }
+
+                    if hosts_config_only {
+                        event!(Level::INFO, "Skipping .runmd initialization");
+                        return;
                     }
 
                     tokio::fs::write(
@@ -163,7 +209,7 @@ async fn main() {
 #[clap(about = "Provides extensions and modifications for container runtimes that work with ACR")]
 struct ACR {
     /// Name of the registry to use, also referred to as a "Tenant",
-    /// 
+    ///
     /// If None, then the context is set to the default host workspace,
     ///
     #[clap(long)]
@@ -238,6 +284,16 @@ struct MirrorSettings {
     ///
     #[clap(long, default_value_t = String::from("azurecr.io"))]
     registry_host: String,
+    /// If initializing settings, only initialize the hosts.toml file
+    /// 
+    #[clap(long, action)]
+    hosts_config_only: bool,
+    /// Root of the current filesystem,
+    ///
+    /// This is usually just `/` however when testing it's useful to specify since root is a privelaged folder.
+    ///
+    #[clap(long)]
+    fs_root: Option<String>,
     /// Name of the registry,
     ///
     #[clap(skip)]

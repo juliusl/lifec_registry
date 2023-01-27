@@ -34,7 +34,6 @@ pub use proxy::Blobs;
 
 mod config;
 pub use config::Host as RegistryHost;
-pub use config::HostCapability;
 pub use config::HostsConfig;
 pub use config::AKSAzureConfig;
 pub use config::OAuthConfig;

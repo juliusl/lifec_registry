@@ -13,7 +13,7 @@ use lifec::{
 };
 use lifec_poem::WebApp;
 use poem::Route;
-use reality::{store::StoreIndex, Interpreter};
+use reality::store::StoreIndex;
 use reality_azure::AzureBlockClient;
 use specs::{Entity, LazyUpdate, RunNow, WorldExt};
 use std::{collections::HashMap, sync::Arc};
@@ -72,9 +72,7 @@ impl SpecialAttribute for RegistryProxy {
 }
 
 impl Project for RegistryProxy {
-    fn interpret(world: &World, block: &Block) {
-        // Interpret mirror plugins
-        Mirror::default().interpret(world, block);
+    fn interpret(_: &World, _: &Block) {
     }
 
     fn parser() -> Parser {
@@ -90,7 +88,7 @@ impl Project for RegistryProxy {
 
         world.insert(handlers);
 
-        default_parser(world).with_special_attr::<RegistryProxy>()
+        default_parser(world)
     }
 
     fn runtime() -> Runtime {

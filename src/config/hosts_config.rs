@@ -82,7 +82,7 @@ impl Display for HostsConfig {
 /// Host capabilities for configuring hosts.toml
 ///
 #[derive(Logos, PartialEq, PartialOrd, Ord, Eq)]
-pub enum HostCapability {
+enum HostCapability {
     /// Resolve means the host can resolve a tag to a digest
     ///
     #[token("resolve")]

@@ -118,7 +118,6 @@ fn main() {
         ``` start
         + .runtime
         : .mirror       
-        : .host         localhost:8578, resolve, pull
         
         + .proxy        localhost:8578
         : .manifests    
