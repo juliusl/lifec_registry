@@ -15,6 +15,9 @@ runcmd:
  - tar -zxvf release-1.10.0.tar.gz
  - cd googletest-release-1.10.0; cmake CMakeLists.txt
  - make; make install
+ # Install golang 
+ - wget https://go.dev/dl/go1.19.5.linux-amd64.tar.gz
+ - tar -C /usr/local -xzf go1.19.5.linux-amd64.tar.gz
  # Install overlaybd-tcmu kernel service
  - cd ..; git clone https://github.com/containerd/overlaybd.git
  - cd overlaybd; git submodule update --init
@@ -44,6 +47,8 @@ packages:
  - libnl-3-dev
  - libnl-genl-3-dev
  - libpci-dev
+ - libzstd-dev
+ - libext2fs-dev
  - make
  - cmake
  - g++
