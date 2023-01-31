@@ -75,7 +75,7 @@ impl Registry {
                 Some("overlaybd"),
             );
 
-            if let Err(err) = mirror_hosts_config.install(Some(".test")) {
+            if let Err(err) = mirror_hosts_config.install(None::<String>) {
                 error!("Unable to enable mirror host config for, {}, {:?}", namespace, err);
             } else {
                 // debug!("Enabled mirror host config for {}")

@@ -11,7 +11,7 @@ pub struct ImageIndex {
     /// Schema version of this manifest
     /// 
     #[serde(rename = "schemaVersion")]
-    pub schema_versin: usize,
+    pub schema_version: usize,
     /// Media type, for this manifest ;ost
     /// 
     #[serde(rename = "mediaType")]

@@ -12,7 +12,7 @@ use lifec::{
     runtime::Runtime,
 };
 use lifec_poem::WebApp;
-use poem::Route;
+use poem::{Route, handler, get, EndpointExt, web::Data};
 use reality::store::StoreIndex;
 use reality_azure::AzureBlockClient;
 use specs::{Entity, LazyUpdate, RunNow, WorldExt};
@@ -88,7 +88,7 @@ impl Project for RegistryProxy {
 
         world.insert(handlers);
 
-        default_parser(world)
+        default_parser(world).with_special_attr::<RegistryProxy>()
     }
 
     fn runtime() -> Runtime {
@@ -155,7 +155,9 @@ impl WebApp for RegistryProxy {
                 .add_route::<Manifests>(&host, &self.context)
                 .add_route::<BlobsUploads>(&host, &self.context);
 
-            Route::default().nest("/v2", route)
+            Route::default()
+                .at("/status", get(status_check).data(self.context.clone()))
+                .nest("/v2", route)
         } else {
             panic!("Cannot start w/o config")
         }
@@ -185,6 +187,15 @@ impl From<ThunkContext> for RegistryProxy {
 
         proxy
     }
+}
+
+/// Runs a status check
+/// 
+#[handler]
+async fn status_check(
+    context: Data<&ThunkContext>
+) -> String {
+    format!("{:#?}", context.workspace())
 }
 
 /// Installs guest agent code,

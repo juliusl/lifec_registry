@@ -29,10 +29,10 @@ impl Plugin for Discover {
                     let api = tc
                         .state()
                         .find_symbol("referrers_api")
-                        .unwrap_or("_oras/artifacts/referrers".to_string());
+                        .unwrap_or("referrers/".to_string());
 
                     let referrers_api = format!(
-                        "https://{}/v2/{}/{api}?digest={digest}&artifactType={artifact_type}",
+                        "https://{}/v2/{}/{api}{digest}?artifactType={artifact_type}",
                         namespace, repo,
                     );
                     event!(
