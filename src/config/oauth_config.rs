@@ -1,6 +1,6 @@
 use std::io::ErrorKind;
 
-use hyper::{http::HeaderValue, Method};
+use hyper::{http::HeaderValue, Method, Body};
 use serde::{Deserialize, Serialize};
 
 /// Struct representing docker's oauth config specification,
@@ -66,14 +66,10 @@ impl OAuthConfig {
     /// 
     /// If `grant_type` of access_token is used, then realm will switch to /oauth2/exchange
     /// 
-    pub fn build_request(mut self) -> Result<hyper::Request<String>, std::io::Error> {
+    pub fn build_request(mut self) -> Result<hyper::Request<Body>, std::io::Error> {
         let mut uri = self.realm.clone();
 
-        if self.grant_type == "access_token" {
-            if self.access_token.is_none() || self.tenant.is_none() {
-                return Err(std::io::Error::new(ErrorKind::InvalidInput, "access_token and tenant are required for this config"));
-            }
-
+        if self.tenant.is_some() {
             uri = uri.replace("token", "exchange");
             self.scope.take();
         }
@@ -84,7 +80,7 @@ impl OAuthConfig {
             .uri(uri)
             .method(Method::POST)
             .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(body)
+            .body(Body::from(body))
             .map_err(|e| std::io::Error::new(ErrorKind::InvalidData, e))
     }
 
@@ -170,6 +166,24 @@ impl BearerChallengeConfig {
         }
     }
 
+    /// Consumes the challenge and returns an OAuthConfig for exchanging a username/password for a refresh_token
+    /// 
+    pub fn exchange_by_password(self, username: impl Into<String>, password: impl Into<String>, tenant_id: impl Into<String>) -> OAuthConfig {
+        OAuthConfig {
+            realm: self.realm,
+            grant_type: String::from("password"),
+            service: self.service,
+            tenant: Some(tenant_id.into()),
+            username: Some(username.into()),
+            password: Some(password.into()),
+            access_token: None,
+            scope: None,
+            refresh_token: None,
+            client_id: None,
+            access_type: None,
+        }
+    }
+
     /// Consumes the challenge config and returns an OAuthConfig for receiving a token by refresh_token grant
     ///
     pub fn token_by_refresh_token(self, refresh_token: impl Into<String>) -> OAuthConfig {
@@ -211,9 +225,12 @@ impl BearerChallengeConfig {
     }
 }
 
+#[allow(unused_imports)]
 mod tests {
-    #[test]
-    fn test_bearer_challenge_config() {
+    use hyper::Body;
+
+    #[tokio::test]
+    async fn test_bearer_challenge_config() {
         use super::BearerChallengeConfig;
         use hyper::http::HeaderValue;
 
@@ -226,19 +243,25 @@ mod tests {
         assert_eq!("host.io", config.service);
         assert_eq!(Some("repository:hello-world:pull,push".to_string()), config.scope);
 
+        async fn convert_to_string(body: &mut Body) -> String {
+            let bytes = hyper::body::to_bytes(body).await.unwrap();
+
+            String::from_utf8(bytes.to_vec()).unwrap()
+        }
+
         // Test refresh_token request generation
         let oauth_config = config.clone().token_by_refresh_token("testtoken");
-        let request = oauth_config.build_request().expect("should be able to generate request");
-        assert_eq!("grant_type=refresh_token&service=host.io&scope=repository%3Ahello-world%3Apull%2Cpush&refresh_token=testtoken", request.body().to_string());
+        let mut request = oauth_config.build_request().expect("should be able to generate request");
+        assert_eq!("grant_type=refresh_token&service=host.io&scope=repository%3Ahello-world%3Apull%2Cpush&refresh_token=testtoken", convert_to_string(request.body_mut()).await);
 
         // Test password request generation
         let oauth_config = config.clone().token_by_password("testusername", "testpassword");
-        let request = oauth_config.build_request().expect("should be able to generate request");
-        assert_eq!("grant_type=password&service=host.io&scope=repository%3Ahello-world%3Apull%2Cpush&username=testusername&password=testpassword", request.body().to_string());
+        let mut request = oauth_config.build_request().expect("should be able to generate request");
+        assert_eq!("grant_type=password&service=host.io&scope=repository%3Ahello-world%3Apull%2Cpush&username=testusername&password=testpassword", convert_to_string(request.body_mut()).await);
 
         // Test exchange request generation
         let oauth_config = config.clone().exchange("testaccesstoken", "testtenant");
-        let request = oauth_config.build_request().expect("should be able to generate request");
-        assert_eq!("grant_type=access_token&service=host.io&tenant=testtenant&access_token=testaccesstoken", request.body().to_string());
+        let mut request = oauth_config.build_request().expect("should be able to generate request");
+        assert_eq!("grant_type=access_token&service=host.io&tenant=testtenant&access_token=testaccesstoken", convert_to_string(request.body_mut()).await);
     }
 }

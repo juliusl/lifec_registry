@@ -16,7 +16,7 @@ use poem::{Route, handler, get, EndpointExt, web::Data};
 use reality::store::StoreIndex;
 use reality_azure::AzureBlockClient;
 use specs::{Entity, LazyUpdate, RunNow, WorldExt};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, path::{Path, PathBuf}, ffi::OsStr};
 use tokio::io::AsyncReadExt;
 use tracing::{event, Level};
 
@@ -26,7 +26,7 @@ use crate::{
         LoginNydus,
     },
     Artifact, ArtifactManifest, Authenticate, Descriptor, Discover, ImageIndex, ImageManifest,
-    Login, LoginACR, LoginOverlayBD, Mirror, RemoteRegistry, Resolve, Teleport,
+    Login, LoginACR, LoginOverlayBD, Mirror, RemoteRegistry, Resolve, Teleport, default_access_provider,
 };
 
 mod proxy_target;
@@ -44,6 +44,9 @@ pub use blobs_uploads::BlobsUploads;
 mod proxy_route;
 use proxy_route::AddRoute;
 pub use proxy_route::ProxyRoute;
+
+mod auth;
+use auth::handle_auth;
 
 /// Struct for creating a customizable registry proxy,
 ///
@@ -155,8 +158,16 @@ impl WebApp for RegistryProxy {
                 .add_route::<Manifests>(&host, &self.context)
                 .add_route::<BlobsUploads>(&host, &self.context);
 
+            let file_provider = workspace.work_dir().join("access_token");
+            let file_provider = if file_provider.exists() {
+                Some(file_provider)
+            } else {
+                None
+            };
+
             Route::default()
                 .at("/status", get(status_check).data(self.context.clone()))
+                .at("/auth", get(handle_auth).data(self.context.clone()).data(default_access_provider(file_provider)))
                 .nest("/v2", route)
         } else {
             panic!("Cannot start w/o config")

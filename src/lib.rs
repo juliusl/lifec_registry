@@ -35,6 +35,17 @@ pub use proxy::Blobs;
 mod config;
 pub use config::Host as RegistryHost;
 pub use config::HostsConfig;
-pub use config::AKSAzureConfig;
 pub use config::OAuthConfig;
 pub use config::BearerChallengeConfig;
+
+pub mod azure {
+    pub use crate::config::AzureAKSConfig;
+    pub use crate::config::AzureIMDSConfig;
+}
+
+mod access_provider;
+pub use access_provider::AccessProvider;
+pub use access_provider::default_access_provider;
+
+mod error;
+pub use error::Error;

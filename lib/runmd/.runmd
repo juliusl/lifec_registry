@@ -1,0 +1,58 @@
+
+# Configure mirror settings
+```
++ .config               start.mirror
+: app_host              .symbol         localhost:8567
+: teleport              .symbol         overlaybd
+: skip_hosts_dir_check          .false
+: enable_guest_agent            .false
+: enable_guest_agent_dispatcher .false
+```
+
+# Resolve manifest handler (/v2/../manifests/..)
+- This handler will resolve the requested reference with the upstream server, 
+- Subsequent plugins will noww have the digest and manifest for the original image
+- Using the resolved digest, we call the referrer's api to `.discover` links to streamable formats
+
+```
++ overlaybd     .operation    manifests.resolve
+: .login        access_token
+: .authn    
+: .request
+: .resolve
+: .discover     application/vnd.azure.artifact.streaming.link.v1
+: .teleport
+```
+```
++ .operation    manifests.resolve
+: .request
+```
+
+# Download blob handler (/v2/../blobs/..)
+```
++ .operation      blobs.download
+: .login          access_token
+: .authn            
+: .request          
+```
+
+# Setup guest storage
+```
++ .operation    setup.guest
+: .remote_registry
+: .process  sh setup-guest-storage.sh
+```
+
+# Open guest
+```
++ .operation    open.guest
+: .remote_registry
+: .remote_guest 
+```
+
+# Test operation
+```
++ .operation    print
+: .remote_registry  
+: .println
+```
