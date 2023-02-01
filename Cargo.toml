@@ -61,6 +61,6 @@ depends = "$auto, build-essential, pkg-config, libssl-dev"
 maintainer-scripts = "lib/debian"
 assets = [
     [ "target/release/acr", "opt/acr/bin/acr", "755" ],
-    [ "lib/sh/overlaybd/", "opt/acr/tools/overlaybd/", "755" ],
+    [ "lib/sh/overlaybd", "opt/acr/tools/overlaybd/", "755" ],
 ]
 systemd-units = { unit-name = "acr-mirror", enable = true, start = true  }
