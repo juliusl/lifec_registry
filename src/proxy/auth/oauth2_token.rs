@@ -77,6 +77,7 @@ impl OAuthToken {
     /// 
     /// Authorizes w/ the refresh token in order to get a new access_token
     /// 
+    #[allow(dead_code)]
     pub async fn access_token(
         client: SecureClient,
         remote_uri: impl Into<String>,

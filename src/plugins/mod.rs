@@ -24,7 +24,9 @@ pub use login::LoginOverlayBD;
 mod resolve;
 pub use resolve::Resolve;
 
-mod remote_registry;
-pub use remote_registry::RemoteRegistry;
-
-pub mod guest;
+cfg_editor! {
+    mod remote_registry;
+    pub use remote_registry::RemoteRegistry;
+    
+    pub mod guest;
+}

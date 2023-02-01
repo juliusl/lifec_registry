@@ -30,7 +30,7 @@ sudo apt-get update
 sudo apt-get upgrade
 ```
 
-This will update the drivers.
+This will update the drivers. On Windows, all of this this just works.
 
 3) Run `cargo update` (You'll want to do this every once in a while to update deps)
 4) Run `cargo build`

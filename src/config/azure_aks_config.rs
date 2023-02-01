@@ -1,9 +1,8 @@
-use std::{path::PathBuf, fs::File};
+use std::path::PathBuf;
 
 use async_trait::async_trait;
 use azure_core::auth::TokenCredential;
 use azure_identity::{authority_hosts, TokenCredentialOptions};
-use std::io::Read;
 use serde::{Deserialize, Serialize};
 
 use crate::{AccessProvider, Error};
@@ -136,5 +135,9 @@ impl AccessProvider for AzureAKSConfig {
                 "AKS config does not have enough information to create an access token",
             ))
         }
+    }
+
+    fn tenant_id(&self) -> Option<String> {
+        Some(self.tenant_id.to_string())
     }
 }

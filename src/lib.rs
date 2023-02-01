@@ -1,3 +1,6 @@
+#[doc(hidden)]
+#[macro_use]
+pub mod macros;
 
 mod content;
 pub use content::Platform;
@@ -19,7 +22,10 @@ pub use plugins::LoginOverlayBD;
 pub use plugins::Discover;
 pub use plugins::Teleport;
 pub use plugins::Resolve;
-pub use plugins::RemoteRegistry;
+
+cfg_editor! {
+    pub use plugins::RemoteRegistry;
+}
 
 pub mod hosts_config {
     pub use crate::plugins::MirrorHost;

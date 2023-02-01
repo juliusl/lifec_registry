@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use azure_core::auth::TokenCredential;
 use azure_identity::DefaultAzureCredential;
-use lifec::prelude::SecureClient;
 
 use crate::{AccessProvider, Error};
 

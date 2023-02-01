@@ -10,7 +10,7 @@ use poem::{
 };
 use serde::{Deserialize, Serialize};
 use specs::{Component, VecStorage, WorldExt, Join};
-use tracing::{event, Level, debug};
+use tracing::{event, Level};
 
 use crate::Registry;
 

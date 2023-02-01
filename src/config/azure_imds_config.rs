@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use hyper::{Request, Uri, Body};
-use lifec::prelude::SecureClient;
 use serde::Deserialize;
 
 use crate::{AccessProvider, Error};

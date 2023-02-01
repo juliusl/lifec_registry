@@ -5,12 +5,19 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = []
+editor = [ "lifec/editor", "imgui" ]
+
 [dependencies]
+# Optional
+imgui = { version = "0.9.0", optional = true }
+
+# Required 
 clap = { version = "4.0.4", features = [ "derive" ] }
 hyper = "0.14.20"
 hyper-tls = "0.5.0"
-imgui = "0.9.0"
-lifec = { git = "https://github.com/juliusl/lifec.git", branch = "pr/refactor-workspace", features = [ "editor" ] }
+lifec = { git = "https://github.com/juliusl/lifec.git", branch = "pr/refactor-workspace"}
 lifec_poem = { git = "https://github.com/juliusl/lifec.git", branch = "pr/refactor-workspace" }
 reality = { git = "https://github.com/juliusl/reality.git", branch = "pr/workspace-refactor" }
 reality_azure = { git = "https://github.com/juliusl/reality.git", branch = "pr/workspace-refactor" }
@@ -34,3 +41,11 @@ tracing-test = "0.2.3"
 sha2 = "0.10.6"
 serde_urlencoded = "0.7.1"
 async-trait = "0.1.64"
+
+[[bin]]
+name = "acr-dev"
+required-features = [ "editor" ]
+
+[[example]]
+name = "proxy"
+required-features = [ "editor" ]

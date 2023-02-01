@@ -12,6 +12,12 @@ pub trait AccessProvider {
     /// Returns an access token that can be exchanged for a refresh token,
     /// 
     async fn access_token(&self) -> Result<String, Error>;
+
+    /// Returns a tenant id if relevant,
+    /// 
+    fn tenant_id(&self) -> Option<String> {
+        None
+    }
 }
 
 /// Returns the default access provider,

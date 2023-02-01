@@ -1,32 +1,28 @@
-use lifec::{
-    appendix::Appendix,
-    debugger::Debugger,
-    engine::{Cleanup, Performance, Profilers},
-    guest::{Guest, RemoteProtocol},
-    host::EventHandler,
-    prelude::{
-        AttributeParser, Block, EventRuntime, Host, Journal, Node, NodeStatus, Parser, Plugins,
-        Run, Sequencer, SpecialAttribute, State, ThunkContext, Value, World,
-    },
-    project::{default_parser, default_runtime, default_world, Project, RunmdFile, Workspace},
-    runtime::Runtime,
-};
+use lifec::prelude::AttributeParser;
+use lifec::prelude::Block;
+use lifec::prelude::Host;
+use lifec::prelude::Parser;
+use lifec::prelude::Run;
+use lifec::prelude::SpecialAttribute;
+use lifec::prelude::ThunkContext;
+use lifec::prelude::Value;
+use lifec::prelude::World;
+use lifec::project::default_parser;
+use lifec::project::default_runtime;
+use lifec::project::default_world;
+use lifec::project::Project;
+use lifec::runtime::Runtime;
+
 use lifec_poem::WebApp;
-use poem::{Route, handler, get, EndpointExt, web::Data};
-use reality::store::StoreIndex;
-use reality_azure::AzureBlockClient;
-use specs::{Entity, LazyUpdate, RunNow, WorldExt};
-use std::{collections::HashMap, sync::Arc, path::{Path, PathBuf}, ffi::OsStr};
-use tokio::io::AsyncReadExt;
-use tracing::{event, Level};
+use poem::{get, handler, web::Data, EndpointExt, Route};
+
+use specs::WorldExt;
+use std::sync::Arc;
 
 use crate::{
-    plugins::{
-        guest::{AzureAgent, AzureDispatcher, AzureGuest, AzureMonitor},
-        LoginNydus,
-    },
-    Artifact, ArtifactManifest, Authenticate, Descriptor, Discover, ImageIndex, ImageManifest,
-    Login, LoginACR, LoginOverlayBD, Mirror, RemoteRegistry, Resolve, Teleport, default_access_provider,
+    default_access_provider, plugins::LoginNydus, Artifact, ArtifactManifest, Authenticate,
+    Descriptor, Discover, ImageIndex, ImageManifest, Login, LoginACR, LoginOverlayBD, Mirror,
+    Resolve, Teleport,
 };
 
 mod proxy_target;
@@ -75,8 +71,7 @@ impl SpecialAttribute for RegistryProxy {
 }
 
 impl Project for RegistryProxy {
-    fn interpret(_: &World, _: &Block) {
-    }
+    fn interpret(_: &World, _: &Block) {}
 
     fn parser() -> Parser {
         let mut world = Self::world();
@@ -94,27 +89,36 @@ impl Project for RegistryProxy {
         default_parser(world).with_special_attr::<RegistryProxy>()
     }
 
-    fn runtime() -> Runtime {
-        // The default runtime gives us all of the built-in plugins from the framework,
-        let mut runtime = default_runtime();
+    cfg_not_editor! {
+        fn runtime() -> Runtime {
+            // The default runtime gives us all of the built-in plugins from the framework,
+            let mut runtime = default_runtime();
 
-        runtime.install_with_custom::<Run<RegistryProxy>>("");
-        runtime.install_with_custom::<LoginACR>("");
-        runtime.install_with_custom::<LoginNydus>("");
-        runtime.install_with_custom::<LoginOverlayBD>("");
-        runtime.install_with_custom::<Teleport>("");
-        runtime.install_with_custom::<Login>("");
-        runtime.install_with_custom::<Authenticate>("");
-        runtime.install_with_custom::<Mirror>("");
-        runtime.install_with_custom::<Resolve>("");
-        runtime.install_with_custom::<Discover>("");
-        runtime.install_with_custom::<Artifact>("");
-        runtime.install_with_custom::<RemoteRegistry>("");
-        runtime.install_with_custom::<AzureGuest>("");
-        runtime.install_with_custom::<AzureAgent>("");
-        runtime.install_with_custom::<AzureDispatcher>("");
-        runtime.install_with_custom::<AzureMonitor>("");
-        runtime
+            runtime.install_with_custom::<Run<RegistryProxy>>("");
+            runtime.install_with_custom::<LoginACR>("");
+            runtime.install_with_custom::<LoginNydus>("");
+            runtime.install_with_custom::<LoginOverlayBD>("");
+            runtime.install_with_custom::<Teleport>("");
+            runtime.install_with_custom::<Login>("");
+            runtime.install_with_custom::<Authenticate>("");
+            runtime.install_with_custom::<Mirror>("");
+            runtime.install_with_custom::<Resolve>("");
+            runtime.install_with_custom::<Discover>("");
+            runtime.install_with_custom::<Artifact>("");
+
+            runtime
+        }
+    }
+    cfg_editor! {
+        fn runtime() -> Runtime {
+        // The default runtime gives us all of the built-in plugins from the framework,
+            let mut runtime = default_runtime();
+            runtime.install_with_custom::<AzureGuest>("");
+            runtime.install_with_custom::<AzureAgent>("");
+            runtime.install_with_custom::<AzureDispatcher>("");
+            runtime.install_with_custom::<AzureMonitor>("");
+            runtime
+        }
     }
 
     fn world() -> World {
@@ -134,7 +138,6 @@ impl Project for RegistryProxy {
         world.register::<ArtifactManifest>();
 
         // This is to enable custom tooling ui
-        world.register::<NodeStatus>();
         world
     }
 }
@@ -167,7 +170,12 @@ impl WebApp for RegistryProxy {
 
             Route::default()
                 .at("/status", get(status_check).data(self.context.clone()))
-                .at("/auth", get(handle_auth).data(self.context.clone()).data(default_access_provider(file_provider)))
+                .at(
+                    "/auth",
+                    get(handle_auth)
+                        .data(self.context.clone())
+                        .data(default_access_provider(file_provider)),
+                )
                 .nest("/v2", route)
         } else {
             panic!("Cannot start w/o config")
@@ -175,40 +183,72 @@ impl WebApp for RegistryProxy {
     }
 }
 
-impl From<ThunkContext> for RegistryProxy {
-    fn from(context: ThunkContext) -> Self {
-        let proxy = Self {
-            context: context.clone(),
-        };
-
-        if context.is_enabled("enable_guest_agent") {
-            // Enables guest agent
-            // The guest runs seperately from the host's engine
-            let guest = build_registry_proxy_guest_agent(&context);
-            if context.is_enabled("enable_guest_agent_dispatcher") {
-                let protocol = guest.protocol();
-                let entity = protocol.as_ref().entities().entity(2);
-                protocol.as_ref().system_data::<State>().activate(entity);
-            }
-
-            if context.enable_guest(guest) {
-                event!(Level::INFO, "Guest agent has been enabled");
-            }
+cfg_not_editor! {
+    impl From<ThunkContext> for RegistryProxy {
+        fn from(context: ThunkContext) -> Self {
+            let proxy = Self {
+                context: context.clone(),
+            };
+            proxy
         }
-
-        proxy
     }
 }
 
 /// Runs a status check
-/// 
+///
 #[handler]
-async fn status_check(
-    context: Data<&ThunkContext>
-) -> String {
+async fn status_check(context: Data<&ThunkContext>) -> String {
     format!("{:#?}", context.workspace())
 }
 
+cfg_editor! {
+    use lifec::guest::RemoteProtocol;
+    use lifec::prelude::State;
+    use lifec::prelude::Sequencer;
+    use lifec::prelude::EventRuntime;
+    use lifec::host::EventHandler;
+    use lifec::guest::Guest;
+    use lifec::debugger::Debugger;
+    use lifec::appendix::Appendix;
+    use lifec::project::Workspace;
+    use lifec::project::RunmdFile;
+    use lifec::engine::{Cleanup, Performance, Profilers};
+    use reality::store::StoreIndex;
+    use reality_azure::AzureBlockClient;
+    use lifec::prelude::Journal;
+    use lifec::prelude::Plugins;
+    use tokio::io::AsyncReadExt;
+    use tracing::{event, Level};
+    use specs::RunNow;
+    use specs::Entity;
+    use specs::LazyUpdate;
+    use crate::plugins::guest::{AzureAgent, AzureDispatcher, AzureGuest, AzureMonitor};
+    use crate::RemoteRegistry;
+    use lifec::prelude::{Node, NodeStatus};
+    use std::collections::HashMap;
+    impl From<ThunkContext> for RegistryProxy {
+        fn from(context: ThunkContext) -> Self {
+            let proxy = Self {
+                context: context.clone(),
+            };
+            if context.is_enabled("enable_guest_agent") {
+                // Enables guest agent
+                // The guest runs seperately from the host's engine
+
+                let guest = build_registry_proxy_guest_agent(&context);
+                if context.is_enabled("enable_guest_agent_dispatcher") {
+                    let protocol = guest.protocol();
+                    let entity = protocol.as_ref().entities().entity(2);
+                    protocol.as_ref().system_data::<State>().activate(entity);
+                }
+
+                if context.enable_guest(guest) {
+                    event!(Level::INFO, "Guest agent has been enabled");
+                }
+            }
+            proxy
+        }
+    }
 /// Installs guest agent code,
 ///
 fn install_guest_agent(root: &mut Workspace) {
@@ -305,6 +345,7 @@ fn build_registry_proxy_guest_agent(tc: &ThunkContext) -> Guest {
     let mut world = root
         .compile::<RegistryProxy>()
         .expect("should compile into a world");
+    world.register::<NodeStatus>();
     world.insert(None::<RemoteProtocol>);
     world.insert(None::<Debugger>);
     world.insert(None::<HashMap<Entity, NodeStatus>>);
@@ -458,6 +499,8 @@ pub async fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest
 
     guest.enable_remote();
     guest
+}
+
 }
 
 mod tests {
