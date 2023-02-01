@@ -61,22 +61,22 @@ extends:
           - task: Bash@3
             displayName: 'Restore'
             inputs:
-              filePath: '$(Build.SourcesDirectory)/lib/build/restore.sh'
+              filePath: '$(Build.SourcesDirectory)/lib/sh/build/restore.sh'
 
           - task: Bash@3
             displayName: 'Test'
             inputs:
-              filePath: '$(Build.SourcesDirectory)/lib/build/test.sh'
+              filePath: '$(Build.SourcesDirectory)/lib/sh/build/test.sh'
 
           - task: Bash@3
             displayName: 'Build'
             inputs:
-              filePath: '$(Build.SourcesDirectory)/lib/build/build.sh'
+              filePath: '$(Build.SourcesDirectory)/lib/sh/build/build.sh'
 
           - task: Bash@3
             displayName: 'Package'
             inputs:
-              filePath: '$(Build.SourcesDirectory)/lib/build/package.sh'
+              filePath: '$(Build.SourcesDirectory)/lib/sh/build/package.sh'
           
           # Build and copy binaries
           - task: Bash@3
