@@ -3,7 +3,9 @@ Description=ACR Mirror Service
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/acr mirror start
+Environment=RUST_LOG='lifec_registry=info'
+WorkingDirectory=/opt/acr/bin
+ExecStart=/opt/acr/bin/acr mirror start
 
 Delegate=yes
 KillMode=process
