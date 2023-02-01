@@ -57,9 +57,24 @@ extends:
             inputs:
               rustVersion: 'ms-stable'
               authenticationToken: '$(MSCODE_HUB_TOKEN)'
+          # Install deps
+          - task: Bash@3
+            inputs:
+              targetType: 'inline'
+              script: 'apt-get install build-essential pkg-config libssl-dev -y'
+
           # Run tests
           - task: Bash@3
             inputs:
               targetType: 'inline'
               script: 'cargo test --package lifec_registry --lib -- proxy --nocapture'
+          
+          # Build and copy binaries
+          - task: Bash@3
+            inputs:
+              targetType: 'inline'
+              script: | 
+                cargo build
+                mkdir -p $(Build.SourcesDirectory)/out
+                cp target/debug/acr $(Build.SourcesDirectory)/out
 
