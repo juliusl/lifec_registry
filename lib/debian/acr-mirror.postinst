@@ -1,0 +1,7 @@
+#!/bin/sh
+
+/opt/acr/tools/overlaybd/install.sh
+/opt/acr/tools/overlaybd/enable-http-auth.sh
+
+cd /opt/acr/bin
+./acr init

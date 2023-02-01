@@ -57,24 +57,32 @@ extends:
             inputs:
               rustVersion: 'ms-stable'
               authenticationToken: '$(MSCODE_HUB_TOKEN)'
-          # Install deps
+          
           - task: Bash@3
+            displayName: 'Restore'
             inputs:
-              targetType: 'inline'
-              script: 'apt-get install build-essential pkg-config libssl-dev -y'
+              filePath: '$(Build.SourcesDirectory)/lib/build/restore.sh'
 
-          # Run tests
           - task: Bash@3
+            displayName: 'Test'
             inputs:
-              targetType: 'inline'
-              script: 'cargo test --package lifec_registry --lib -- proxy --nocapture'
+              filePath: '$(Build.SourcesDirectory)/lib/build/test.sh'
+
+          - task: Bash@3
+            displayName: 'Build'
+            inputs:
+              filePath: '$(Build.SourcesDirectory)/lib/build/build.sh'
+
+          - task: Bash@3
+            displayName: 'Package'
+            inputs:
+              filePath: '$(Build.SourcesDirectory)/lib/build/package.sh'
           
           # Build and copy binaries
           - task: Bash@3
             inputs:
               targetType: 'inline'
               script: | 
-                cargo build
                 mkdir -p $(Build.SourcesDirectory)/out
-                cp target/debug/acr $(Build.SourcesDirectory)/out
+                cp target/debian/ $(Build.SourcesDirectory)/out/
 

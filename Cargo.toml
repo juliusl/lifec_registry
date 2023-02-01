@@ -1,7 +1,12 @@
 [package]
 name = "lifec_registry"
+authors = [ "Microsoft Corporation", "Julius Liu <juliusl@microsoft.com>" ]
+description = "Framework for extending container registry functionality from the client"
+license-file = "LICENSE"
+readme = "README.md"
 version = "0.1.0"
 edition = "2021"
+resolver = "2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -49,3 +54,14 @@ required-features = [ "editor" ]
 [[example]]
 name = "proxy"
 required-features = [ "editor" ]
+
+[package.metadata.deb]
+name = "acr-mirror"
+build-depends = "build-essential, pkg-config, libssl-dev"
+depends = "$auto"
+maintainer-scripts = "lib/debian"
+assets = [
+    [ "target/release/acr", "opt/acr/bin/acr", "755" ],
+    [ "lib/sh/overlaybd/", "opt/acr/tools/overlaybd/", "755" ],
+]
+systemd-units = { unit-name = "acr-mirror", enable = true, start = true  }
