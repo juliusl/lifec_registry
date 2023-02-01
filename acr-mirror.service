@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Environment=RUST_LOG='lifec_registry=info'
 WorkingDirectory=/opt/acr/bin
-ExecStart=/opt/acr/bin/acr mirror start
+ExecStart=/opt/acr/entrypoint.sh
 
 Delegate=yes
 KillMode=process
