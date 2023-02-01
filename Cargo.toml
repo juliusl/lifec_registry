@@ -57,8 +57,7 @@ required-features = [ "editor" ]
 
 [package.metadata.deb]
 name = "acr-mirror"
-build-depends = "build-essential, pkg-config, libssl-dev"
-depends = "$auto"
+depends = "$auto, build-essential, pkg-config, libssl-dev"
 maintainer-scripts = "lib/debian"
 assets = [
     [ "target/release/acr", "opt/acr/bin/acr", "755" ],
