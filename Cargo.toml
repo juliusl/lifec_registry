@@ -62,6 +62,7 @@ maintainer-scripts = "lib/debian"
 assets = [
     [ "target/release/acr", "opt/acr/bin/acr", "755" ],
     [ "lib/sh/overlaybd/install.sh", "opt/acr/tools/overlaybd/install.sh", "755" ],
+    [ "lib/sh/overlaybd/enable.sh", "opt/acr/tools/overlaybd/enable.sh", "755" ],
     [ "lib/sh/overlaybd/enable-file-auth.sh", "opt/acr/tools/overlaybd/enable-file-auth.sh", "755" ],
     [ "lib/sh/overlaybd/enable-http-auth.sh", "opt/acr/tools/overlaybd/enable-http-auth.sh", "755" ],
 ]
