@@ -24,6 +24,7 @@ jobs:
       run: |
         mkdir out
         cp target/debian/*.deb out/
+        ls out
   release:
     name: Release
     runs-on: ubuntu-latest
