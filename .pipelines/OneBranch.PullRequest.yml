@@ -84,5 +84,5 @@ extends:
               targetType: 'inline'
               script: | 
                 mkdir -p $(Build.SourcesDirectory)/out
-                cp target/debian/ $(Build.SourcesDirectory)/out/
+                cp -r target/debian/ $(Build.SourcesDirectory)/out/
 

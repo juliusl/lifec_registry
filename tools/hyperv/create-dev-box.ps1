@@ -51,9 +51,10 @@ $ubuntuPath = "https://cloud-images.ubuntu.com/focal/current/focal-server-cloudi
 $virtualSwitchName = "Default Switch"
 $imageCachePath = "$($VMRoot)\imagecache"
 $vmPath = "$($VMRoot)\$($VMType)"
+$vmConfigPath = "$($vmPath)\$($VMName)\config"
 $vhdx = "$($vmPath)\$($VMName).vhdx"
-$metaDataIso = "$($vmPath)\metadata.iso"
-$nocloudPath = "$($vmPath)\NoCloud"
+$metaDataIso = "$($vmConfigPath)\metadata.iso"
+$nocloudPath = "$($vmConfigPath)\NoCloud"
 
 # Get the timestamp of the latest build on the Ubuntu cloud-images site
 $ubuntuManifestURI = "$ubuntuPath.manifest"
@@ -83,9 +84,16 @@ ethernets:
 # Check Paths
 if (!(test-path $imageCachePath)) {mkdir $imageCachePath}
 
+if (!(test-path $vmConfigPath)) {
+    mkdir -p $vmConfigPath
+}
+
+if (!(test-path $nocloudPath)) {
+    mkdir -p $nocloudPath
+}
+
 if (!(test-path $vmPath)) {
     mkdir $vmPath
-    mkdir $nocloudPath
 }
 
 # Helper function for no error file cleanup
