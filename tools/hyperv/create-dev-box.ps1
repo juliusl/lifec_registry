@@ -136,8 +136,6 @@ merge_how:
 
 packages_update: true
 packages_upgrade: true
-chpasswd:
-  expire: true
 power_state:
   mode: reboot
 
@@ -145,8 +143,6 @@ users:
  - default
  - name: $($env:USERNAME)
    sudo: ALL=(ALL) NOPASSWD:ALL
-   plain_text_passwd: $($env:USERNAME)
-   lock_passwd: false
    shell: /bin/bash
    ssh_authorized_keys:
     - $($sshKey)
@@ -190,3 +186,5 @@ Get-VM -VMname $VMName | Enable-VMIntegrationService -Name *
 Add-VMDvdDrive -VMName $VMName
 Set-VMDvdDrive -VMName $VMName -Path $metaDataIso
 Start-VM $VMName
+
+Write-Information "The VM will now start. Wait for it to reboot and then you can ssh to it."
