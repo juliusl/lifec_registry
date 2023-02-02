@@ -1,18 +1,69 @@
 [package]
 name = "lifec_registry"
+authors = [ "Microsoft Corporation", "Julius Liu <juliusl@microsoft.com>" ]
+description = "Framework for extending container registry functionality from the client"
+license-file = "LICENSE"
+readme = "README.md"
 version = "0.1.0"
 edition = "2021"
+resolver = "2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = []
+editor = [ "lifec/editor", "imgui" ]
+
 [dependencies]
+# Optional
+imgui = { version = "0.9.0", optional = true }
+
+# Required 
+clap = { version = "4.0.4", features = [ "derive" ] }
 hyper = "0.14.20"
-imgui = "0.8.2"
-lifec = { git = "https://github.com/juliusl/lifec.git", branch = "main" }
-lifec_poem = { git = "https://github.com/juliusl/lifec_poem.git", branch = "main" }
-poem = { version = "1.3.32", features = ["server", "static-files", "rustls", "test"] }
+hyper-tls = "0.5.0"
+lifec = { git = "https://github.com/juliusl/lifec.git", branch = "pr/refactor-workspace"}
+lifec_poem = { git = "https://github.com/juliusl/lifec.git", branch = "pr/refactor-workspace" }
+reality = { git = "https://github.com/juliusl/reality.git", branch = "pr/workspace-refactor" }
+reality_azure = { git = "https://github.com/juliusl/reality.git", branch = "pr/workspace-refactor" }
+azure_identity = { git = "https://github.com/juliusl/azure-sdk-for-rust.git", branch="pr/block-id-conversion" }
+azure_core = { git = "https://github.com/juliusl/azure-sdk-for-rust.git", branch="pr/block-id-conversion" }
+# shinsu = { git = "https://github.com/juliusl/shinsu.git", branch = "pr/v2_api" }
+# lifec = { path = "../lifec" }
+specs = { git = "https://github.com/amethyst/specs", features = ["default", "derive", "shred-derive"] }
+logos = "0.12.1"
+native-tls = "0.2.10"
+poem = { version = "1.3.32", features = ["server", "static-files", "native-tls", "test"] }
+rust-embed = { version = "6.4.1", features = ["include-exclude"] }
 serde = "1.0"
 serde_json = "1.0.82"
+tinytemplate = "1.2.1"
 tokio = "1.20.1"
+toml = "0.5.9"
 tracing = "0.1.35"
 tracing-subscriber =  { version = "0.3", features = [ "env-filter" ] }
+tracing-test = "0.2.3"
+sha2 = "0.10.6"
+serde_urlencoded = "0.7.1"
+async-trait = "0.1.64"
+
+[[bin]]
+name = "acr-dev"
+required-features = [ "editor" ]
+
+[[example]]
+name = "proxy"
+required-features = [ "editor" ]
+
+[package.metadata.deb]
+name = "acr-mirror"
+depends = "jq"
+maintainer-scripts = "lib/debian"
+assets = [
+    [ "target/release/acr", "opt/acr/bin/acr", "755" ],
+    [ "lib/sh/overlaybd/install.sh", "opt/acr/tools/overlaybd/install.sh", "755" ],
+    [ "lib/sh/overlaybd/enable.sh", "opt/acr/tools/overlaybd/enable.sh", "755" ],
+    [ "lib/sh/overlaybd/enable-file-auth.sh", "opt/acr/tools/overlaybd/enable-file-auth.sh", "755" ],
+    [ "lib/sh/overlaybd/enable-http-auth.sh", "opt/acr/tools/overlaybd/enable-http-auth.sh", "755" ],
+]
+systemd-units = { unit-name = "acr-mirror", unit-scripts = "lib/systemd", enable = true, start = true  }
