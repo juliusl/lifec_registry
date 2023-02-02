@@ -16,11 +16,10 @@ sudo modprobe target_core_user
 touch /etc/containerd/config.toml
 tee -a /etc/containerd/config.toml > /dev/null <<EOF
 version = 2
-[plugins.cri]
-    [plugins.cri.containerd]
-        snapshotter = "overlaybd"
-        disable_snapshot_annotations = false
+[plugins."io.containerd.grpc.v1.cri".containerd]
+    snapshotter = "overlaybd"
+    disable_snapshot_annotations = false
     
-    [plugins."io.containerd.grpc.v1.cri".registry]
-        config_path = "/etc/containerd/certs.d"
+[plugins."io.containerd.grpc.v1.cri".registry]
+    config_path = "/etc/containerd/certs.d"
 EOF
