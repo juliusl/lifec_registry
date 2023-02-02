@@ -1,16 +1,21 @@
 #!/bin/sh
 set -e
 
-mkdir -p /opt/acr/pkg
-
 # Download Overlaybd binaries
-wget https://github.com/containerd/overlaybd/releases/download/v0.6.0/overlaybd-0.6.0-1.x86_64.deb -o /opt/acr/pkg/overlaybd-0.6.0-1.x86_64.deb > /dev/null
-wget https://github.com/containerd/accelerated-container-image/releases/download/v0.6.0/overlaybd-snapshotter_0.6.0_amd64.deb -o /opt/acr/pkg/overlaybd-snapshotter_0.6.0_amd64.deb > /dev/null
+wget https://github.com/containerd/overlaybd/releases/download/v0.6.0/overlaybd-0.6.0-1.x86_64.deb
+wget https://github.com/containerd/accelerated-container-image/releases/download/v0.6.0/overlaybd-snapshotter_0.6.0_amd64.deb
+sudo apt-get install ./overlaybd-0.6.0-1.x86_64.deb
+sudo apt-get install ./overlaybd-snapshotter_0.6.0_amd64.deb
+rm ./overlaybd-0.6.0-1.x86_64.deb
+rm ./overlaybd-snapshotter_0.6.0_amd64.deb
 
 # Enable kernel feature
-modprobe target_core_user
+sudo modprobe target_core_user
 
-# Edit containerd settings
+# Enable containerd settings
+mkdir /etc/containerd
+touch /etc/containerd/config.toml
+
 tee -a /etc/containerd/config.toml > /dev/null <<EOF
 version = 2
 [plugins.cri]

@@ -1,8 +1,6 @@
 #! /bin/sh
 set -e
 
-/opt/acr/tools/overlaybd/install.sh
-
 cd /opt/acr/bin
 ./acr init
 

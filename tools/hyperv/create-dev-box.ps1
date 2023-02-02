@@ -129,7 +129,7 @@ if ($PSVersionTable.PSVersion.Major -gt 5) {
 Set-Content "$($nocloudPath)\user-data" (Get-Content $UserDataSource)
 
 # Create meta data ISO image
-& $oscdimgPath "$($vmPath)\NoCloud" $metaDataIso -j2 -lcidata
+& $oscdimgPath $nocloudPath $metaDataIso -j2 -lcidata
 
 Resize-VHD -Path $vhdx -SizeBytes 512GB
 
