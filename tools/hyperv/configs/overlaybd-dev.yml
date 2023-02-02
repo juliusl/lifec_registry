@@ -7,52 +7,23 @@ merge_how:
    settings: [no_replace, recurse_list]
 
 runcmd:
- - useradd -m -s /bin/bash -p "" chief
+ - useradd -m -s /bin/bash -p "a" chief
  - chage -d 0 chief
  - usermod -a -G sudo chief
- # Install deps
- - wget https://github.com/google/googletest/archive/refs/tags/release-1.10.0.tar.gz
- - tar -zxvf release-1.10.0.tar.gz
- - cd googletest-release-1.10.0; cmake CMakeLists.txt
- - make; make install
- # Install golang 
- - wget https://go.dev/dl/go1.19.5.linux-amd64.tar.gz
- - tar -C /usr/local -xzf go1.19.5.linux-amd64.tar.gz
- # Install overlaybd-tcmu kernel service
- - cd ..; git clone https://github.com/containerd/overlaybd.git
- - cd overlaybd; git submodule update --init
- - mkdir build; cd build; cmake ..; make -j; make install
- - systemctl enable /opt/overlaybd/overlaybd-tcmu.service
- - systemctl start overlaybd-tcmu
  # Install containerd + runc
- - moby_runc_package_url=https://packages.microsoft.com/ubuntu/20.04/prod/pool/main/m/moby-runc/moby-runc_1.0.2%2Bazure-1_amd64.deb
+ - moby_runc_package_url=https://packages.microsoft.com/ubuntu/20.04/prod/pool/main/m/moby-runc/moby-runc_1.1.4%2Bazure-1_amd64.deb
  - moby_runc_package_file="./moby-runc.deb"
  - curl -sSL $moby_runc_package_url -o $moby_runc_package_file
  - sudo dpkg --force-all -i $moby_runc_package_file
- - moby_containerd_package_url=https://packages.microsoft.com/ubuntu/20.04/prod/pool/main/m/moby-containerd/moby-containerd_1.6.6%2Bazure-ubuntu20.04u1_amd64.deb
+ - moby_containerd_package_url=https://packages.microsoft.com/ubuntu/20.04/prod/pool/main/m/moby-containerd/moby-containerd_1.6.9%2Bazure-ubuntu20.04u1_amd64.deb
  - moby_containerd_package_file="./moby-containerd.deb"
  - curl -sSL $moby_containerd_package_url -o $moby_containerd_package_file
  - sudo dpkg --force-all -i $moby_containerd_package_file
- # Install overlaybd snapshotter
- - su chief -s /bin/bash -c 'export PATH=$PATH:/usr/local/go/bin; go version'
- - su chief -s /bin/bash -c 'git clone https://github.com/containerd/accelerated-container-image.git ~/accelerated-container-image'
- - su chief -s /bin/bash -c 'export PATH=$PATH:/usr/local/go/bin; cd ~/accelerated-container-image; make'
 
 packages:
  - pkg-config
- - libgflags-dev
- - libcurl4-openssl-dev
+ - build-essential
  - libssl-dev
- - libaio-dev
- - libnl-3-dev
- - libnl-genl-3-dev
- - libpci-dev
- - libzstd-dev
- - libext2fs-dev
- - make
- - cmake
- - g++
- - gcc
  - linux-virtual
  - linux-cloud-tools-virtual
  - linux-tools-virtual
