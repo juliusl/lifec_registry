@@ -1,6 +1,7 @@
 #!/bin/sh
 
 rm -rf /opt/acr/bin/.world
+rm -rf /opt/acr/pkg
 
 #DEBHELPER#
 

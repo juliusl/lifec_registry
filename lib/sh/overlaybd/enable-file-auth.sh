@@ -1,5 +1,5 @@
 #!/bin/sh
-apt install jq -y
+set -e
 
 # Edit overlaybd settings
 jq '.credentialConfig.mode = "file"' /etc/overlaybd/overlaybd.json > tmp.json
