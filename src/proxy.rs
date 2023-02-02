@@ -43,6 +43,7 @@ pub use proxy_route::ProxyRoute;
 
 mod auth;
 use auth::handle_auth;
+pub use auth::OAuthToken;
 
 /// Struct for creating a customizable registry proxy,
 ///
@@ -113,6 +114,17 @@ impl Project for RegistryProxy {
         fn runtime() -> Runtime {
         // The default runtime gives us all of the built-in plugins from the framework,
             let mut runtime = default_runtime();
+            runtime.install_with_custom::<Run<RegistryProxy>>("");
+            runtime.install_with_custom::<LoginACR>("");
+            runtime.install_with_custom::<LoginNydus>("");
+            runtime.install_with_custom::<LoginOverlayBD>("");
+            runtime.install_with_custom::<Teleport>("");
+            runtime.install_with_custom::<Login>("");
+            runtime.install_with_custom::<Authenticate>("");
+            runtime.install_with_custom::<Mirror>("");
+            runtime.install_with_custom::<Resolve>("");
+            runtime.install_with_custom::<Discover>("");
+            runtime.install_with_custom::<Artifact>("");
             runtime.install_with_custom::<AzureGuest>("");
             runtime.install_with_custom::<AzureAgent>("");
             runtime.install_with_custom::<AzureDispatcher>("");

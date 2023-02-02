@@ -37,6 +37,7 @@ pub use proxy::RegistryProxy;
 pub use proxy::ProxyTarget;
 pub use proxy::Manifests;
 pub use proxy::Blobs;
+pub use proxy::OAuthToken;
 
 mod config;
 pub use config::Host as RegistryHost;

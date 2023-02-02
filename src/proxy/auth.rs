@@ -33,7 +33,12 @@ pub async fn handle_auth(
     let access_token = access_provider.access_token().await?;
     let client = context.client().expect("should have an https client");
 
-    let refresh_token = OAuthToken::refresh_token(client, remote_url, access_token, access_provider.tenant_id()).await?;
+    let refresh_token = OAuthToken::refresh_token(
+        client, 
+        remote_url, 
+        access_token, 
+        access_provider.tenant_id()
+    ).await?;
 
     Ok(AuthResponse::authorize(refresh_token.host(), refresh_token.token()))
 }

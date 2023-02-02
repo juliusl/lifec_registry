@@ -25,8 +25,9 @@ fn main() {
     # Implementation that will be executed when proxying the request
     ```
     + .config start.mirror
-    : skip_hosts_dir_check .true
-    : enable_guest_agent   .true
+    : skip_hosts_dir_check  .true
+    : enable_guest_agent    .true
+    : app_host              .symbol     localhost:8578
 
     + .operation resolve.test
     : .login        access_token
@@ -106,18 +107,16 @@ fn main() {
         + .engine
         : .start    setup
         : .start    start
-        : .start    recover
-        : .loop
         ```
 
         ``` setup
         + .runtime
-        : .login_acr
+        : .println skipping
         ```
 
         ``` start
         + .runtime
-        : .mirror       
+        : .mirror       localhost:8578
         
         + .proxy        localhost:8578
         : .manifests    
