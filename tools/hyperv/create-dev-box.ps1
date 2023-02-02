@@ -147,7 +147,7 @@ users:
    sudo: ALL=(ALL) NOPASSWD:ALL
    plain_text_passwd: $($env:USERNAME)
    lock_passwd: false
-   shell: /bin/zsh
+   shell: /bin/bash
    ssh_authorized_keys:
     - $($sshKey)
 "@
