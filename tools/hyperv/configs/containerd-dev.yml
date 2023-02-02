@@ -1,0 +1,27 @@
+## template: jinja
+#cloud-config
+merge_how:
+ - name: list
+   settings: [append]
+ - name: dict
+   settings: [no_replace, recurse_list]
+
+runcmd:
+ # Install containerd + runc
+ - moby_runc_package_url=https://packages.microsoft.com/ubuntu/20.04/prod/pool/main/m/moby-runc/moby-runc_1.1.4+azure-ubuntu20.04u2_amd64.deb
+ - moby_runc_package_file="./moby-runc.deb"
+ - curl -sSL $moby_runc_package_url -o $moby_runc_package_file
+ - sudo dpkg --force-all -i $moby_runc_package_file
+ - moby_containerd_package_url=https://packages.microsoft.com/ubuntu/20.04/prod/pool/main/m/moby-containerd/moby-containerd_1.6.9%2Bazure-ubuntu20.04u1_amd64.deb
+ - moby_containerd_package_file="./moby-containerd.deb"
+ - curl -sSL $moby_containerd_package_url -o $moby_containerd_package_file
+ - sudo dpkg --force-all -i $moby_containerd_package_file
+
+packages:
+ - pkg-config
+ - build-essential
+ - libssl-dev
+ - linux-virtual
+ - linux-cloud-tools-virtual
+ - linux-tools-virtual
+ - zsh

@@ -1,0 +1,9 @@
+#! /bin/sh
+set -e
+
+cd /opt/acr/bin
+./acr init
+
+#DEBHELPER#
+
+exit 0

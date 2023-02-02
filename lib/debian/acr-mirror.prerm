@@ -1,0 +1,7 @@
+#!/bin/sh
+
+rm -rf /opt/acr/bin/.world
+
+#DEBHELPER#
+
+exit 0
