@@ -65,4 +65,4 @@ assets = [
     [ "lib/sh/overlaybd/enable-file-auth.sh", "opt/acr/tools/overlaybd/enable-file-auth.sh", "755" ],
     [ "lib/sh/overlaybd/enable-http-auth.sh", "opt/acr/tools/overlaybd/enable-http-auth.sh", "755" ],
 ]
-systemd-units = { unit-name = "acr-mirror", enable = true, start = true  }
+systemd-units = { unit-name = "acr-mirror", unit-scripts = "lib/systemd", enable = true, start = true  }
