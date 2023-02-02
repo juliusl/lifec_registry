@@ -20,19 +20,24 @@ jobs:
       run: cargo install cargo-deb
     - name: Package
       run: cargo deb
-    - name: Copy Artifacts
-      run: |
-        mkdir out
-        cp target/debian/*.deb out/
-        ls out
+    - name: Publish artifacts
+      uses: actions/upload-artifact@master
+      with:
+        name: acr-mirror-deb
+        path: release/debian/*.deb
   release:
     name: Release
     runs-on: ubuntu-latest
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
+      - name: Download Artifacts
+        uses: actions/download-artifact@master
+        with:
+          name: acr-mirror-deb
+          path: build/
       - name: Release
         uses: fnkr/github-action-ghr@v1
         env:
-          GHR_PATH: out/
+          GHR_PATH: build/
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
