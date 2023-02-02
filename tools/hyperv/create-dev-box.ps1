@@ -27,7 +27,7 @@ param (
     [Parameter(Mandatory = $false)]
     [bool]$EnableSSH,
     [Parameter(Mandatory = $false)]
-    [string]$UserDataSource = "./configs/overlaybd-dev.yml"
+    [string]$UserDataSource = "./configs/containerd-dev.yml"
 )
 
 # Get the ID and security principal of the current user account
