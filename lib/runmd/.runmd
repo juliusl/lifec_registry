@@ -2,7 +2,7 @@
 # Configure mirror settings
 ```
 + .config               start.mirror
-: app_host              .symbol         localhost:8567
+: app_host              .symbol         localhost:8578
 : teleport              .symbol         overlaybd
 : skip_hosts_dir_check          .false
 : enable_guest_agent            .false

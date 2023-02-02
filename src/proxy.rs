@@ -532,7 +532,7 @@ mod tests {
         : .println teleporting blobs
 
         # Proxy setup
-        + .proxy localhost:8567
+        + .proxy localhost:8578
         : .manifests
         : .get      test_manifest
         : .blobs
