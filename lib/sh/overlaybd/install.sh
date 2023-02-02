@@ -16,6 +16,10 @@ sudo modprobe target_core_user
 touch /etc/containerd/config.toml
 tee -a /etc/containerd/config.toml > /dev/null <<EOF
 version = 2
+[proxy_plugins.overlaybd]
+    type = "snapshot"
+    address = "/run/overlaybd-snapshotter/overlaybd.sock"
+
 [plugins."io.containerd.grpc.v1.cri".containerd]
     snapshotter = "overlaybd"
     disable_snapshot_annotations = false
