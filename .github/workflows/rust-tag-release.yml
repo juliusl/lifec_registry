@@ -24,7 +24,7 @@ jobs:
       uses: actions/upload-artifact@master
       with:
         name: acr-mirror-deb
-        path: release/debian/*.deb
+        path: target/debian/*.deb
   release:
     name: Release
     runs-on: ubuntu-latest
