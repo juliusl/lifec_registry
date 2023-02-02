@@ -13,9 +13,7 @@ rm ./overlaybd-snapshotter_0.6.0_amd64.deb
 sudo modprobe target_core_user
 
 # Enable containerd settings
-mkdir /etc/containerd
 touch /etc/containerd/config.toml
-
 tee -a /etc/containerd/config.toml > /dev/null <<EOF
 version = 2
 [plugins.cri]
