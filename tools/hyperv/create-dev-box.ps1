@@ -124,7 +124,6 @@ if (!(test-path "$($imageCachePath)\ubuntu-$($stamp).img")) {
 
 if ($EnableSSH) {
     $sshKey = Get-Content "c:\Users\$($env:USERNAME)\.ssh\id_rsa.pub"
-    $sshKey = $sshKey.Replace("\", "\\");
 
     $vendorData = @"
 ## template: jinja
@@ -135,10 +134,22 @@ merge_how:
  - name: dict
    settings: [no_replace, recurse_list]
 
-write_files:
- - content: | 
-      $($sshKey)
-   path: /home/chief/.ssh/authorized_keys
+packages_update: true
+packages_upgrade: true
+chpasswd:
+  expire: true
+power_state:
+  mode: reboot
+
+users:
+ - default
+ - name: $($env:USERNAME)
+   sudo: ALL=(ALL) NOPASSWD:ALL
+   plain_text_passwd: $($env:USERNAME)
+   lock_passwd: false
+   shell: /bin/zsh
+   ssh_authorized_keys:
+    - $($sshKey)
 "@
 
     if ($PSVersionTable.PSVersion.Major -gt 5) {

@@ -7,10 +7,8 @@ merge_how:
    settings: [no_replace, recurse_list]
 
 runcmd:
- - useradd -m -s /bin/bash -p "" chief
- - usermod -a -G sudo chief
  # Install containerd + runc
- - moby_runc_package_url=https://packages.microsoft.com/ubuntu/20.04/prod/pool/main/m/moby-runc/moby-runc_1.1.4%2Bazure-1_amd64.deb
+ - moby_runc_package_url=https://packages.microsoft.com/ubuntu/20.04/prod/pool/main/m/moby-runc/moby-runc_1.1.4+azure-ubuntu20.04u2_amd64.deb
  - moby_runc_package_file="./moby-runc.deb"
  - curl -sSL $moby_runc_package_url -o $moby_runc_package_file
  - sudo dpkg --force-all -i $moby_runc_package_file
@@ -18,7 +16,6 @@ runcmd:
  - moby_containerd_package_file="./moby-containerd.deb"
  - curl -sSL $moby_containerd_package_url -o $moby_containerd_package_file
  - sudo dpkg --force-all -i $moby_containerd_package_file
- - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
 packages:
  - pkg-config

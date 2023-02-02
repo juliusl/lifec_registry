@@ -24,3 +24,7 @@ pub struct ImageIndex {
 /// Docker manifest list media type,
 /// 
 pub const DOCKER_MANIFEST_LIST: &'static str = "application/vnd.docker.distribution.manifest.list.v2+json";
+
+/// OCI Image index mediat type,
+/// 
+pub const OCI_IMAGE_INDEX: &'static str = "application/vnd.oci.image.index.v1+json";
