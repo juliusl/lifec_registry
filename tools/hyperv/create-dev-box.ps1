@@ -79,6 +79,7 @@ else {
 }
 
 $stamp = $lastModified.ToFileTimeUtc()
+$vmImage = "$($imageCachePath)\ubuntu-$($UbuntuVersion)-$($stamp).img"
 
 $metadata = @"
 instance-id: guid-$([GUID]::NewGuid())
@@ -118,14 +119,14 @@ cleanupFile $vhdx
 cleanupFile $metaDataIso
 
 # Make temp location
-if (!(test-path "$($imageCachePath)\ubuntu-$($stamp).img")) {
+if (!(test-path $vmImage)) {
     # If we do not have a matching image - delete the old ones and download the new one
-    Remove-Item "$($imageCachePath)\ubuntu-*.img"
-    Invoke-WebRequest "$($ubuntuPath).img" -UseBasicParsing -OutFile "$($imageCachePath)\ubuntu-$($stamp).img"
+    Remove-Item "$($imageCachePath)\ubuntu-$($UbuntuVersion)-*.img"
+    Invoke-WebRequest "$($ubuntuPath).img" -UseBasicParsing -OutFile $vmImage
 }
 
 # Convert cloud image to VHDX
-& $qemuImgPath convert -f qcow2 "$($imageCachePath)\ubuntu-$($stamp).img" -O vhdx -o subformat=dynamic $vhdx
+& $qemuImgPath convert -f qcow2  $vmImage -O vhdx -o subformat=dynamic $vhdx
 
 if ($EnableSSH) {
     $sshKey = Get-Content "c:\Users\$($env:USERNAME)\.ssh\id_rsa.pub"
