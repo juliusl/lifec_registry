@@ -14,6 +14,9 @@
     .PARAMETER EnableSSH
     Enable the current user's ssh-pub-key as an authorized key on the VM
 
+    .PARAMETER UbuntuVersion
+    Ubuntu version to use, defaults to focal (20.04), for 18.04 use bionic
+
     .PARAMETER UserDataSource
     Path to source .yml for cloud-config user-data, see https://cloudinit.readthedocs.io/en/latest/reference/examples.html for examples
 #>
@@ -26,6 +29,8 @@ param (
     [string]$VMName,
     [Parameter(Mandatory = $false)]
     [bool]$EnableSSH,
+    [Parameter(Mandatory = $false)]
+    [string]$UbuntuVersion = "focal",
     [Parameter(Mandatory = $false)]
     [string]$UserDataSource = "./configs/containerd-dev.yml"
 )
@@ -51,7 +56,7 @@ $oscdimgPath = ".\bin\windows-adk\oscdimg.exe"
 $qemuImgPath = ".\bin\qemu\qemu-img.exe"
 
 # Update this to the release of Ubuntu that you want
-$ubuntuPath = "https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64"
+$ubuntuPath = "https://cloud-images.ubuntu.com/$($UbuntuVersion)/current/$($UbuntuVersion)-server-cloudimg-amd64"
 
 $virtualSwitchName = "Default Switch"
 $imageCachePath = "$($VMRoot)\imagecache"
@@ -74,6 +79,7 @@ else {
 }
 
 $stamp = $lastModified.ToFileTimeUtc()
+$vmImage = "$($imageCachePath)\ubuntu-$($UbuntuVersion)-$($stamp).img"
 
 $metadata = @"
 instance-id: guid-$([GUID]::NewGuid())
@@ -113,14 +119,14 @@ cleanupFile $vhdx
 cleanupFile $metaDataIso
 
 # Make temp location
-if (!(test-path "$($imageCachePath)\ubuntu-$($stamp).img")) {
+if (!(test-path $vmImage)) {
     # If we do not have a matching image - delete the old ones and download the new one
-    Remove-Item "$($imageCachePath)\ubuntu-*.img"
-    Invoke-WebRequest "$($ubuntuPath).img" -UseBasicParsing -OutFile "$($imageCachePath)\ubuntu-$($stamp).img"
+    Remove-Item "$($imageCachePath)\ubuntu-$($UbuntuVersion)-*.img"
+    Invoke-WebRequest "$($ubuntuPath).img" -UseBasicParsing -OutFile $vmImage
 }
 
 # Convert cloud image to VHDX
-& $qemuImgPath convert -f qcow2 "$($imageCachePath)\ubuntu-$($stamp).img" -O vhdx -o subformat=dynamic $vhdx
+& $qemuImgPath convert -f qcow2  $vmImage -O vhdx -o subformat=dynamic $vhdx
 
 if ($EnableSSH) {
     $sshKey = Get-Content "c:\Users\$($env:USERNAME)\.ssh\id_rsa.pub"
