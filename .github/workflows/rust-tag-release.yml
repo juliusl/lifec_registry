@@ -10,7 +10,24 @@ env:
 
 jobs:
   build:
-    name: Build
+    name: Build Ubuntu-18.04
+    runs-on: ubuntu-18.04
+    steps:
+    - uses: actions/checkout@v3
+    - name: Run tests
+      run: cargo test --verbose
+    - name: Install tools
+      run: cargo install cargo-deb
+    - name: Package
+      run: |
+        cargo deb --output "target/debian/acr-mirror-1804-$GITHUB_REF_NAME-${GITHUB_SHA::5}.deb"
+    - name: Publish artifacts
+      uses: actions/upload-artifact@master
+      with:
+        name: acr-mirror-deb-18.04
+        path: target/debian/*.deb
+  build:
+    name: Build Ubuntu-20.04
     runs-on: ubuntu-20.04
     steps:
     - uses: actions/checkout@v3
@@ -19,11 +36,12 @@ jobs:
     - name: Install tools
       run: cargo install cargo-deb
     - name: Package
-      run: cargo deb
+      run: |
+        cargo deb --output "target/debian/acr-mirror-2004-$GITHUB_REF_NAME-${GITHUB_SHA::5}.deb"
     - name: Publish artifacts
       uses: actions/upload-artifact@master
       with:
-        name: acr-mirror-deb
+        name: acr-mirror-deb-20.04
         path: target/debian/*.deb
   release:
     name: Release
@@ -31,10 +49,15 @@ jobs:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
-      - name: Download Artifacts
+      - name: Download Artifacts 18.04
         uses: actions/download-artifact@master
         with:
-          name: acr-mirror-deb
+          name: acr-mirror-deb-18.04
+          path: build/
+      - name: Download Artifacts 20.04
+        uses: actions/download-artifact@master
+        with:
+          name: acr-mirror-deb-20.04
           path: build/
       - name: Release
         uses: fnkr/github-action-ghr@v1
