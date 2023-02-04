@@ -20,8 +20,9 @@ jobs:
         apt-get update
         apt-get upgrade -y
         apt-get install curl -y
+        export CARGO_HOME=$HOME
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        . "root/.cargo/env"
+        . "$HOME/.cargo/env"
     - name: Run tests
       run: cargo test --verbose
     - name: Install tools
