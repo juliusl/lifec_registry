@@ -19,17 +19,13 @@ jobs:
       run: |
         apt-get update
         apt-get upgrade -y
-        apt-get install curl -y
+        apt-get install curl, libssl-dev, build-essential, pkg-config -y
         export CARGO_HOME=/github/home/.cargo
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
         . "/github/home/.cargo/env"
         cargo version
-    - name: Run tests
-      run: cargo test --verbose
-    - name: Install tools
-      run: cargo install cargo-deb
-    - name: Package
-      run: |
+        cargo test --verbose
+        cargo install cargo-deb
         cargo deb --output "target/debian/acr-mirror-1804-$GITHUB_REF_NAME-${GITHUB_SHA::5}.deb"
     - name: Publish artifacts
       uses: actions/upload-artifact@master
