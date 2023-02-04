@@ -65,6 +65,14 @@ impl Error {
             category: ErrorCategory::SystemEnvironment,
         }
     }
+
+    /// Returns an error that indicates a coding error,
+    /// 
+    pub fn code_defect() -> Self {
+        Error {
+            category: ErrorCategory::CodeDefect
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -74,6 +82,7 @@ enum ErrorCategory {
     ExternalDependency,
     ExternalDependencyWithStatusCode(StatusCode),
     SystemEnvironment,
+    CodeDefect,
     InvalidOperation(&'static str),
     RecoverableError(&'static str),
 }
@@ -128,6 +137,13 @@ impl From<hyper::http::Error> for Error {
     }
 }
 
+impl From<tokio::sync::oneshot::error::RecvError> for Error {
+    fn from(value: tokio::sync::oneshot::error::RecvError) -> Self {
+        error!("Error receiving result from a oneshot channel, likely a code-defect {value}");
+        Self::code_defect()
+    }
+}
+
 impl From<Error> for lifec::error::Error {
     fn from(value: Error) -> lifec::error::Error {
         match &value.category {
@@ -141,6 +157,7 @@ impl From<Error> for lifec::error::Error {
                     lifec::error::Error::invalid_operation("http error")
                 }
             },
+            ErrorCategory::CodeDefect => lifec::error::Error::invalid_operation("code defect"),
             ErrorCategory::SystemEnvironment => lifec::error::Error::invalid_operation("system environment error"),
             ErrorCategory::InvalidOperation(reason) => lifec::error::Error::invalid_operation(reason),
             ErrorCategory::RecoverableError(message) if message.starts_with("skip") => lifec::error::Error::skip(message),
