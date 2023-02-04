@@ -19,7 +19,7 @@ jobs:
       run: |
         apt-get update
         apt-get upgrade -y
-        apt-get install curl
+        apt-get install curl -y
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
         source "$HOME/.cargo/env"
     - name: Run tests
