@@ -26,7 +26,7 @@ jobs:
         cargo version
         cargo test --verbose
         cargo install cargo-deb
-        cargo deb --output "target/debian/acr-mirror-1804-$GITHUB_REF_NAME-${GITHUB_SHA::5}.deb"
+        cargo deb --output "target/debian/acr-mirror-1804-$GITHUB_REF_NAME.deb"
     - name: Publish artifacts
       uses: actions/upload-artifact@master
       with:
