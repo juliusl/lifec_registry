@@ -1,11 +1,10 @@
 use std::path::PathBuf;
 
 use lifec::prelude::{
+    AttributeIndex, BlockObject, BlockProperties, Component, CustomAttribute, DenseVecStorage,
     Plugin, ThunkContext,
-    Component, DenseVecStorage,
-    AttributeIndex, BlockObject, BlockProperties, CustomAttribute,
 };
-use tracing::{event, Level};
+use tracing::{debug, warn};
 
 mod acr;
 pub use acr::LoginACR;
@@ -16,15 +15,59 @@ pub use overlaybd::LoginOverlayBD;
 mod nydus;
 pub use nydus::LoginNydus;
 
-use crate::{default_access_provider, OAuthToken};
+use crate::{default_access_provider, Error, OAuthToken};
 
-/// Component to login to a registry, 
-/// 
+/// Component to login to a registry,
+///
 /// Reads token from file_src in the work directory,
-/// 
+///
 #[derive(Component, Default)]
 #[storage(DenseVecStorage)]
 pub struct Login;
+
+impl Login {
+    /// Parses token from the current state,
+    /// 
+    async fn parse_token(token_src: PathBuf, tc: &ThunkContext) -> Result<String, Error> {
+        match token_src.canonicalize() {
+            Ok(path) => Ok(tokio::fs::read_to_string(path).await?),
+            Err(ref err)
+                if err.raw_os_error() == Some(2)
+                    && tc.client().is_some()
+                    && tc.search().find_symbol("api").is_some() =>
+            {
+                if let (Some(client), Some(api)) =
+                    (tc.client(), tc.search().find_symbol("api"))
+                {
+                    let access_provider = default_access_provider(None::<PathBuf>);
+                    let access_token = access_provider
+                        .access_token()
+                        .await?;
+
+                    let refresh_token = OAuthToken::refresh_token(
+                        client,
+                        api,
+                        access_token,
+                        access_provider.tenant_id(),
+                    )
+                    .await?;
+
+                    let token = refresh_token.token();
+                    tokio::fs::write(token_src, &token).await?;
+                    
+                    Ok(token)
+                } else {
+                    return Err(Error::invalid_operation(
+                        "cannot generate refresh_token, missing deps",
+                    ));
+                }
+            }
+            Err(err) => {
+                return Err(err.into());
+            }
+        }
+    }
+}
 
 impl Plugin for Login {
     fn symbol() -> &'static str {
@@ -36,54 +79,30 @@ impl Plugin for Login {
     }
 
     fn call(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
-        context.task(|_| {
+        context.task_with_result(|_| {
             let mut tc = context.clone();
-            async {      
-                event!(Level::DEBUG, "Starting registry login");
+            async {
+                debug!("Starting registry login");
                 if let Some(token_src) = tc.state().find_symbol("login") {
                     let token_src = &token_src;
-                    
-                    let token_src = tc.work_dir()
+
+                    let token_src = tc
+                        .work_dir()
                         .expect("should have a work dir")
                         .join(token_src);
 
-                    let token = match token_src.canonicalize() {
-                        Ok(path) => {
-                            tokio::fs::read_to_string(path).await.expect("should be a token")
-                        },
-                        Err(ref err) if err.raw_os_error() == Some(2) && tc.client().is_some() && tc.search().find_symbol("api").is_some() => {
-                            if let (Some(client), Some(api)) = (tc.client(), tc.search().find_symbol("api")) {
-                                let access_provider = default_access_provider(None::<PathBuf>);
-                                let access_token = access_provider.access_token().await.expect("should be able to get an access token");
+                    let token = Self::parse_token(token_src, &tc).await?;
 
-                                let refresh_token = OAuthToken::refresh_token(client, api, access_token, access_provider.tenant_id()).await.expect("should be able to get token");
-
-                                let token = refresh_token.token();
-                                tokio::fs::write(token_src, &token).await.ok();
-                                token
-                            } else {
-                                panic!("Can't login")
-                            }
-                        }
-                        Err(err) => {
-                            tc.error(|g| {
-                                g.add_symbol("error", format!("{err}"));
-                            });
-
-                            return Some(tc);
-                        }
-                    };
-
-                    event!(Level::DEBUG, "Writing credentials to context");
+                    debug!("Writing credentials to context");
                     tc.state_mut()
                         .with_symbol("REGISTRY_USER", "00000000-0000-0000-0000-000000000000")
                         .with_symbol("REGISTRY_TOKEN", token.trim());
                 } else {
-                    event!(Level::WARN, "Missing login property");
+                    warn!("Missing login property");
                 }
 
                 tc.copy_previous();
-                Some(tc)
+                Ok(tc)
             }
         })
     }

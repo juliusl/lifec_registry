@@ -127,3 +127,24 @@ impl From<hyper::http::Error> for Error {
         Self::external_dependency()
     }
 }
+
+impl From<Error> for lifec::error::Error {
+    fn from(value: Error) -> lifec::error::Error {
+        match &value.category {
+            ErrorCategory::Authentication => lifec::error::Error::invalid_operation("authentication failure"),
+            ErrorCategory::DataFormat => lifec::error::Error::invalid_operation("invalid data format"),
+            ErrorCategory::ExternalDependency => lifec::error::Error::invalid_operation("external dependency failure"),
+            ErrorCategory::ExternalDependencyWithStatusCode(status_code) => {
+                if let Some(reason) = status_code.canonical_reason() {
+                    lifec::error::Error::invalid_operation(reason)
+                } else {
+                    lifec::error::Error::invalid_operation("http error")
+                }
+            },
+            ErrorCategory::SystemEnvironment => lifec::error::Error::invalid_operation("system environment error"),
+            ErrorCategory::InvalidOperation(reason) => lifec::error::Error::invalid_operation(reason),
+            ErrorCategory::RecoverableError(message) if message.starts_with("skip") => lifec::error::Error::skip(message),
+            ErrorCategory::RecoverableError(message) => lifec::error::Error::recoverable(message),
+        }
+    }
+}

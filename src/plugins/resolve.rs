@@ -2,7 +2,9 @@ use lifec::prelude::{
     AttributeIndex, BlockObject, BlockProperties, Component, CustomAttribute, DenseVecStorage,
     Plugin, ThunkContext,
 };
-use tracing::{event, Level};
+use tracing::{event, Level, warn};
+
+use crate::Error;
 
 /// Plugin that mirrors image resolution api's, based on OCI spec endpoints,
 ///
@@ -30,18 +32,19 @@ impl Plugin for Resolve {
     fn call(context: &mut ThunkContext) -> Option<lifec::plugins::AsyncContext> {
         let digest = context.cached_response().and_then(|c| c.headers().get("docker-content-digest")).cloned();
         
-        context.task(|_| {
+        context.task_with_result(|_| {
             let mut tc = context.clone();
             async move {
                 if let Some(digest) = digest {
                     event!(Level::DEBUG, "Found digest {:?}", digest); 
                     tc.state_mut().with_symbol("digest", digest.to_str().expect("should be a string"));
-                } else {
-                    event!(Level::ERROR, "Did not find digest from cached response"); 
-                }
 
-                tc.copy_previous();
-                Some(tc)
+                    tc.copy_previous();
+                    Ok(tc)
+                } else {
+                    warn!("Did not find digest from cached response");
+                    Err(Error::recoverable_error("skip - missing digest from cached result, passing response through").into())
+                }
             }
         })
     }
