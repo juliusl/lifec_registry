@@ -67,3 +67,15 @@ assets = [
     [ "lib/sh/overlaybd/enable-http-auth.sh", "opt/acr/tools/overlaybd/enable-http-auth.sh", "755" ],
 ]
 systemd-units = { unit-name = "acr-mirror", unit-scripts = "lib/systemd", enable = true, start = true  }
+
+[package.metadata.generate-rpm]
+name = "acr-mirror"
+license = "MIT"
+assets = [
+    { source = "lib/systemd/acr-mirror.service", dest = "/lib/systemd/system/acr-mirror.service", mode = "644" },
+    { source = "target/release/acr", dest = "/opt/acr/bin/acr", mode = "755" },
+    { source = "lib/sh/overlaybd/install.sh", dest = "/opt/acr/tools/overlaybd/install.sh", mode = "755" },
+    { source = "lib/sh/overlaybd/enable.sh", dest = "/opt/acr/tools/overlaybd/enable.sh", mode = "755" },
+    { source = "lib/sh/overlaybd/enable-file-auth.sh", dest = "/opt/acr/tools/overlaybd/enable-file-auth.sh", mode = "755" },
+    { source = "lib/sh/overlaybd/enable-http-auth.sh", dest = "/opt/acr/tools/overlaybd/enable-http-auth.sh", mode = "755" },
+]
