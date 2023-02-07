@@ -361,7 +361,7 @@ impl From<&Request> for ProxyTarget {
 }
 
 impl TryFrom<&ThunkContext> for ProxyTarget {
-    type Error = ();
+    type Error = crate::Error;
 
     fn try_from(tc: &ThunkContext) -> Result<Self, Self::Error> {
         if let (Some(namespace), Some(repo)) = (
@@ -383,7 +383,7 @@ impl TryFrom<&ThunkContext> for ProxyTarget {
                 context: tc.clone(),
             })
         } else {
-            Err(())
+            Err(crate::Error::invalid_operation("Current context is missing namespace, repo information"))
         }
     }
 }
