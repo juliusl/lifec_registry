@@ -14,7 +14,34 @@ impl DefaultHost {
         let config = HostsConfig::new(None::<String>);
 
         let mut host = RegistryHost::new(address.into())
-            .enable_resolve();
+            .enable_resolve()
+            .enable_pull();
+        
+        if insecure {
+            host = host.skip_verify();
+        }
+
+        if let Some(suffix_match) = suffix_match {
+            let suffix_match = suffix_match.into();
+            host = host.add_header(crate::consts::ACCEPT_IF_SUFFIX_HEADER, suffix_match.clone());
+            host = host.add_header(crate::consts::ENABLE_MIRROR_IF_SUFFIX_HEADER, suffix_match);
+        }
+
+        if let Some(streamable_format) = streamable_format {
+            host = host.add_header(crate::consts::UPGRADE_IF_STREAMABLE_HEADER, streamable_format.into());
+        }
+
+        config.add_host(host)
+    }
+
+    /// Returns a host config that is capable of handling azurecr.io/_tenant_ requests
+    /// 
+    pub fn get_legacy_supported_hosts_config(host: impl Into<String>, address: impl Into<String>, insecure: bool, suffix_match: Option<impl Into<String>>, streamable_format: Option<impl Into<String>>) -> HostsConfig {
+        let config = HostsConfig::new(Some(host.into())).enable_legacy_support();
+
+        let mut host = RegistryHost::new(address.into())
+            .enable_resolve()
+            .enable_pull();
         
         if insecure {
             host = host.skip_verify();

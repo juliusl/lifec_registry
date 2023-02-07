@@ -18,6 +18,8 @@ pub struct HostsConfig {
     server: Option<String>,
     /// List of hosts in priority order that will be used to serve registry requests
     hosts: Vec<Host>,
+    /// If true, adds logic to handle configuring a hosts.toml for containerd versions under 1.7
+    legacy_support: bool,
 }
 
 impl HostsConfig {
@@ -27,7 +29,15 @@ impl HostsConfig {
         Self {
             server: server.map(|s| s.into()),
             hosts: vec![],
+            legacy_support: false,
         }
+    }
+
+    /// Enables legacy support for containerd version under 1.7
+    /// 
+    pub fn enable_legacy_support(mut self) -> Self {
+        self.legacy_support = true;
+        self
     }
 
     /// Adds host to list of hosts, chainable
@@ -65,7 +75,8 @@ impl HostsConfig {
 
 impl Display for HostsConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(server) = self.server.as_ref() {
+        // TODO: Workaround for _default host being only available in ctrd 1.7 +, a server should never start with azurecr
+        if let Some(server) = self.server.as_ref().filter(|_| !self.legacy_support) {
             writeln!(f, r#"server = "https://{}""#, server)?;
             writeln!(f, "")?;
         }
