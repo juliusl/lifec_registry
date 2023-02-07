@@ -49,7 +49,7 @@ impl Plugin for Teleport {
                                 info!("Streamable descriptor was found");
                                 streamable_desc.digest.clone()
                             } else {
-                                warn!("No streamable descriptor was not found, {:?} {:?}", list, streamable);
+                                warn!("No streamable descriptor was found, {:?} {:?}", list, streamable);
                                 tc.search().find_symbol("digest").expect("should have a digest property")
                             };
 

@@ -36,7 +36,7 @@ impl Plugin for Discover {
                         namespace, repo,
                     );
                     event!(
-                        Level::DEBUG,
+                        Level::INFO,
                         "Making referrers call for {artifact_type}\n{referrers_api}"
                     );
 
