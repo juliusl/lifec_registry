@@ -4,7 +4,7 @@ use lifec::prelude::{SpecialAttribute, ThunkContext};
 use lifec::state::AttributeIndex;
 use lifec_poem::RoutePlugin;
 use poem::{Request, Response};
-use tracing::{debug, event, Level, error};
+use tracing::{debug, event, Level, error, info};
 
 use crate::hosts_config::MirrorHost;
 
@@ -47,8 +47,17 @@ impl Registry {
     where
         P: RoutePlugin + SpecialAttribute,
     {
-        let repo = repo.into();
-        let namespace = namespace.into();
+        let mut repo = repo.into();
+        let mut namespace = namespace.into();
+
+        if repo.starts_with("_tenant_") {
+            if let Some((tenant, _repo)) = repo.split_once("/") {
+                let tenant = tenant.trim_start_matches("_tenant_");
+                namespace = format!("{tenant}.{namespace}");
+                repo = _repo.to_string();
+                info!("Applied tenant workaround, namespace -> {namespace}, repo -> {repo}");
+            }
+        }
 
         // Check if the request uri ends with the suffix value of the header, if not then return 503 Service Unavailable
         let accept_if_header = request.header(consts::ACCEPT_IF_SUFFIX_HEADER);

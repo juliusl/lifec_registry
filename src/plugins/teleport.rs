@@ -1,6 +1,6 @@
 use hyper::Body;
-use hyper::Response;
-use hyper::StatusCode;
+use hyper::Method;
+use hyper::Request;
 use lifec::prelude::{
     AsyncContext, AttributeIndex, BlockObject, BlockProperties, CustomAttribute, Plugin,
     ThunkContext,
@@ -10,6 +10,7 @@ use tracing::warn;
 
 use crate::Error;
 use crate::ImageIndex;
+use crate::ProxyTarget;
 use crate::ReferrersList;
 
 /// Plugin to handle swapping out the manifest resolution to a teleportable image
@@ -68,13 +69,25 @@ impl Plugin for Teleport {
                                 .expect("should have a digest property")
                         };
 
+                        let mut ptc = tc.clone();
+                        ptc.replace_symbol("digest", digest);
+
+                        let manifest_uri = ProxyTarget::try_from(&ptc)?;
+                        let manifest = tc.client()
+                            .expect("should have client")
+                            .request(
+                                Request::builder()
+                                    .method(Method::HEAD)
+                                    .uri(manifest_uri.manifest_url())
+                                    .header("Accept", tc.search().find_symbol("accept").expect("should have accept header"))
+                                    .header("Authorization", tc.search().find_symbol("Authorization").expect("should have authorization"))
+                                    .body(Body::empty())
+                                    .expect("should be able to create request")
+                                    .into()
+                                ).await.expect("should have response");
+
                         tc.cache_response(
-                            Response::builder()
-                                .header("docker-content-digest", digest)
-                                .status(StatusCode::OK)
-                                .body(Body::empty())
-                                .expect("should build a response")
-                                .into(),
+                            manifest
                         );
 
                         tc.copy_previous();
