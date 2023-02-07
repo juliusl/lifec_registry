@@ -3,10 +3,6 @@
 ```
 + .config               start.mirror
 : app_host              .symbol         localhost:8578
-: teleport              .symbol         overlaybd
-: skip_hosts_dir_check          .false
-: enable_guest_agent            .false
-: enable_guest_agent_dispatcher .false
 ```
 
 # Resolve manifest handler (/v2/../manifests/..)
@@ -16,7 +12,7 @@
 
 ```
 + overlaybd     .operation    manifests.resolve
-: .login        access_token
+: .login        token_cache
 : .authn    
 : .request
 : .resolve
@@ -31,28 +27,12 @@
 # Download blob handler (/v2/../blobs/..)
 ```
 + .operation      blobs.download
-: .login          access_token
-: .authn            
-: .request          
-```
+: .login          token_cache
+: .authn          
+: .request
 
-# Setup guest storage
-```
-+ .operation    setup.guest
-: .remote_registry
-: .process  sh setup-guest-storage.sh
-```
-
-# Open guest
-```
-+ .operation    open.guest
-: .remote_registry
-: .remote_guest 
-```
-
-# Test operation
-```
-+ .operation    print
-: .remote_registry  
-: .println
++ overlaybd     .operation      blobs.download
+: .login        token_cache
+: .authn        
+: .request
 ```

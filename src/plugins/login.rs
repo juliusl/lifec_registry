@@ -6,15 +6,6 @@ use lifec::prelude::{
 };
 use tracing::{debug, warn};
 
-mod acr;
-pub use acr::LoginACR;
-
-mod overlaybd;
-pub use overlaybd::LoginOverlayBD;
-
-mod nydus;
-pub use nydus::LoginNydus;
-
 use crate::{default_access_provider, Error, OAuthToken};
 
 /// Component to login to a registry,
@@ -26,11 +17,22 @@ use crate::{default_access_provider, Error, OAuthToken};
 pub struct Login;
 
 impl Login {
+    /// Resets the token cache,
+    /// 
+    async fn reset_cache(token_src: &PathBuf) -> Result<(), Error> {
+        tokio::fs::remove_file(&token_src).await?;
+
+        Ok(())
+    }
+
     /// Parses token from the current state,
     /// 
-    async fn parse_token(token_src: PathBuf, tc: &ThunkContext) -> Result<String, Error> {
+    async fn parse_token(token_src: &PathBuf, tc: &ThunkContext) -> Result<String, Error> {
         match token_src.canonicalize() {
-            Ok(path) => Ok(tokio::fs::read_to_string(path).await?),
+            Ok(path) => {
+                let cached = Self::read_token_cache(&path).await?;
+                Ok(cached.token())
+            },
             Err(ref err)
                 if err.raw_os_error() == Some(2)
                     && tc.client().is_some()
@@ -53,7 +55,7 @@ impl Login {
                     .await?;
 
                     let token = refresh_token.token();
-                    tokio::fs::write(token_src, &token).await?;
+                    Self::cache_token(token_src, &refresh_token).await?;
                     
                     Ok(token)
                 } else {
@@ -65,6 +67,28 @@ impl Login {
             Err(err) => {
                 return Err(err.into());
             }
+        }
+    }
+
+    /// Write to the token cache,
+    /// 
+    async fn cache_token(token_src: &PathBuf, token: &OAuthToken) -> Result<(), Error> {
+        tokio::fs::write(token_src, serde_json::to_string_pretty(token)?).await?;
+
+        Ok(())
+    }
+
+    /// Read from the token cache,
+    /// 
+    async fn read_token_cache(token_src: &PathBuf) -> Result<OAuthToken, Error> {
+        let cached = tokio::fs::read_to_string(token_src).await?;
+
+        let token = serde_json::from_str::<OAuthToken>(cached.as_str())?;
+
+        if token.is_expired()? {
+            Err(Error::recoverable_error("token has expired, reissue required"))
+        } else {
+            Ok(token)
         }
     }
 }
@@ -91,7 +115,19 @@ impl Plugin for Login {
                         .expect("should have a work dir")
                         .join(token_src);
 
-                    let token = Self::parse_token(token_src, &tc).await?;
+                    let token = match Self::parse_token(&token_src, &tc).await {
+                        Ok(token) => {
+                            token
+                        },
+                        Err(ref err) if err.is_recoverable() => {
+                            Self::reset_cache(&token_src).await?;
+                            
+                            Self::parse_token(&token_src, &tc).await?
+                        },
+                        Err(err) => {
+                            return Err(err.into());
+                        }
+                    };
 
                     debug!("Writing credentials to context");
                     tc.state_mut()

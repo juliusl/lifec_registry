@@ -12,18 +12,26 @@ use lifec::project::default_runtime;
 use lifec::project::default_world;
 use lifec::project::Project;
 use lifec::runtime::Runtime;
-
 use lifec_poem::WebApp;
-use poem::{get, handler, web::Data, EndpointExt, Route};
-
+use poem::Route;
+use poem::EndpointExt;
+use poem::web::Data;
+use poem::handler;
+use poem::get;
 use specs::WorldExt;
 use std::sync::Arc;
-
-use crate::{
-    default_access_provider, plugins::LoginNydus, Artifact, ArtifactManifest, Authenticate,
-    Descriptor, Discover, ImageIndex, ImageManifest, Login, LoginACR, LoginOverlayBD, Mirror,
-    Resolve, Teleport,
-};
+use crate::Teleport;
+use crate::Resolve;
+use crate::Mirror;
+use crate::Login;
+use crate::ImageManifest;
+use crate::ImageIndex;
+use crate::Discover;
+use crate::Descriptor;
+use crate::Authenticate;
+use crate::ArtifactManifest;
+use crate::Artifact;
+use crate::default_access_provider;
 
 mod proxy_target;
 pub use proxy_target::ProxyTarget;
@@ -96,9 +104,6 @@ impl Project for RegistryProxy {
             let mut runtime = default_runtime();
 
             runtime.install_with_custom::<Run<RegistryProxy>>("");
-            runtime.install_with_custom::<LoginACR>("");
-            runtime.install_with_custom::<LoginNydus>("");
-            runtime.install_with_custom::<LoginOverlayBD>("");
             runtime.install_with_custom::<Teleport>("");
             runtime.install_with_custom::<Login>("");
             runtime.install_with_custom::<Authenticate>("");
@@ -115,9 +120,6 @@ impl Project for RegistryProxy {
         // The default runtime gives us all of the built-in plugins from the framework,
             let mut runtime = default_runtime();
             runtime.install_with_custom::<Run<RegistryProxy>>("");
-            runtime.install_with_custom::<LoginACR>("");
-            runtime.install_with_custom::<LoginNydus>("");
-            runtime.install_with_custom::<LoginOverlayBD>("");
             runtime.install_with_custom::<Teleport>("");
             runtime.install_with_custom::<Login>("");
             runtime.install_with_custom::<Authenticate>("");

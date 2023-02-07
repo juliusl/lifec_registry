@@ -12,7 +12,7 @@ resolver = "2"
 
 [features]
 default = []
-editor = [ "lifec/editor", "imgui" ]
+editor = ["lifec/editor", "imgui"]
 
 [dependencies]
 # Optional
@@ -46,6 +46,7 @@ tracing-test = "0.2.3"
 sha2 = "0.10.6"
 serde_urlencoded = "0.7.1"
 async-trait = "0.1.64"
+base64-url = "1.4.13"
 
 [[bin]]
 name = "acr-dev"

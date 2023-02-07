@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, string};
 
 use hyper::{http::uri::InvalidUri, StatusCode};
 use tracing::{error, warn};
@@ -73,6 +73,15 @@ impl Error {
             category: ErrorCategory::CodeDefect
         }
     }
+
+    /// Returns true if the category is recoverable,
+    /// 
+    pub fn is_recoverable(&self) -> bool {
+        match self.category { 
+            ErrorCategory::RecoverableError(_) => true,
+            _ => false, 
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -144,6 +153,27 @@ impl From<tokio::sync::oneshot::error::RecvError> for Error {
     }
 }
 
+impl From<string::FromUtf8Error> for Error {
+    fn from(value: string::FromUtf8Error) -> Self {
+        error!("Error converting from bytes to string, input was not utf8, {value}");
+        Self::data_format()
+    }
+}
+
+impl From<base64_url::base64::DecodeError> for Error {
+    fn from(value: base64_url::base64::DecodeError) -> Self {
+        error!("Error decoding base64 string, input was not base64, {value}");
+        Self::data_format()
+    }
+}
+
+impl From<std::time::SystemTimeError> for Error {
+    fn from(value: std::time::SystemTimeError) -> Self {
+        error!("Could not convert system time to duration, {value}");
+        Self::code_defect()
+    }
+}
+
 impl From<Error> for lifec::error::Error {
     fn from(value: Error) -> lifec::error::Error {
         match &value.category {
@@ -163,5 +193,17 @@ impl From<Error> for lifec::error::Error {
             ErrorCategory::RecoverableError(message) if message.starts_with("skip") => lifec::error::Error::skip(message),
             ErrorCategory::RecoverableError(message) => lifec::error::Error::recoverable(message),
         }
+    }
+}
+
+#[allow(unused_imports)]
+mod tests {
+    use crate::Error;
+
+    #[test]
+    fn test_is_recoverable() {
+        let e = Error::recoverable_error("test");
+
+        assert!(e.is_recoverable());
     }
 }
