@@ -2,14 +2,13 @@ use hyper::Body;
 use hyper::Method;
 use hyper::Request;
 use lifec::prelude::{
-    AsyncContext, AttributeIndex, BlockObject, BlockProperties, CustomAttribute,
-    Plugin, ThunkContext,
+    AsyncContext, AttributeIndex, BlockObject, BlockProperties, CustomAttribute, Plugin,
+    ThunkContext,
 };
-use tracing::event;
-use tracing::Level;
 use tracing::info;
 use tracing::warn;
 
+use crate::Error;
 use crate::ImageIndex;
 use crate::ProxyTarget;
 use crate::ReferrersList;
@@ -18,6 +17,19 @@ use crate::ReferrersList;
 ///
 #[derive(Default)]
 pub struct Teleport;
+
+impl Teleport {
+    async fn parse_referrers_list(body: Body) -> Result<ReferrersList, Error> {
+        let bytes = hyper::body::to_bytes::<Body>(body).await?;
+
+        let list = serde_json::from_slice::<ImageIndex>(&bytes)?;
+        let list = ReferrersList {
+            referrers: list.manifests,
+        };
+
+        Ok(list)
+    }
+}
 
 impl Plugin for Teleport {
     fn symbol() -> &'static str {
@@ -33,63 +45,58 @@ impl Plugin for Teleport {
     }
 
     fn call(context: &mut ThunkContext) -> Option<AsyncContext> {
-        let body = context
-            .take_response()
-            .and_then(|r| Some(r.into_body()))
-            .expect("should have body");
+        let body = context.take_response().and_then(|r| Some(r.into_body()));
 
-        context.task(|_| {
+        context.task_with_result(|_| {
             let mut tc = context.clone();
             async move {
-                match hyper::body::to_bytes::<Body>(body).await {
-                    Ok(bytes) => match serde_json::from_slice::<ImageIndex>(&bytes) {
-                        Ok(list) => {
-                            let list = ReferrersList { referrers: list.manifests };
-                            let streamable = list.find_streamable_descriptors();
-                            let digest = if let Some(streamable_desc) = streamable.first() {
-                                info!("Streamable descriptor was found");
-                                streamable_desc.digest.to_string()
-                            } else {
-                                warn!("No streamable descriptor was found, {:?} {:?}", list, streamable);
-                                let digest = tc.search().find_symbol("digest").expect("should have a digest property");
-                                digest
-                            };
+                match body {
+                    Some(body) => {
+                        let list = Self::parse_referrers_list(body).await?;
 
-                            let mut ptc = tc.clone();
-                            ptc.replace_symbol("digest", digest);
+                        let streamable = list.find_streamable_descriptors();
+                        
+                        let digest = if let Some(streamable_desc) = streamable.first() {
+                            info!("Streamable descriptor was found");
+                            streamable_desc.digest.clone()
+                        } else {
+                            warn!(
+                                "No streamable descriptor was not found, {:?} {:?}",
+                                list, streamable
+                            );
+                            tc.search()
+                                .find_symbol("digest")
+                                .expect("should have a digest property")
+                        };
 
-                            let manifest_uri = ProxyTarget::try_from(&ptc).expect("should have a proxy target");
-                            let manifest = tc.client()
-                                .expect("should have client")
-                                .request(
-                                    Request::builder()
-                                        .method(Method::HEAD)
-                                        .uri(manifest_uri.manifest_url())
-                                        .header("Accept", tc.search().find_symbol("accept").expect("should have accept header"))
-                                        .header("Authorization", tc.search().find_symbol("Authorization").expect("should have authorization"))
-                                        .body(Body::empty())
-                                        .expect("should be able to create request")
-                                        .into()
-                                    ).await.expect("should have response");
+                        let mut ptc = tc.clone();
+                        ptc.replace_symbol("digest", digest);
 
-                            tc.cache_response(
-                                manifest
-                            )
-                        }
-                        Err(err) => {
-                            event!(Level::ERROR, "Error deserializing referrer's list, {err}");
-                        }
-                    },
-                    Err(err) => {
-                        event!(
-                            Level::ERROR,
-                            "Error reading body from cached response, {err}"
+                        let manifest_uri = ProxyTarget::try_from(&ptc)?;
+                        let manifest = tc.client()
+                            .expect("should have client")
+                            .request(
+                                Request::builder()
+                                    .method(Method::HEAD)
+                                    .uri(manifest_uri.manifest_url())
+                                    .header("Accept", tc.search().find_symbol("accept").expect("should have accept header"))
+                                    .header("Authorization", tc.search().find_symbol("Authorization").expect("should have authorization"))
+                                    .body(Body::empty())
+                                    .expect("should be able to create request")
+                                    .into()
+                                ).await.expect("should have response");
+
+                        tc.cache_response(
+                            manifest
                         );
-                    }
-                }
 
-                tc.copy_previous();
-                Some(tc)
+                        tc.copy_previous();
+                        Ok(tc)
+                    }
+                    None => {
+                        Err(Error::recoverable_error("skip -- missing body in cached response, passing state through").into())
+                    },
+                }
             }
         })
     }

@@ -87,7 +87,7 @@ impl Registry {
             if let Err(err) = mirror_hosts_config.install(None::<String>) {
                 error!("Unable to enable mirror host config for, {}, {:?}", namespace, err);
             } else {
-                // debug!("Enabled mirror host config for {}")
+                debug!("Enabled mirror host config for {}", namespace);
             }
         }
 
@@ -103,7 +103,7 @@ impl Registry {
                     w.to_owned()
                 }
             })
-            .unwrap();
+            .expect("should return a workspace by this point");
 
         let operation_name = operation_name.into();
         let operation = workspace.find_operation(&operation_name).expect(&format!(

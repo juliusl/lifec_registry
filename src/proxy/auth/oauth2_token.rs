@@ -1,4 +1,6 @@
-use hyper::{header::WWW_AUTHENTICATE, Uri};
+use std::time::SystemTime;
+
+use hyper::{header::WWW_AUTHENTICATE, Uri, body::Bytes};
 use lifec::prelude::SecureClient;
 use serde::{Deserialize, Serialize};
 use crate::{BearerChallengeConfig, Error};
@@ -16,9 +18,50 @@ pub struct OAuthToken {
     /// Refresh token that can be used to exchange for an access_token for resources
     /// 
     refresh_token: Option<String>,
+    /// Set of claims that matter for this token,
+    /// 
+    claims: Option<Claims>,
+}
+
+/// Claims from the oauth2 token that are useful,
+/// 
+#[derive(Serialize, Deserialize, Debug)]
+struct Claims {
+    #[serde(rename = "exp")]
+    expires_on: u64
+}
+
+impl Claims {
+    /// Returns claims from a jwt token string,
+    /// 
+    pub fn parse_jwt(jwt_token: impl Into<String>) -> Result<Claims, Error> {
+        let jwt_token = jwt_token.into();
+        let mut parts = jwt_token.split(".");
+        let _ = parts.next();
+        if let Some(payload) = parts.next().map(base64_url::decode) {
+            let payload = payload?.to_vec();
+            let payload = serde_json::from_slice::<Claims>(&payload)?;
+
+            Ok(payload)
+        } else {
+            Err(Error::invalid_operation("Received an invalid JWT token"))
+        }
+    }
 }
 
 impl OAuthToken {
+    /// Returns if the current token is expired,
+    /// 
+    pub fn is_expired(&self) -> Result<bool, Error> {
+        if let Some(expires_on) = self.claims.as_ref().map(|c| c.expires_on) {
+            let now = SystemTime::UNIX_EPOCH.elapsed()?;
+
+            Ok(now.as_secs() > expires_on)
+        } else {
+            Err(Error::invalid_operation("Token did not have claims"))
+        }
+    }
+
     /// Returns the host this access_token is intended for,
     /// 
     pub fn host(&self) -> String {
@@ -62,10 +105,7 @@ impl OAuthToken {
 
             let bytes = hyper::body::to_bytes(response.body_mut()).await?;
 
-            let mut token = serde_json::from_slice::<OAuthToken>(&bytes)?;
-            if let Some(host) = uri.host().as_ref() {
-                token.host = host.to_string();
-            }
+            let token = Self::assemble_parts(&uri, bytes).await?;
 
             Ok(token)
         } else {
@@ -94,14 +134,26 @@ impl OAuthToken {
 
             let bytes = hyper::body::to_bytes(response.body_mut()).await?;
 
-            let mut token = serde_json::from_slice::<OAuthToken>(&bytes)?;
-            if let Some(host) = uri.host().as_ref() {
-                token.host = host.to_string();
-            }
+            let token = Self::assemble_parts(&uri, bytes).await?;
 
             Ok(token)
         } else {
             Err(Error::invalid_operation("The remote uri did not return a challenge header"))
         }
+    }
+
+    /// Parses token bytes,
+    /// 
+    async fn assemble_parts(uri: &Uri, bytes: Bytes) -> Result<Self, Error> {
+        let jwt_token = String::from_utf8(bytes.to_vec())?;
+        let claims = Claims::parse_jwt(jwt_token)?;
+
+        let mut token = serde_json::from_slice::<OAuthToken>(&bytes)?;
+        if let Some(host) = uri.host().as_ref() {
+            token.host = host.to_string();
+        }
+        token.claims = Some(claims);
+
+        Ok(token)
     }
 }

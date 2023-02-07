@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::{fmt::Display, string};
 
 use hyper::{http::uri::InvalidUri, StatusCode};
 use tracing::{error, warn};
@@ -65,6 +65,23 @@ impl Error {
             category: ErrorCategory::SystemEnvironment,
         }
     }
+
+    /// Returns an error that indicates a coding error,
+    /// 
+    pub fn code_defect() -> Self {
+        Error {
+            category: ErrorCategory::CodeDefect
+        }
+    }
+
+    /// Returns true if the category is recoverable,
+    /// 
+    pub fn is_recoverable(&self) -> bool {
+        match self.category { 
+            ErrorCategory::RecoverableError(_) => true,
+            _ => false, 
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -74,6 +91,7 @@ enum ErrorCategory {
     ExternalDependency,
     ExternalDependencyWithStatusCode(StatusCode),
     SystemEnvironment,
+    CodeDefect,
     InvalidOperation(&'static str),
     RecoverableError(&'static str),
 }
@@ -125,5 +143,67 @@ impl From<hyper::http::Error> for Error {
     fn from(value: hyper::http::Error) -> Self {
         error!("Error making http request, {value}");
         Self::external_dependency()
+    }
+}
+
+impl From<tokio::sync::oneshot::error::RecvError> for Error {
+    fn from(value: tokio::sync::oneshot::error::RecvError) -> Self {
+        error!("Error receiving result from a oneshot channel, likely a code-defect {value}");
+        Self::code_defect()
+    }
+}
+
+impl From<string::FromUtf8Error> for Error {
+    fn from(value: string::FromUtf8Error) -> Self {
+        error!("Error converting from bytes to string, input was not utf8, {value}");
+        Self::data_format()
+    }
+}
+
+impl From<base64_url::base64::DecodeError> for Error {
+    fn from(value: base64_url::base64::DecodeError) -> Self {
+        error!("Error decoding base64 string, input was not base64, {value}");
+        Self::data_format()
+    }
+}
+
+impl From<std::time::SystemTimeError> for Error {
+    fn from(value: std::time::SystemTimeError) -> Self {
+        error!("Could not convert system time to duration, {value}");
+        Self::code_defect()
+    }
+}
+
+impl From<Error> for lifec::error::Error {
+    fn from(value: Error) -> lifec::error::Error {
+        match &value.category {
+            ErrorCategory::Authentication => lifec::error::Error::invalid_operation("authentication failure"),
+            ErrorCategory::DataFormat => lifec::error::Error::invalid_operation("invalid data format"),
+            ErrorCategory::ExternalDependency => lifec::error::Error::invalid_operation("external dependency failure"),
+            ErrorCategory::ExternalDependencyWithStatusCode(status_code) => {
+                if let Some(reason) = status_code.canonical_reason() {
+                    lifec::error::Error::invalid_operation(reason)
+                } else {
+                    lifec::error::Error::invalid_operation("http error")
+                }
+            },
+            ErrorCategory::CodeDefect => lifec::error::Error::invalid_operation("code defect"),
+            ErrorCategory::SystemEnvironment => lifec::error::Error::invalid_operation("system environment error"),
+            ErrorCategory::InvalidOperation(reason) => lifec::error::Error::invalid_operation(reason),
+            ErrorCategory::RecoverableError(message) if message.starts_with("skip") => lifec::error::Error::skip(message),
+            ErrorCategory::RecoverableError(message) => lifec::error::Error::recoverable(message),
+        }
+    }
+}
+
+#[allow(unused_imports)]
+mod tests {
+    use crate::Error;
+
+    #[test]
+    fn test_is_recoverable() {
+        let e = Error::recoverable_error("test");
+
+        assert!(e.is_recoverable());
     }
 }
