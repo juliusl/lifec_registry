@@ -11,7 +11,7 @@ impl MirrorHost {
     pub fn get_hosts_config(server: impl Into<String>, host: impl Into<String>, insecure: bool, upgrade_streamable_format: Option<impl Into<String>>) -> HostsConfig {
         let config = HostsConfig::new(Some(server));
 
-        let mut host = RegistryHost::new(host).enable_resolve();
+        let mut host = RegistryHost::new(host).enable_resolve().enable_pull();
 
         if insecure {
             host = host.skip_verify();

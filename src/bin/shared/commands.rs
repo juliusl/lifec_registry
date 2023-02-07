@@ -51,11 +51,11 @@ impl Commands {
                             None::<String>,
                         )
                     };
-    
+
                     if let Some(guest) = acr.guest.as_ref() {
                         std::env::set_var("ACCOUNT_NAME", guest);
                     }
-    
+
                     tokio::task::block_in_place(|| {
                         host.open_runtime_editor::<RegistryProxy>(debug);
                     })
@@ -73,8 +73,18 @@ impl Commands {
         }
     }
 
-
-    async fn default_handle(self, ACR {registry, registry_host, guest, ..}: ACR, _: bool, mirror_runmd: PathBuf, world_dir: PathBuf) {
+    async fn default_handle(
+        self,
+        ACR {
+            registry,
+            registry_host,
+            guest,
+            ..
+        }: ACR,
+        _: bool,
+        mirror_runmd: PathBuf,
+        world_dir: PathBuf,
+    ) {
         match self {
             Commands::Mirror(mut host_settings) => {
                 if host_settings.workspace.is_none() {
@@ -108,25 +118,36 @@ impl Commands {
                     event!(Level::WARN, "Overwriting existing file {:?}", mirror_runmd);
                 }
 
-                let hosts_config = if let Some(registry) = registry.as_ref() {
-                    MirrorHost::get_hosts_config(
+                let hosts_configs = if let Some(registry) = registry.as_ref() {
+                    vec![MirrorHost::get_hosts_config(
                         format!("{registry}.{registry_host}"),
                         mirror_address.to_string(),
                         true,
                         Some(teleport_format.to_string()),
-                    )
+                    )]
                 } else {
-                    DefaultHost::get_hosts_config(
-                        mirror_address.to_string(),
-                        true,
-                        Some(registry_host.to_string()),
-                        Some(teleport_format.to_string()),
-                    )
+                    vec![
+                        DefaultHost::get_hosts_config(
+                            mirror_address.to_string(),
+                            true,
+                            Some(registry_host.to_string()),
+                            Some(teleport_format.to_string()),
+                        ),
+                        DefaultHost::get_legacy_supported_hosts_config(
+                            &registry_host,
+                            mirror_address.to_string(),
+                            true,
+                            Some(registry_host.to_string()),
+                            Some(teleport_format.to_string()),
+                        ),
+                    ]
                 };
 
-                match hosts_config.install(fs_root.to_owned()) {
-                    Ok(path) => event!(Level::INFO, "Wrote hosts.toml for host, {:?}", path),
-                    Err(err) => panic!("Could not write hosts.toml {err}"),
+                for host_config in hosts_configs {
+                    match host_config.install(fs_root.to_owned()) {
+                        Ok(path) => event!(Level::INFO, "Wrote hosts.toml for host, {:?}", path),
+                        Err(err) => panic!("Could not write hosts.toml {err}"),
+                    }
                 }
 
                 if hosts_config_only {

@@ -50,8 +50,9 @@ impl Registry {
         let mut repo = repo.into();
         let mut namespace = namespace.into();
 
-        if repo.starts_with("t_") {
+        if repo.starts_with("_tenant_") {
             if let Some((tenant, _repo)) = repo.split_once("/") {
+                let tenant = tenant.trim_start_matches("_tenant_");
                 namespace = format!("{tenant}.{namespace}");
                 repo = _repo.to_string();
                 info!("Applied tenant workaround, namespace -> {namespace}, repo -> {repo}");

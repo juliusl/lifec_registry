@@ -1,6 +1,6 @@
 use hyper::Body;
-use hyper::Response;
-use hyper::StatusCode;
+use hyper::Method;
+use hyper::Request;
 use lifec::prelude::{
     AsyncContext, AttributeIndex, BlockObject, BlockProperties, CustomAttribute,
     Plugin, ThunkContext,
@@ -11,6 +11,7 @@ use tracing::info;
 use tracing::warn;
 
 use crate::ImageIndex;
+use crate::ProxyTarget;
 use crate::ReferrersList;
 
 /// Plugin to handle swapping out the manifest resolution to a teleportable image
@@ -47,19 +48,32 @@ impl Plugin for Teleport {
                             let streamable = list.find_streamable_descriptors();
                             let digest = if let Some(streamable_desc) = streamable.first() {
                                 info!("Streamable descriptor was found");
-                                streamable_desc.digest.clone()
+                                streamable_desc.digest.to_string()
                             } else {
                                 warn!("No streamable descriptor was found, {:?} {:?}", list, streamable);
-                                tc.search().find_symbol("digest").expect("should have a digest property")
+                                let digest = tc.search().find_symbol("digest").expect("should have a digest property");
+                                digest
                             };
 
+                            let mut ptc = tc.clone();
+                            ptc.replace_symbol("digest", digest);
+
+                            let manifest_uri = ProxyTarget::try_from(&ptc).expect("should have a proxy target");
+                            let manifest = tc.client()
+                                .expect("should have client")
+                                .request(
+                                    Request::builder()
+                                        .method(Method::HEAD)
+                                        .uri(manifest_uri.manifest_url())
+                                        .header("Accept", tc.search().find_symbol("accept").expect("should have accept header"))
+                                        .header("Authorization", tc.search().find_symbol("Authorization").expect("should have authorization"))
+                                        .body(Body::empty())
+                                        .expect("should be able to create request")
+                                        .into()
+                                    ).await.expect("should have response");
+
                             tc.cache_response(
-                                Response::builder()
-                                    .header("docker-content-digest", digest)
-                                    .status(StatusCode::OK)
-                                    .body(Body::empty())
-                                    .expect("should build a response")
-                                    .into(),
+                                manifest
                             )
                         }
                         Err(err) => {
