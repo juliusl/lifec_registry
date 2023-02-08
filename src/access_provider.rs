@@ -3,7 +3,7 @@ use std::{sync::Arc, path::PathBuf};
 use async_trait::async_trait;
 use tracing::{info, warn};
 
-use crate::{Error, config::{AzureSDKConfig, AzureAKSConfig}};
+use crate::{Error, config::{AzureSDKConfig, AzureAKSConfig}, OAuthToken};
 
 /// Trait to implement for types that capable of providing an access token that can be exchanged for a refresh token,
 /// 
@@ -43,9 +43,8 @@ impl AccessProvider for PathBuf {
             warn!("{:?} has been deleted, falling back to Azure SDK", self);
             Ok(AzureSDKConfig::default().access_token().await?)
         } else {
-            let access_token = tokio::fs::read_to_string(self).await?;
-
-            Ok(access_token)
+            let token = OAuthToken::read_token_cache(self).await?;
+            Ok(token.token())
         }
     }
 }

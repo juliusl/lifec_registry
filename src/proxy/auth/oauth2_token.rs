@@ -1,4 +1,4 @@
-use std::time::SystemTime;
+use std::{time::SystemTime, path::PathBuf};
 
 use hyper::{header::WWW_AUTHENTICATE, Uri, body::Bytes};
 use lifec::prelude::SecureClient;
@@ -156,4 +156,35 @@ impl OAuthToken {
 
         Ok(token)
     }
+
+    /// Write to the token cache,
+    /// 
+    pub async fn cache_token(token_src: &PathBuf, token: &OAuthToken) -> Result<(), Error> {
+        tokio::fs::write(token_src, serde_json::to_string_pretty(token)?).await?;
+
+        Ok(())
+    }
+
+    /// Read from the token cache,
+    /// 
+    pub async fn read_token_cache(token_src: &PathBuf) -> Result<OAuthToken, Error> {
+        let cached = tokio::fs::read_to_string(token_src).await?;
+
+        let token = serde_json::from_str::<OAuthToken>(cached.as_str())?;
+
+        if token.is_expired()? {
+            Err(Error::recoverable_error("token has expired, reissue required"))
+        } else {
+            Ok(token)
+        }
+    }
+
+    /// Resets the token cache,
+    /// 
+    pub async fn reset_cache(token_src: &PathBuf) -> Result<(), Error> {
+        tokio::fs::remove_file(&token_src).await?;
+
+        Ok(())
+    }
+
 }
