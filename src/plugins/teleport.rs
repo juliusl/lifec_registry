@@ -77,7 +77,7 @@ impl Plugin for Teleport {
                             .expect("should have client")
                             .request(
                                 Request::builder()
-                                    .method(Method::HEAD)
+                                    .method(Method::GET)
                                     .uri(manifest_uri.manifest_url())
                                     .header("Accept", tc.search().find_symbol("accept").expect("should have accept header"))
                                     .header("Authorization", tc.search().find_symbol("Authorization").expect("should have authorization"))
