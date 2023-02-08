@@ -176,7 +176,7 @@ impl WebApp for RegistryProxy {
                 .add_route::<Manifests>(&host, &self.context)
                 .add_route::<BlobsUploads>(&host, &self.context);
 
-            let file_provider = workspace.work_dir().join("access_token");
+            let file_provider = workspace.work_dir().join("token_cache");
             let file_provider = if file_provider.exists() {
                 Some(file_provider)
             } else {
