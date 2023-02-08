@@ -5,11 +5,13 @@ use lifec::prelude::{
     AsyncContext, AttributeIndex, BlockObject, BlockProperties, CustomAttribute, Plugin,
     ThunkContext,
 };
+use logos::Logos;
 use tracing::info;
 use tracing::warn;
 
 use crate::Error;
 use crate::ImageIndex;
+use crate::Object;
 use crate::ProxyTarget;
 use crate::ReferrersList;
 
@@ -55,7 +57,7 @@ impl Plugin for Teleport {
                         let list = Self::parse_referrers_list(body).await?;
 
                         let streamable = list.find_streamable_descriptors();
-                        
+
                         let digest = if let Some(streamable_desc) = streamable.first() {
                             info!("Streamable descriptor was found");
                             streamable_desc.digest.clone()
@@ -73,29 +75,56 @@ impl Plugin for Teleport {
                         ptc.replace_symbol("digest", digest);
 
                         let manifest_uri = ProxyTarget::try_from(&ptc)?;
-                        let manifest = tc.client()
+
+                        let method = tc.search().find_symbol("REFERENCE").map(|r| {
+                            let object = Object::lexer(r.as_str()).next();
+                            match object {
+                                Some(obj) => match obj {
+                                    // We can teleport references, but not digests
+                                    crate::Object::Reference(_) => Method::HEAD,
+                                    // We can't teleport digests, so get the manifest
+                                    crate::Object::Digest(_) => Method::GET,
+                                    crate::Object::Error => Method::HEAD,
+                                },
+                                _ => Method::HEAD,
+                            }
+                        }).unwrap_or(Method::HEAD);
+
+                        let manifest = tc
+                            .client()
                             .expect("should have client")
                             .request(
                                 Request::builder()
-                                    .method(Method::GET)
+                                    .method(method)
                                     .uri(manifest_uri.manifest_url())
-                                    .header("Accept", tc.search().find_symbol("accept").expect("should have accept header"))
-                                    .header("Authorization", tc.search().find_symbol("Authorization").expect("should have authorization"))
+                                    .header(
+                                        "Accept",
+                                        tc.search()
+                                            .find_symbol("accept")
+                                            .expect("should have accept header"),
+                                    )
+                                    .header(
+                                        "Authorization",
+                                        tc.search()
+                                            .find_symbol("Authorization")
+                                            .expect("should have authorization"),
+                                    )
                                     .body(Body::empty())
                                     .expect("should be able to create request")
-                                    .into()
-                                ).await.expect("should have response");
+                                    .into(),
+                            )
+                            .await
+                            .expect("should have response");
 
-                        tc.cache_response(
-                            manifest
-                        );
+                        tc.cache_response(manifest);
 
                         tc.copy_previous();
                         Ok(tc)
                     }
-                    None => {
-                        Err(Error::recoverable_error("skip -- missing body in cached response, passing state through").into())
-                    },
+                    None => Err(Error::recoverable_error(
+                        "skip -- missing body in cached response, passing state through",
+                    )
+                    .into()),
                 }
             }
         })

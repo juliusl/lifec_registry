@@ -35,6 +35,7 @@ use crate::default_access_provider;
 
 mod proxy_target;
 pub use proxy_target::ProxyTarget;
+pub use proxy_target::Object;
 
 mod manifests;
 pub use manifests::Manifests;

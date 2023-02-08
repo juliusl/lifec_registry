@@ -13,7 +13,7 @@ use auth_response::AuthResponse;
 
 mod oauth2_token;
 pub use oauth2_token::OAuthToken;
-use tracing::error;
+use tracing::{error, info};
 
 use crate::{Error, AccessProvider};
 
@@ -30,6 +30,7 @@ pub async fn handle_auth(
     context: Data<&ThunkContext>,
     access_provider: Data<&Arc<dyn AccessProvider + Send + Sync + 'static>>,
 ) -> Result<AuthResponse, Error> {
+    info!("Request to authenticate {remote_url}");
     let access_token = access_provider.access_token().await?;
     let client = context.client().expect("should have an https client");
 
