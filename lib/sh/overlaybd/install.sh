@@ -11,19 +11,3 @@ rm ./overlaybd-snapshotter_0.6.0_amd64.deb
 
 # Enable kernel feature
 sudo modprobe target_core_user
-
-# Enable containerd settings
-touch /etc/containerd/config.toml
-tee -a /etc/containerd/config.toml > /dev/null <<EOF
-version = 2
-[proxy_plugins.overlaybd]
-    type = "snapshot"
-    address = "/run/overlaybd-snapshotter/overlaybd.sock"
-
-[plugins."io.containerd.grpc.v1.cri".containerd]
-    snapshotter = "overlaybd"
-    disable_snapshot_annotations = false
-    
-[plugins."io.containerd.grpc.v1.cri".registry]
-    config_path = "/etc/containerd/certs.d"
-EOF
