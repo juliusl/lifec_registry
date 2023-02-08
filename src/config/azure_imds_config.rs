@@ -32,7 +32,6 @@ pub enum AzureIMDSEndpoint {
 #[derive(Deserialize)]
 struct IMDSTokenResponse {
     access_token: String,
-    refresh_token: String,
     expires_in: String,
     expires_on: String,
     not_before: String,
