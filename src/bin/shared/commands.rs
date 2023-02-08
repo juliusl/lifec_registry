@@ -128,14 +128,14 @@ impl Commands {
                 } else {
                     vec![
                         DefaultHost::get_hosts_config(
-                            mirror_address.to_string(),
+                            format!("http://{}", mirror_address),
                             true,
                             Some(registry_host.to_string()),
                             Some(teleport_format.to_string()),
                         ),
                         DefaultHost::get_legacy_supported_hosts_config(
                             &registry_host,
-                            mirror_address.to_string(),
+                            format!("http://{}", mirror_address),
                             true,
                             Some(registry_host.to_string()),
                             Some(teleport_format.to_string()),

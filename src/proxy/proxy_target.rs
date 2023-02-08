@@ -30,6 +30,12 @@ pub struct ProxyTarget {
 }
 
 impl ProxyTarget {
+    /// Returns the current object setting,
+    /// 
+    pub fn object(&self) -> &Object {
+        &self.object
+    }
+
     /// Request content w/ a descriptor from the proxy target,
     ///
     pub async fn request_content(&self, descriptor: &Descriptor) -> Option<Vec<u8>> {

@@ -33,6 +33,7 @@ pub mod hosts_config {
 mod proxy;
 pub use proxy::RegistryProxy;
 pub use proxy::ProxyTarget;
+pub use proxy::Object;
 pub use proxy::Manifests;
 pub use proxy::Blobs;
 pub use proxy::OAuthToken;
