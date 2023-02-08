@@ -42,6 +42,7 @@ pub use config::Host as RegistryHost;
 pub use config::HostsConfig;
 pub use config::OAuthConfig;
 pub use config::BearerChallengeConfig;
+pub use config::ContainerdConfig;
 
 pub mod azure {
     pub use crate::config::AzureAKSConfig;

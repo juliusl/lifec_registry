@@ -3,8 +3,8 @@ use std::{fmt::Display, string};
 use hyper::{http::uri::InvalidUri, StatusCode};
 use tracing::{error, warn};
 
-/// Struct to represent when the library encounters an error, 
-/// 
+/// Struct to represent when the library encounters an error,
+///
 #[allow(dead_code)]
 #[derive(Debug)]
 pub struct Error {
@@ -16,14 +16,18 @@ impl Error {
     ///
     pub fn invalid_operation(reason: &'static str) -> Self {
         error!("Error while executing an operation, reason: {reason}");
-        Error { category: ErrorCategory::InvalidOperation(reason) }
+        Error {
+            category: ErrorCategory::InvalidOperation(reason),
+        }
     }
 
     /// This operation is expected to fail at times and the runtime is expected to recover from it,
-    /// 
+    ///
     pub fn recoverable_error(details: &'static str) -> Self {
         warn!("Recoverable error, {details}");
-        Error { category: ErrorCategory::RecoverableError(details) }
+        Error {
+            category: ErrorCategory::RecoverableError(details),
+        }
     }
 
     /// Returns an error that indicates a data-format issue,
@@ -51,7 +55,7 @@ impl Error {
     }
 
     /// Returns an error that indicates that there was an error using an external dependency w/ a status code,
-    /// 
+    ///
     pub fn external_dependency_with(status_code: StatusCode) -> Self {
         Error {
             category: ErrorCategory::ExternalDependencyWithStatusCode(status_code),
@@ -82,10 +86,27 @@ impl Error {
             _ => false, 
         }
     }
+
+    /// Returns a composite error,
+    ///
+    pub fn also(&self, other: Self) -> Self {
+        Self {
+            category: ErrorCategory::Composite(
+                Box::new(self.category.clone()),
+                Box::new(other.category),
+            ),
+        }
+    }
+
+    /// Returns the current error category,
+    /// 
+    pub fn category(&self) -> &ErrorCategory {
+       &self.category
+    }
 }
 
-#[derive(Debug)]
-enum ErrorCategory {
+#[derive(Debug, Clone)]
+pub enum ErrorCategory {
     Authentication,
     DataFormat,
     ExternalDependency,
@@ -94,6 +115,7 @@ enum ErrorCategory {
     CodeDefect,
     InvalidOperation(&'static str),
     RecoverableError(&'static str),
+    Composite(Box<Self>, Box<Self>),
 }
 
 impl std::error::Error for Error {}
@@ -192,6 +214,14 @@ impl From<Error> for lifec::error::Error {
             ErrorCategory::InvalidOperation(reason) => lifec::error::Error::invalid_operation(reason),
             ErrorCategory::RecoverableError(message) if message.starts_with("skip") => lifec::error::Error::skip(message),
             ErrorCategory::RecoverableError(message) => lifec::error::Error::recoverable(message),
+            ErrorCategory::Composite(a, b) => match (*a.clone(), *b.clone()) {
+                (ErrorCategory::RecoverableError(message), _) | (_, ErrorCategory::RecoverableError(message)) if message.starts_with("skip") => lifec::error::Error::skip(message),
+                (ErrorCategory::RecoverableError(message), _) | (_, ErrorCategory::RecoverableError(message)) => lifec::error::Error::recoverable(message),
+                (a, b) => {
+                    error!("Composite error, {:?} + {:?}", a, b);
+                    lifec::error::Error::invalid_operation("composite error")
+                }
+            },
         }
     }
 }
@@ -205,5 +235,12 @@ mod tests {
         let e = Error::recoverable_error("test");
 
         assert!(e.is_recoverable());
+    }
+}
+
+impl From<toml_edit::TomlError> for Error {
+    fn from(value: toml_edit::TomlError) -> Self {
+        error!("Error parsing toml, {value}");
+        Self::data_format().also(Self::recoverable_error("Can output correct toml"))
     }
 }

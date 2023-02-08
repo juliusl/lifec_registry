@@ -15,3 +15,6 @@ pub use oauth_config::BearerChallengeConfig;
 mod hosts_config;
 pub use hosts_config::HostsConfig;
 pub use hosts_config::Host;
+
+mod containerd_config;
+pub use containerd_config::ContainerdConfig;
