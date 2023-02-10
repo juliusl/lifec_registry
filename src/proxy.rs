@@ -1,3 +1,15 @@
+use crate::default_access_provider;
+use crate::Artifact;
+use crate::ArtifactManifest;
+use crate::Authenticate;
+use crate::Descriptor;
+use crate::Discover;
+use crate::ImageIndex;
+use crate::ImageManifest;
+use crate::Login;
+use crate::Mirror;
+use crate::Resolve;
+use crate::Teleport;
 use lifec::prelude::AttributeParser;
 use lifec::prelude::Block;
 use lifec::prelude::Host;
@@ -13,29 +25,17 @@ use lifec::project::default_world;
 use lifec::project::Project;
 use lifec::runtime::Runtime;
 use lifec_poem::WebApp;
-use poem::Route;
-use poem::EndpointExt;
-use poem::web::Data;
-use poem::handler;
 use poem::get;
+use poem::handler;
+use poem::web::Data;
+use poem::EndpointExt;
+use poem::Route;
 use specs::WorldExt;
 use std::sync::Arc;
-use crate::Teleport;
-use crate::Resolve;
-use crate::Mirror;
-use crate::Login;
-use crate::ImageManifest;
-use crate::ImageIndex;
-use crate::Discover;
-use crate::Descriptor;
-use crate::Authenticate;
-use crate::ArtifactManifest;
-use crate::Artifact;
-use crate::default_access_provider;
 
 mod proxy_target;
-pub use proxy_target::ProxyTarget;
 pub use proxy_target::Object;
+pub use proxy_target::ProxyTarget;
 
 mod manifests;
 pub use manifests::Manifests;
@@ -53,6 +53,9 @@ pub use proxy_route::ProxyRoute;
 mod auth;
 use auth::handle_auth;
 pub use auth::OAuthToken;
+
+mod config;
+use config::handle_config;
 
 /// Struct for creating a customizable registry proxy,
 ///
@@ -190,6 +193,12 @@ impl WebApp for RegistryProxy {
                     get(handle_auth)
                         .data(self.context.clone())
                         .data(default_access_provider(file_provider)),
+                )
+                .at(
+                    "/config",
+                    get(handle_config.data(self.context.clone()))
+                        .put(handle_config.data(self.context.clone()))
+                        .delete(handle_config.data(self.context.clone())),
                 )
                 .nest("/v2", route)
         } else {
@@ -623,6 +632,12 @@ mod tests {
                 .header("x-ms-enable-mirror-if-suffix", "registry.io")
                 .send()
                 .await;
+            resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
+        });
+
+        let test_5 = cli.clone();
+        tokio::spawn(async move {
+            let resp = test_5.get("/config?ns=tenant.registry.io").send().await;
             resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
         });
 

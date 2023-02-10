@@ -68,7 +68,7 @@ required-features = ["editor"]
 
 [package.metadata.deb]
 name = "acr-mirror"
-depends = "jq, libssl-dev"
+depends = "jq"
 maintainer-scripts = "lib/debian"
 assets = [
     [

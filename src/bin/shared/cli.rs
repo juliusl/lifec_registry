@@ -103,7 +103,7 @@ pub struct MirrorSettings {
     /// If initializing settings, only initialize the hosts.toml file
     ///
     #[clap(long, action)]
-    pub hosts_config_only: bool,
+    pub init_hosts_config_only: bool,
     /// Root of the current filesystem,
     ///
     /// This is usually just `/` however when testing it's useful to specify since root is a privelaged folder.

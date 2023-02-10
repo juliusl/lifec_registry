@@ -87,6 +87,15 @@ impl Error {
         }
     }
 
+    /// Returns true if the category is an invalid operation,
+    /// 
+    pub fn is_invalid_operation(&self) -> bool {
+        match self.category { 
+            ErrorCategory::InvalidOperation(_) => true,
+            _ => false, 
+        }
+    }
+
     /// Returns a composite error,
     ///
     pub fn also(&self, other: Self) -> Self {

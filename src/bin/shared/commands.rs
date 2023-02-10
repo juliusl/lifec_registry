@@ -114,7 +114,7 @@ impl Commands {
                 teleport_format,
                 registry_host,
                 fs_root,
-                hosts_config_only,
+                init_hosts_config_only: hosts_config_only,
                 ..
             }) => {
                 if mirror_runmd.exists() {
