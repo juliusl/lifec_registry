@@ -2,12 +2,13 @@ use logos::Logos;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Display,
-    path::PathBuf, io::Write
+    io::Write,
+    path::PathBuf,
 };
 use tracing::error;
 
 /// Folder name of the default hosts_config folder used by containerd,
-/// 
+///
 const HOSTS_CONFIG_FOLDER: &'static str = "etc/containerd/certs.d";
 
 /// Struct for creating a hosts.toml file for containerd hosts configuration,
@@ -34,7 +35,7 @@ impl HostsConfig {
     }
 
     /// Enables legacy support for containerd version under 1.7
-    /// 
+    ///
     pub fn enable_legacy_support(mut self) -> Self {
         self.legacy_support = true;
         self
@@ -48,16 +49,9 @@ impl HostsConfig {
     }
 
     /// Serializes and writes the current config to
-    /// 
+    ///
     pub fn install(&self, root_dir: Option<impl Into<PathBuf>>) -> Result<PathBuf, std::io::Error> {
-        let path = root_dir.map(|r| r.into()).unwrap_or(PathBuf::from("/"));
-        let path = path.join(HOSTS_CONFIG_FOLDER);
-
-        let path = if let Some(server) = self.server.as_ref() {
-            path.join(server)
-        } else {
-            path.join("_default")
-        };
+        let path = self.install_dir(root_dir);
 
         std::fs::create_dir_all(&path)?;
 
@@ -70,6 +64,49 @@ impl HostsConfig {
         // TODO -- Make readonly?
 
         Ok(path)
+    }
+
+    /// Uninstalls the config,
+    /// 
+    pub fn uninstall(&self, root_dir: Option<impl Into<PathBuf>>) -> Result<(), std::io::Error> {
+        let path = self.install_dir(root_dir);
+
+        std::fs::create_dir_all(&path)?;
+
+        let path = path.join("hosts.toml");
+
+        if !path.exists() {
+            return Ok(());
+        } else {
+            std::fs::remove_file(path)?;
+        }
+
+        Ok(())
+    }
+
+    /// Returns true if the config is installed,
+    ///
+    pub fn installed(&self, root_dir: Option<impl Into<PathBuf>>) -> bool {
+        self.install_dir(root_dir)
+            .canonicalize()
+            .ok()
+            .map(|p| p.join("hosts.toml").exists())
+            .unwrap_or_default()
+    }
+
+    /// Returns the path to the config,
+    ///
+    fn install_dir(&self, root_dir: Option<impl Into<PathBuf>>) -> PathBuf {
+        let path = root_dir.map(|r| r.into()).unwrap_or(PathBuf::from("/"));
+        let path = path.join(HOSTS_CONFIG_FOLDER);
+
+        let path = if let Some(server) = self.server.as_ref() {
+            path.join(server)
+        } else {
+            path.join("_default")
+        };
+
+        path
     }
 }
 
@@ -306,9 +343,11 @@ server = "https://test.azurecr.io"
             .trim_start(),
             format!("{}", host_config)
         );
-        let location = host_config.install(Some(".test")).expect("should be able to install");
+        let location = host_config
+            .install(Some(".test"))
+            .expect("should be able to install");
         eprintln!("{:?}", location);
-        
+
         // Test w/o server=
         let host_config = HostsConfig::new(None::<String>);
         let host_config = host_config.add_host(
@@ -334,7 +373,9 @@ server = "https://test.azurecr.io"
             format!("{}", host_config)
         );
 
-        let location = host_config.install(Some(".test")).expect("should be able to install");
+        let location = host_config
+            .install(Some(".test"))
+            .expect("should be able to install");
         eprintln!("{:?}", location);
     }
 
