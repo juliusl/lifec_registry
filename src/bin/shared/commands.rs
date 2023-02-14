@@ -121,7 +121,7 @@ impl Commands {
                     event!(Level::WARN, "Overwriting existing file {:?}", mirror_runmd);
                 }
                 
-                if min_init {
+                if !min_init {
                     enable_containerd_config().await;
 
                     let host_config = if let Some(registry) = registry.as_ref() {
