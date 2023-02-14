@@ -370,3 +370,4 @@ query-guest-commands.sh
 query-guest-state.sh
 output.resp
 .test
+.test_handle_config

@@ -1,10 +1,38 @@
 use std::{fmt::Display, path::PathBuf};
 
 use toml_edit::{table, value, Document};
+use tracing::{info, error};
 
 use crate::Error;
 
 const DEFAULT_CONTAINERD_CONFIG_DIR: &'static str = "etc/containerd/";
+
+/// Enable containerd config,
+/// 
+/// The containerd config is stored at /etc/containerd/config.toml. To enable a definition is installed for the proxy snapshotter,
+/// the hosts config directory is specified, and then the default snapshotter is set.
+///
+pub async fn enable_containerd_config() {
+    // Configure containerd
+    let ctr_config = match ContainerdConfig::try_load(None).await {
+        Ok(config) => config,
+        Err(_) => ContainerdConfig::new(),
+    };
+
+    let mut updated = ctr_config
+        .enable_overlaybd_snapshotter()
+        .enable_hosts_config();
+    updated.format();
+
+    match updated.try_save().await {
+        Ok(saved) => {
+            info!("Wrote containerd config at {:?}", saved)
+        }
+        Err(err) => {
+            error!("Could not save containerd config, {err}");
+        }
+    }
+}
 
 /// Pointer struct for handling /etc/containerd/config.toml
 ///

@@ -100,10 +100,10 @@ pub struct MirrorSettings {
     ///
     #[clap(long, default_value_t = String::from("azurecr.io"))]
     pub registry_host: String,
-    /// If initializing settings, only initialize the hosts.toml file
-    ///
+    /// Minimum initialization,
+    /// 
     #[clap(long, action)]
-    pub init_hosts_config_only: bool,
+    pub min_init: bool,
     /// Root of the current filesystem,
     ///
     /// This is usually just `/` however when testing it's useful to specify since root is a privelaged folder.
