@@ -2,7 +2,7 @@
 set -e
 
 cd /opt/acr/bin
-./acr init
+./acr init --min_init
 
 #DEBHELPER#
 

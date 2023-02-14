@@ -1,14 +1,14 @@
 use clap::Subcommand;
 use lifec::host::HostSettings;
 use lifec::prelude::*;
-use lifec_registry::ContainerdConfig;
 use lifec_registry::hosts_config::DefaultHost;
 use lifec_registry::hosts_config::MirrorHost;
+use lifec_registry::ContainerdConfig;
 use lifec_registry::RegistryProxy;
-use tracing::error;
-use tracing::info;
 use std::path::PathBuf;
+use tracing::error;
 use tracing::event;
+use tracing::info;
 use tracing::Level;
 
 use super::default_mirror_engine;
@@ -114,69 +114,36 @@ impl Commands {
                 teleport_format,
                 registry_host,
                 fs_root,
-                init_hosts_config_only: hosts_config_only,
+                min_init,
                 ..
             }) => {
                 if mirror_runmd.exists() {
                     event!(Level::WARN, "Overwriting existing file {:?}", mirror_runmd);
                 }
+                
+                if min_init {
+                    enable_containerd_config().await;
 
-                let ctr_config = match ContainerdConfig::try_load(None).await {
-                    Ok(config) => {
-                        config
-                    }, 
-                    Err(_) => {
-                        ContainerdConfig::new()
-                    }
-                };
-
-                let mut updated = ctr_config.enable_overlaybd_snapshotter().enable_hosts_config();
-                updated.format();
-
-                match updated.try_save().await {
-                    Ok(saved) => {
-                        info!("Wrote containerd config at {:?}", saved)
-                    },
-                    Err(err) => {
-                        error!("Could not save containerd config, {err}");
-                    }
-                }
-
-                let hosts_configs = if let Some(registry) = registry.as_ref() {
-                    vec![MirrorHost::get_hosts_config(
-                        format!("{registry}.{registry_host}"),
-                        mirror_address.to_string(),
-                        true,
-                        Some(teleport_format.to_string()),
-                    )]
-                } else {
-                    vec![
+                    let host_config = if let Some(registry) = registry.as_ref() {
+                        MirrorHost::get_hosts_config(
+                            format!("{registry}.{registry_host}"),
+                            mirror_address.to_string(),
+                            true,
+                            Some(teleport_format.to_string()),
+                        )
+                    } else {
                         DefaultHost::get_hosts_config(
                             format!("http://{}", mirror_address),
                             true,
                             Some(registry_host.to_string()),
                             Some(teleport_format.to_string()),
-                        ),
-                        DefaultHost::get_legacy_supported_hosts_config(
-                            &registry_host,
-                            format!("http://{}", mirror_address),
-                            true,
-                            Some(registry_host.to_string()),
-                            Some(teleport_format.to_string()),
-                        ),
-                    ]
-                };
-
-                for host_config in hosts_configs {
+                        )
+                    };
+    
                     match host_config.install(fs_root.to_owned()) {
                         Ok(path) => event!(Level::INFO, "Wrote hosts.toml for host, {:?}", path),
                         Err(err) => panic!("Could not write hosts.toml {err}"),
                     }
-                }
-
-                if hosts_config_only {
-                    event!(Level::INFO, "Skipping .runmd initialization");
-                    return;
                 }
 
                 tokio::fs::write(
@@ -218,6 +185,30 @@ impl Commands {
                 host.print_lifecycle_graph();
             }
             _ => {}
+        }
+    }
+}
+
+/// Enable containerd config,
+///
+async fn enable_containerd_config() {
+    // Configure containerd
+    let ctr_config = match ContainerdConfig::try_load(None).await {
+        Ok(config) => config,
+        Err(_) => ContainerdConfig::new(),
+    };
+
+    let mut updated = ctr_config
+        .enable_overlaybd_snapshotter()
+        .enable_hosts_config();
+    updated.format();
+
+    match updated.try_save().await {
+        Ok(saved) => {
+            info!("Wrote containerd config at {:?}", saved)
+        }
+        Err(err) => {
+            error!("Could not save containerd config, {err}");
         }
     }
 }
