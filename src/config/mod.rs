@@ -18,3 +18,4 @@ pub use hosts_config::Host;
 
 mod containerd_config;
 pub use containerd_config::ContainerdConfig;
+pub use containerd_config::enable_containerd_config;

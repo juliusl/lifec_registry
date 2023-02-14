@@ -1,19 +1,20 @@
 // Imports
-use hyper::Method;
-use lifec::state::AttributeIndex;
-use lifec::prelude::ThunkContext;
-use poem::IntoResponse;
-use poem::web::Query;
-use poem::web::Data;
-use poem::handler;
-use poem::error::IntoResult;
-use serde::Serialize;
-use serde::Deserialize;
-use tracing::info;
-use tracing::error;
-use tracing::debug;
-use crate::Error;
+use crate::hosts_config::DefaultHost;
 use crate::hosts_config::MirrorHost;
+use crate::Error;
+use hyper::Method;
+use lifec::prelude::ThunkContext;
+use lifec::state::AttributeIndex;
+use poem::error::IntoResult;
+use poem::handler;
+use poem::web::Data;
+use poem::web::Query;
+use poem::IntoResponse;
+use serde::Deserialize;
+use serde::Serialize;
+use tracing::debug;
+use tracing::error;
+use tracing::info;
 
 // Exports
 mod config_response;
@@ -29,10 +30,16 @@ pub struct ConfigRequest {
     /// Stream format to configure,
     ///
     stream_format: Option<String>,
+    /// Suffix to enable,
+    ///
+    enable_suffix: Option<String>,
+    /// Enable containerd config,
+    /// 
+    enable_containerd: Option<bool>,
 }
 
 /// Handler for /config requests
-/// 
+///
 #[handler]
 pub async fn handle_config(
     method: Method,
@@ -43,10 +50,15 @@ pub async fn handle_config(
 }
 
 /// Handler impl, seperated to test
-/// 
+///
 async fn _handle_config(
     method: Method,
-    Query(ConfigRequest { ns, stream_format }): Query<ConfigRequest>,
+    Query(ConfigRequest {
+        ns,
+        stream_format,
+        enable_suffix,
+        enable_containerd,
+    }): Query<ConfigRequest>,
     context: Data<&ThunkContext>,
 ) -> Result<ConfigResponse, Error> {
     let app_host = context
@@ -54,11 +66,16 @@ async fn _handle_config(
         .find_symbol("app_host")
         .unwrap_or("http://localhost:8578".to_string());
 
-    let mirror_hosts_config = MirrorHost::get_hosts_config(&ns, app_host, true, stream_format);
+    let hosts_config = if ns != "_default" {
+        MirrorHost::get_hosts_config(&ns, app_host, true, stream_format)
+    } else {
+        let suffix = enable_suffix.unwrap_or(String::from("azurecr.io"));
+        DefaultHost::get_hosts_config(app_host, true, Some(suffix), stream_format)
+    };
 
     match method {
         Method::GET => {
-            if mirror_hosts_config.installed(context.search().find_symbol("sysroot")) {
+            if hosts_config.installed(context.search().find_symbol("sysroot")) {
                 Ok(ConfigResponse::ok())
             } else {
                 Err(Error::recoverable_error("config is not installed"))
@@ -67,7 +84,11 @@ async fn _handle_config(
         Method::PUT => {
             info!("Configuring namespace {ns}");
 
-            if let Err(err) = mirror_hosts_config.install(context.search().find_symbol("sysroot")) {
+            if let Some(true) = enable_containerd {
+                crate::enable_containerd_config().await;
+            }
+
+            if let Err(err) = hosts_config.install(context.search().find_symbol("sysroot")) {
                 error!("Unable to enable mirror host config for, {}, {:?}", ns, err);
                 Err(Error::system_environment())
             } else {
@@ -77,7 +98,8 @@ async fn _handle_config(
         }
         Method::DELETE => {
             info!("Deleting config for namespace {ns}");
-            if let Err(err) = mirror_hosts_config.uninstall(context.search().find_symbol("sysroot")) {
+            if let Err(err) = hosts_config.uninstall(context.search().find_symbol("sysroot"))
+            {
                 error!("Unable to enable mirror host config for, {}, {:?}", ns, err);
                 Err(Error::system_environment())
             } else {
@@ -121,6 +143,8 @@ mod tests {
             Query(ConfigRequest {
                 ns: String::from("test.azurecr.io"),
                 stream_format: None,
+                enable_suffix: None,
+                enable_containerd: None,
             }),
             Data(
                 &ThunkContext::default()
@@ -136,6 +160,8 @@ mod tests {
             Query(ConfigRequest {
                 ns: String::from("test.azurecr.io"),
                 stream_format: None,
+                enable_suffix: None,
+                enable_containerd: None,
             }),
             Data(
                 &ThunkContext::default()
@@ -151,6 +177,8 @@ mod tests {
             Query(ConfigRequest {
                 ns: String::from("test.azurecr.io"),
                 stream_format: None,
+                enable_suffix: None,
+                enable_containerd: None,
             }),
             Data(
                 &ThunkContext::default()

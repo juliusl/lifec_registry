@@ -3,11 +3,10 @@ use lifec::host::HostSettings;
 use lifec::prelude::*;
 use lifec_registry::hosts_config::DefaultHost;
 use lifec_registry::hosts_config::MirrorHost;
-use lifec_registry::ContainerdConfig;
 use lifec_registry::RegistryProxy;
 use std::path::PathBuf;
-use tracing::error;
 use tracing::event;
+use tracing::warn;
 use tracing::info;
 use tracing::Level;
 
@@ -118,11 +117,11 @@ impl Commands {
                 ..
             }) => {
                 if mirror_runmd.exists() {
-                    event!(Level::WARN, "Overwriting existing file {:?}", mirror_runmd);
+                    warn!("Overwriting existing file {:?}", mirror_runmd);
                 }
                 
                 if !min_init {
-                    enable_containerd_config().await;
+                    lifec_registry::enable_containerd_config().await;
 
                     let host_config = if let Some(registry) = registry.as_ref() {
                         MirrorHost::get_hosts_config(
@@ -144,6 +143,8 @@ impl Commands {
                         Ok(path) => event!(Level::INFO, "Wrote hosts.toml for host, {:?}", path),
                         Err(err) => panic!("Could not write hosts.toml {err}"),
                     }
+                } else {
+                    info!("Minimum initialization enabled. Skipping hosts config & containerd config.")
                 }
 
                 tokio::fs::write(
@@ -185,30 +186,6 @@ impl Commands {
                 host.print_lifecycle_graph();
             }
             _ => {}
-        }
-    }
-}
-
-/// Enable containerd config,
-///
-async fn enable_containerd_config() {
-    // Configure containerd
-    let ctr_config = match ContainerdConfig::try_load(None).await {
-        Ok(config) => config,
-        Err(_) => ContainerdConfig::new(),
-    };
-
-    let mut updated = ctr_config
-        .enable_overlaybd_snapshotter()
-        .enable_hosts_config();
-    updated.format();
-
-    match updated.try_save().await {
-        Ok(saved) => {
-            info!("Wrote containerd config at {:?}", saved)
-        }
-        Err(err) => {
-            error!("Could not save containerd config, {err}");
         }
     }
 }

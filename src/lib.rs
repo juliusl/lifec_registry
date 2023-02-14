@@ -44,6 +44,7 @@ pub use config::HostsConfig;
 pub use config::OAuthConfig;
 pub use config::BearerChallengeConfig;
 pub use config::ContainerdConfig;
+pub use config::enable_containerd_config;
 
 pub mod azure {
     pub use crate::config::AzureAKSConfig;
