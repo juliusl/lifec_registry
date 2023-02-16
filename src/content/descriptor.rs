@@ -130,11 +130,11 @@ struct StreamingDescriptor {
     #[serde(rename = "streaming.format")]
     format: String,
     #[serde(rename = "streaming.version")]
-    version: String,
+    version: Option<String>,
     #[serde(rename = "streaming.platform.os")]
-    platform_os: String,
+    platform_os: Option<String>,
     #[serde(rename = "streaming.platform.arch")]
-    platform_arch: String,
+    platform_arch: Option<String>,
 }
 
 #[allow(unused_imports)]
