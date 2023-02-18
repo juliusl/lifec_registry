@@ -64,7 +64,9 @@ async fn _handle_config(
     let app_host = context
         .search()
         .find_symbol("app_host")
-        .unwrap_or("http://localhost:8578".to_string());
+        .unwrap_or("localhost:8578".to_string());
+
+    let app_host = format!("http://{app_host}");
 
     let hosts_config = if ns != "_default" {
         MirrorHost::get_hosts_config(&ns, app_host, true, stream_format)
