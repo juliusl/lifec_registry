@@ -2,7 +2,7 @@
 # Configure mirror settings
 ```
 + .config               start.mirror
-: app_host              .symbol         http://localhost:8578
+: app_host              .symbol         localhost:8578
 ```
 
 # Resolve manifest handler (/v2/../manifests/..)
