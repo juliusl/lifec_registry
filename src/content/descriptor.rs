@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use lifec::prelude::{AttributeIndex, Component, DefaultVecStorage, ThunkContext};
 use serde::{Deserialize, Serialize};
-use tracing::trace;
+use tracing::{debug, trace};
 
 use super::Platform;
 
@@ -88,6 +88,25 @@ impl Descriptor {
     /// ```
     ///
     pub fn try_parse_streamable_descriptor(&self) -> Option<Self> {
+        if !self
+            .annotations
+            .as_ref()
+            .map(|a| a.contains_key("streaming.mediaType"))
+            .unwrap_or_default()
+        {
+            let mut desc = self.clone();
+            debug!("Updated artifact manifest detected, skipping annotation parsing");
+            if let Some(platform) = self.try_parse_streamable_platform() {
+                desc.platform = Some(Platform {
+                    architecture: platform.platform_arch.unwrap_or_default(),
+                    os: platform.platform_os.unwrap_or_default(),
+                    variant: None,
+                });
+            }
+
+            return Some(desc);
+        }
+
         if let Some(annotations) = self
             .annotations
             .as_ref()
@@ -102,7 +121,11 @@ impl Descriptor {
                     annotations: None,
                     urls: None,
                     data: None,
-                    platform: None,
+                    platform: Some(Platform {
+                        architecture: streaming_desc.platform_arch.unwrap_or_default(),
+                        os: streaming_desc.platform_os.unwrap_or_default(),
+                        variant: None,
+                    }),
                 }),
                 Err(err) => {
                     trace!(
@@ -112,6 +135,18 @@ impl Descriptor {
                     None
                 }
             }
+        } else {
+            None
+        }
+    }
+
+    fn try_parse_streamable_platform(&self) -> Option<StreamingPlatform> {
+        if let Some(annotations) = self
+            .annotations
+            .as_ref()
+            .and_then(|a| serde_json::to_string(a).ok())
+        {
+            serde_json::from_str::<StreamingPlatform>(annotations.as_str()).ok()
         } else {
             None
         }
@@ -131,6 +166,19 @@ struct StreamingDescriptor {
     format: String,
     #[serde(rename = "streaming.version")]
     version: Option<String>,
+    #[serde(rename = "streaming.platform.os")]
+    platform_os: Option<String>,
+    #[serde(rename = "streaming.platform.arch")]
+    platform_arch: Option<String>,
+}
+
+/// Struct to parse stremaing platform,
+///
+#[allow(dead_code)]
+#[derive(Deserialize)]
+struct StreamingPlatform {
+    #[serde(rename = "streaming.format")]
+    format: String,
     #[serde(rename = "streaming.platform.os")]
     platform_os: Option<String>,
     #[serde(rename = "streaming.platform.arch")]

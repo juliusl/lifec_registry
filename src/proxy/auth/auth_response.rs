@@ -24,9 +24,9 @@ struct AuthData {
 /// Struct to serialize auth credentials,
 ///
 #[derive(Serialize, Default)]
-struct AuthCreds {
-    username: String,
-    password: String,
+pub struct AuthCreds {
+    pub username: String,
+    pub password: String,
 }
 
 impl AuthResponse {
@@ -51,6 +51,19 @@ impl AuthResponse {
 
         let mut auth_data = AuthData::default();
         auth_data.auths.insert(host, creds);
+
+        AuthResponse {
+            trace_id: "${trace_id}".to_string(),
+            success: true,
+            data: Some(auth_data),
+        }
+    }
+
+    /// Returns a response w/ login credentials,
+    /// 
+    pub fn login(host: impl Into<String>, username: impl Into<String>, password: impl Into<String>) -> AuthResponse {
+        let mut auth_data = AuthData::default();
+        auth_data.auths.insert(host.into(), AuthCreds { username: username.into(), password: password.into() });
 
         AuthResponse {
             trace_id: "${trace_id}".to_string(),

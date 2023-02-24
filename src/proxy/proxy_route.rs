@@ -10,9 +10,10 @@ use poem::{
 };
 use serde::{Deserialize, Serialize};
 use specs::{Component, VecStorage, WorldExt, Join};
+use tokio::sync::RwLock;
 use tracing::{event, Level};
 
-use crate::Registry;
+use crate::{Registry, config::LoginConfig};
 
 /// Trait to include a specific route to the proxy,
 /// 
@@ -283,6 +284,7 @@ async fn proxy_api<R>(
     resolve: Data<&ProxyRoute<R>>,
     registry: Data<&Registry>,
     context: Data<&ThunkContext>,
+    login_config: Data<&Arc<RwLock<LoginConfig>>>,
 ) -> Response 
 where
     R: RouteParameters
@@ -299,5 +301,6 @@ where
             ns,
             repo.trim_end_matches(R::ident().replace("_", "/").as_str()).trim_end_matches("/"),
             reference.filter(|r| !r.is_empty()),
+            login_config.clone()
         ).await
 }

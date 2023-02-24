@@ -58,7 +58,22 @@ impl Plugin for Teleport {
 
                         let streamable = list.find_streamable_descriptors();
 
-                        let digest = if let Some(streamable_desc) = streamable.first() {
+                        let arch = if std::env::consts::ARCH == "x86_64" {
+                            "amd64"
+                        } else {
+                            std::env::consts::ARCH
+                        };
+                        let os = std::env::consts::OS;
+
+                        info!("Filtering streamable descriptors w/ os - {os}, arch - {arch}");
+
+                        let digest = if let Some(streamable_desc) = streamable.iter().find(|s| {
+                            if let Some(platform) = s.platform.as_ref() {
+                                platform.architecture == arch && platform.os == os
+                            } else {
+                                false
+                            }
+                        }) {
                             info!("Streamable descriptor was found");
                             streamable_desc.digest.clone()
                         } else {

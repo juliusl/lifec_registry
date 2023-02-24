@@ -13,9 +13,11 @@ use auth_response::AuthResponse;
 
 mod oauth2_token;
 pub use oauth2_token::OAuthToken;
+use tokio::sync::RwLock;
 use tracing::{error, info};
+use url::Url;
 
-use crate::{Error, AccessProvider};
+use crate::{Error, AccessProvider, config::LoginConfig};
 
 /// Struct for a request to authenticate a registry request,
 ///
@@ -29,12 +31,21 @@ pub async fn handle_auth(
     Query(AuthRequest { remote_url }): Query<AuthRequest>,
     context: Data<&ThunkContext>,
     access_provider: Data<&Arc<dyn AccessProvider + Send + Sync + 'static>>,
+    login_config: Data<&Arc<RwLock<LoginConfig>>>,
 ) -> Result<AuthResponse, Error> {
+    let url: Url = remote_url.parse()?;
+    if let Some(domain) = url.domain() {
+        if let Some((username, password)) = login_config.read().await.authorize(domain) {
+            info!("Login credentials found for {domain}, using those instead of token access");
+            return Ok(AuthResponse::login(domain, username, password));
+        }
+    }
+
     info!("Request to authenticate {remote_url}");
     let access_token = access_provider.access_token().await?;
     let client = context.client().expect("should have an https client");
 
-    let refresh_token = OAuthToken::refresh_token(
+    let refresh_token = OAuthToken::exchange_token(
         client, 
         remote_url, 
         access_token, 

@@ -57,6 +57,7 @@ serde_urlencoded = "0.7.1"
 async-trait = "0.1.64"
 base64-url = "1.4.13"
 toml_edit = { version = "0.19.2", features = ["serde"] }
+url = "2.4.0"
 
 [[bin]]
 name = "acr-dev"

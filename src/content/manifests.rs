@@ -5,12 +5,16 @@ use crate::{ArtifactManifest, Descriptor, ImageIndex, ImageManifest};
 /// Enumeration of possible manifest types,
 ///
 #[derive(Debug, Clone)]
+
+#[allow(dead_code)]
 pub enum Manifests {
     Image(Descriptor, ImageManifest),
     Artifact(Descriptor, ArtifactManifest),
     Index(Descriptor, ImageIndex),
 }
 
+
+#[allow(dead_code)]
 impl Manifests {
     /// Copies manifest to context for later processing,
     /// 
