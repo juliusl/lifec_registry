@@ -49,6 +49,23 @@ jobs:
       with:
         name: acr-mirror-deb-20.04
         path: target/debian/*.deb
+  build_2204:
+    name: Build Ubuntu-22.04
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v3
+    - name: Run tests
+      run: cargo test --verbose
+    - name: Install tools
+      run: cargo install cargo-deb
+    - name: Package
+      run: |
+        cargo deb --output "target/debian/acr-mirror-2204-$GITHUB_REF_NAME-${GITHUB_SHA::5}.deb"
+    - name: Publish artifacts
+      uses: actions/upload-artifact@master
+      with:
+        name: acr-mirror-deb-22.04
+        path: target/debian/*.deb
   release:
     name: Release
     runs-on: ubuntu-latest
@@ -64,6 +81,11 @@ jobs:
         uses: actions/download-artifact@master
         with:
           name: acr-mirror-deb-20.04
+          path: build/
+      - name: Download Artifacts 22.04
+        uses: actions/download-artifact@master
+        with:
+          name: acr-mirror-deb-22.04
           path: build/
       - name: Release
         uses: fnkr/github-action-ghr@v1
