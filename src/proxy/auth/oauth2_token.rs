@@ -84,7 +84,7 @@ impl OAuthToken {
     ///
     /// Authorizes w/ the current environment to get an up-to-date refresh_token,
     /// 
-    pub async fn refresh_token(
+    pub async fn exchange_token(
         client: SecureClient,
         remote_uri: impl Into<String>,
         access_token: String,

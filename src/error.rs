@@ -205,6 +205,13 @@ impl From<std::time::SystemTimeError> for Error {
     }
 }
 
+impl From<url::ParseError> for Error {
+    fn from(value: url::ParseError) -> Self {
+        error!("Could not parse url, {value}");
+        Self::data_format()
+    }
+}
+
 impl From<Error> for lifec::error::Error {
     fn from(value: Error) -> lifec::error::Error {
         match &value.category {
