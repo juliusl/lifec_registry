@@ -43,7 +43,7 @@ jobs:
       run: cargo install cargo-deb
     - name: Package
       run: |
-        cargo deb --output "target/debian/acr-mirror-2004-$GITHUB_REF_NAME-${GITHUB_SHA::5}.deb"
+        cargo deb --output "target/debian/acr-mirror-2004-$GITHUB_REF_NAME.deb"
     - name: Publish artifacts
       uses: actions/upload-artifact@master
       with:
@@ -60,7 +60,7 @@ jobs:
       run: cargo install cargo-deb
     - name: Package
       run: |
-        cargo deb --output "target/debian/acr-mirror-2204-$GITHUB_REF_NAME-${GITHUB_SHA::5}.deb"
+        cargo deb --output "target/debian/acr-mirror-2204-$GITHUB_REF_NAME.deb"
     - name: Publish artifacts
       uses: actions/upload-artifact@master
       with:
