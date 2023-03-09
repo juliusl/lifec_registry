@@ -26,7 +26,7 @@ jobs:
         cargo version
         cargo test --verbose
         cargo install cargo-deb
-        cargo deb --output "target/debian/acr-mirror-1804-$GITHUB_REF_NAME.deb"
+        cargo deb --output "target/debian/acr-mirror-1804.deb"
     - name: Publish artifacts
       uses: actions/upload-artifact@master
       with:
@@ -43,7 +43,7 @@ jobs:
       run: cargo install cargo-deb
     - name: Package
       run: |
-        cargo deb --output "target/debian/acr-mirror-2004-$GITHUB_REF_NAME.deb"
+        cargo deb --output "target/debian/acr-mirror-2004.deb"
     - name: Publish artifacts
       uses: actions/upload-artifact@master
       with:
@@ -60,7 +60,7 @@ jobs:
       run: cargo install cargo-deb
     - name: Package
       run: |
-        cargo deb --output "target/debian/acr-mirror-2204-$GITHUB_REF_NAME.deb"
+        cargo deb --output "target/debian/acr-mirror-2204.deb"
     - name: Publish artifacts
       uses: actions/upload-artifact@master
       with:
