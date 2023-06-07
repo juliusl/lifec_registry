@@ -111,11 +111,9 @@ assets = [
     { source = "lib/sh/overlaybd/enable-http-auth.sh", dest = "/opt/acr/tools/overlaybd/enable-http-auth.sh", mode = "755" },
 ]
 post_install_script = """
-%post
 cd /opt/acr/bin
 ./acr init --min-init
 """
 pre_uninstall_script = """
-%preun
 rm -rf /opt/acr/bin/.world
 """
