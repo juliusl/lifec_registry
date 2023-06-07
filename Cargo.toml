@@ -110,9 +110,8 @@ assets = [
     { source = "lib/sh/overlaybd/enable-file-auth.sh", dest = "/opt/acr/tools/overlaybd/enable-file-auth.sh", mode = "755" },
     { source = "lib/sh/overlaybd/enable-http-auth.sh", dest = "/opt/acr/tools/overlaybd/enable-http-auth.sh", mode = "755" },
 ]
+requires = "systemd-rpm-macros"
 post_install_script = """
-BuildRequires: systemd-rpm-macros
-
 %post
 cd /opt/acr/bin
 ./acr init --min-init
