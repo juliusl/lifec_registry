@@ -114,9 +114,8 @@ post_install_script = """
 %post
 cd /opt/acr/bin
 ./acr init --min-init
-
-%systemd_post acr-mirror.service
 """
-
-[package.metadata.generate-rpm.requires]
-systemd-rpm-macros = "*"
+pre_uninstall_script = """
+%preun
+rm -rf /opt/acr/bin/.world
+"""
