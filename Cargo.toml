@@ -110,7 +110,6 @@ assets = [
     { source = "lib/sh/overlaybd/enable-file-auth.sh", dest = "/opt/acr/tools/overlaybd/enable-file-auth.sh", mode = "755" },
     { source = "lib/sh/overlaybd/enable-http-auth.sh", dest = "/opt/acr/tools/overlaybd/enable-http-auth.sh", mode = "755" },
 ]
-requires = "systemd-rpm-macros"
 post_install_script = """
 %post
 cd /opt/acr/bin
@@ -118,3 +117,6 @@ cd /opt/acr/bin
 
 %systemd_post acr-mirror.service
 """
+
+[package.metadata.generate-rpm.requires]
+systemd-rpm-macros = "*"
