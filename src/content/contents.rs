@@ -8,6 +8,7 @@ use super::{Upstream, Local};
 /// System data for content storage,
 /// 
 #[derive(SystemData)]
+#[allow(dead_code)]
 pub struct Contents<'a> {
     descriptors: WriteStorage<'a, Descriptor>,
     platforms: WriteStorage<'a, Platform>,

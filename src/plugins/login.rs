@@ -17,7 +17,6 @@ use crate::{default_access_provider, Error, OAuthToken};
 pub struct Login;
 
 impl Login {
-
     /// Parses token from the current state,
     /// 
     async fn parse_token(token_src: &PathBuf, tc: &ThunkContext) -> Result<String, Error> {
@@ -39,7 +38,7 @@ impl Login {
                         .access_token()
                         .await?;
 
-                    let refresh_token = OAuthToken::refresh_token(
+                    let refresh_token = OAuthToken::exchange_token(
                         client,
                         api,
                         access_token,
@@ -78,6 +77,13 @@ impl Plugin for Login {
             let mut tc = context.clone();
             async {
                 debug!("Starting registry login");
+
+                // If username/password are set w/ the context, skip getting credentials
+                if tc.state().find_symbol("REGISTRY_PASSWORD").is_some() && tc.state().find_symbol("REGISTRY_USER").is_some() {
+                    debug!("Skipping login, password/username is set");
+                    return Ok(tc);
+                }
+
                 if let Some(token_src) = tc.state().find_symbol("login") {
                     let token_src = &token_src;
 

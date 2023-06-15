@@ -1,3 +1,4 @@
+use crate::config::LoginConfig;
 use crate::default_access_provider;
 use crate::Artifact;
 use crate::ArtifactManifest;
@@ -24,14 +25,19 @@ use lifec::project::default_runtime;
 use lifec::project::default_world;
 use lifec::project::Project;
 use lifec::runtime::Runtime;
+use lifec::state::AttributeIndex;
 use lifec_poem::WebApp;
 use poem::get;
 use poem::handler;
+use poem::put;
 use poem::web::Data;
 use poem::EndpointExt;
 use poem::Route;
 use specs::WorldExt;
+use std::path::PathBuf;
 use std::sync::Arc;
+use tokio::sync::RwLock;
+use tracing::info;
 
 mod proxy_target;
 pub use proxy_target::Object;
@@ -56,6 +62,9 @@ pub use auth::OAuthToken;
 
 mod config;
 use config::handle_config;
+
+mod login;
+use login::handle_login;
 
 /// Struct for creating a customizable registry proxy,
 ///
@@ -179,12 +188,23 @@ impl WebApp for RegistryProxy {
                 .add_route::<Manifests>(&host, &self.context)
                 .add_route::<BlobsUploads>(&host, &self.context);
 
-            let file_provider = workspace.work_dir().join("token_cache");
-            let file_provider = if file_provider.exists() {
-                Some(file_provider)
+            let token_cache = workspace.work_dir().join("token_cache");
+            let token_cache = if token_cache.exists() {
+                info!("Token cache found for proxy, {:?}", workspace.work_dir());
+                Some(token_cache)
             } else {
                 None
             };
+
+            let root_dir = self
+                .context
+                .search()
+                .find_symbol("root_dir")
+                .map(|s| PathBuf::from(s))
+                .filter(|p| p.is_dir());
+
+            let login_config = LoginConfig::load(root_dir).unwrap_or_default();
+            let login_config = Arc::new(RwLock::new(login_config));
 
             Route::default()
                 .at("/status", get(status_check).data(self.context.clone()))
@@ -192,7 +212,7 @@ impl WebApp for RegistryProxy {
                     "/auth",
                     get(handle_auth)
                         .data(self.context.clone())
-                        .data(default_access_provider(file_provider)),
+                        .data(default_access_provider(token_cache)),
                 )
                 .at(
                     "/config",
@@ -200,7 +220,8 @@ impl WebApp for RegistryProxy {
                         .put(handle_config.data(self.context.clone()))
                         .delete(handle_config.data(self.context.clone())),
                 )
-                .nest("/v2", route)
+                .at("/login", put(handle_login).data(login_config.clone()))
+                .nest("/v2", route.data(login_config))
         } else {
             panic!("Cannot start w/o config")
         }
@@ -527,7 +548,12 @@ pub async fn build_registry_proxy_guest_agent_remote(tc: &ThunkContext) -> Guest
 
 }
 
+#[allow(unused_imports)]
 mod tests {
+    use std::path::PathBuf;
+
+    use crate::{config::LoginConfig, proxy::login::LoginResponse};
+
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_proxy_parsing() {
@@ -564,6 +590,8 @@ mod tests {
         ```
         "#;
 
+        let _ = tokio::fs::create_dir(".test").await;
+
         let mut workspace = Workspace::new("test.com", Some(std::path::PathBuf::from(".test")));
         workspace.set_root_runmd(root);
 
@@ -585,7 +613,7 @@ mod tests {
             assert!(operation_map.get("adhoc-test_blobs").is_some());
         }
 
-        let app = RegistryProxy::create(&mut context).routes();
+        let app = RegistryProxy::create(&mut context.with_symbol("root_dir", ".test")).routes();
         let cli = poem::test::TestClient::new(app);
         let cli = std::sync::Arc::new(cli);
 
@@ -635,10 +663,42 @@ mod tests {
             resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
         });
 
+        // Test a config request
         let test_5 = cli.clone();
         tokio::spawn(async move {
             let resp = test_5.get("/config?ns=tenant.registry.io").send().await;
-            resp.assert_status(StatusCode::SERVICE_UNAVAILABLE);
+            resp.assert_status(StatusCode::NOT_FOUND);
+        });
+
+        // Test routing to login api
+        let test_6 = cli.clone();
+        tokio::spawn(async move {
+            let resp = test_6
+                .put("/login")
+                .body_json(&crate::proxy::login::LoginBody {
+                    host: "test.endpoint.io".into(),
+                    username: "test-username".into(),
+                    password: "test-password".into(),
+                })
+                .send()
+                .await;
+            resp.assert_status(StatusCode::OK);
+
+            let config = LoginConfig::load(Some(PathBuf::from(".test"))).unwrap();
+            let (u, p) = config.authorize("test.endpoint.io").unwrap();
+            assert_eq!("test-username", u);
+            assert_eq!("test-password", p);
+
+            let resp = test_6
+                .put("/login")
+                .body_json(&crate::proxy::login::LoginBody {
+                    host: "test.endpoint.io".into(),
+                    username: "test-username".into(),
+                    password: "test-password".into(),
+                })
+                .send()
+                .await;
+            resp.assert_status(StatusCode::OK);
         });
 
         // It's important that all requests start before this line, otherwise the host will exit immediately b/c there will be no operations pending

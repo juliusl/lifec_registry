@@ -6,7 +6,7 @@ use lifec::prelude::{
 use poem::{web::headers::Authorization, Request};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use tracing::{event, Level};
+use tracing::{event, info, Level};
 
 /// Plugin for authenticating w/ a registry
 ///
@@ -62,7 +62,7 @@ impl Plugin for Authenticate {
                             event!(Level::ERROR, "Could not parse auth header, {err}");
                         }
                     }
-                    
+
                     tc.copy_previous();
                     Some(tc)
                 } else {
@@ -106,11 +106,38 @@ impl Authenticate {
     ///
     async fn authenticate(tc: &ThunkContext) -> Option<Credentials> {
         if let Some(challenge_uri) = Self::start_challenge(tc).await {
-            if let (Some(ns), Some(token)) = (
+            let (ns, req) = if let (Some(ns), Some(user), Some(password)) = (
+                tc.search().find_symbol("REGISTRY_NAMESPACE"),
+                tc.search().find_symbol("REGISTRY_USER"),
+                tc.search().find_symbol("REGISTRY_PASSWORD"),
+            ) {
+                info!("Start authn for {challenge_uri} w/ login config");
+                /*
+                # Example curl request:
+                curl -v -X POST -H "Content-Type: application/x-www-form-urlencoded" -d \
+                "grant_type=password&service=$registry&scope=$scope&username=$acr_user&password=&acr_passwd" \
+                https://$registry/oauth2/token
+                */
+
+                let body = format!(
+                    "{}&grant_type=password&username={}&password={}",
+                    challenge_uri.query().unwrap(),
+                    user,
+                    password
+                );
+
+                let req = Request::builder()
+                    .uri(challenge_uri)
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .method(Method::POST)
+                    .body(body);
+
+                (ns, req)
+            } else if let (Some(ns), Some(token)) = (
                 tc.search().find_symbol("REGISTRY_NAMESPACE"),
                 tc.search().find_symbol("REGISTRY_TOKEN"),
             ) {
-                event!(Level::INFO, "Start authn for {challenge_uri}");
+                info!("Start authn for {challenge_uri}");
 
                 /*
                 # Example curl request:
@@ -131,26 +158,34 @@ impl Authenticate {
                     .method(Method::POST)
                     .body(body);
 
-                let client = tc
-                    .client()
-                    .expect("async is enabled, so this should be set");
+                (ns, req)
+            } else {
+                (String::new(), Request::default())
+            };
 
-                event!(Level::TRACE, "{:#?}", req);
-                match client.request(req.into()).await {
-                    Ok(response) => {
-                        event!(Level::TRACE, "{:#?}", response);
-                        match hyper::body::to_bytes(response.into_body()).await {
-                            Ok(bytes) => {
-                                return serde_json::de::from_slice::<Credentials>(bytes.as_ref())
-                                    .ok()
-                            }
-                            Err(err) => {
-                                event!(Level::ERROR, "Could not decode credentials, {ns} {err}")
-                            }
+            if ns.is_empty() {
+                tracing::error!("Tried to authn w/o credentials");
+                return None;
+            }
+
+            let client = tc
+                .client()
+                .expect("async is enabled, so this should be set");
+
+            event!(Level::TRACE, "{:#?}", req);
+            match client.request(req.into()).await {
+                Ok(response) => {
+                    event!(Level::TRACE, "{:#?}", response);
+                    match hyper::body::to_bytes(response.into_body()).await {
+                        Ok(bytes) => {
+                            return serde_json::de::from_slice::<Credentials>(bytes.as_ref()).ok()
+                        }
+                        Err(err) => {
+                            event!(Level::ERROR, "Could not decode credentials, {ns} {err}")
                         }
                     }
-                    Err(err) => event!(Level::ERROR, "Could not fetch credentials for, {ns} {err}"),
                 }
+                Err(err) => event!(Level::ERROR, "Could not fetch credentials for, {ns} {err}"),
             }
         }
 

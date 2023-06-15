@@ -26,12 +26,12 @@ pub trait AccessProvider {
 /// Returns the default access provider,
 ///
 pub fn default_access_provider(
-    access_token_path: Option<PathBuf>,
+    token_cache: Option<PathBuf>,
 ) -> Arc<dyn AccessProvider + Send + Sync + 'static> {
     if let Some(aks_config) = AzureAKSConfig::try_load().ok() {
         info!("AKS config detected, using AKS as the access provider");
         Arc::new(aks_config)
-    } else if let Some(path) = access_token_path {
+    } else if let Some(path) = token_cache {
         info!(
             "File access_token provided, using {:?} as the access provider",
             path
@@ -86,6 +86,10 @@ mod tests {
         );
 
         let test_file_path = PathBuf::from(".test/test_access_provider");
+
+        if test_file_path.exists() {
+            std::fs::remove_file(&test_file_path).unwrap();
+        }
 
         std::fs::create_dir_all(".test").expect("should be able to create test dir");
 

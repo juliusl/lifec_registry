@@ -1,11 +1,15 @@
+use std::sync::Arc;
+
 use hyper::{Body, StatusCode, Uri};
 use lifec::engine::NodeCommand;
 use lifec::prelude::{SpecialAttribute, ThunkContext};
 use lifec::state::AttributeIndex;
 use lifec_poem::RoutePlugin;
 use poem::{Request, Response};
-use tracing::{debug, event, Level, error, info};
+use tokio::sync::RwLock;
+use tracing::{debug, error, event, info, Level};
 
+use crate::config::LoginConfig;
 use crate::hosts_config::MirrorHost;
 
 pub mod consts {
@@ -43,6 +47,7 @@ impl Registry {
         namespace: impl Into<String>,
         repo: impl Into<String>,
         reference: Option<impl Into<String>>,
+        login_config: Arc<RwLock<LoginConfig>>,
     ) -> Response
     where
         P: RoutePlugin + SpecialAttribute,
@@ -61,10 +66,11 @@ impl Registry {
 
         // Check if the request uri ends with the suffix value of the header, if not then return 503 Service Unavailable
         let accept_if_header = request.header(consts::ACCEPT_IF_SUFFIX_HEADER);
-        if accept_if_header.is_some() && !accept_if_header
-            .filter(|f| f.len() < 256)
-            .map(|suffix| namespace.ends_with(suffix))
-            .unwrap_or_default()
+        if accept_if_header.is_some()
+            && !accept_if_header
+                .filter(|f| f.len() < 256)
+                .map(|suffix| namespace.ends_with(suffix))
+                .unwrap_or_default()
         {
             debug!("Rejecting host {:?}", namespace);
             return Self::soft_fail();
@@ -85,7 +91,10 @@ impl Registry {
             );
 
             if let Err(err) = mirror_hosts_config.install(None::<String>) {
-                error!("Unable to enable mirror host config for, {}, {:?}", namespace, err);
+                error!(
+                    "Unable to enable mirror host config for, {}, {:?}",
+                    namespace, err
+                );
             } else {
                 debug!("Enabled mirror host config for {}", namespace);
             }
@@ -118,8 +127,16 @@ impl Registry {
             workspace.tag()
         );
 
-        let context =
-            self.prepare_registry_context::<P>(request, namespace, repo, reference, context);
+        let context = self
+            .prepare_registry_context::<P>(
+                request,
+                namespace,
+                repo,
+                reference,
+                context,
+                login_config.clone(),
+            )
+            .await;
 
         if let Some(yielding) = context.dispatch_node_command(NodeCommand::Spawn(*operation)) {
             match yielding.await {
@@ -173,13 +190,14 @@ impl Registry {
 
     /// Returns a context prepared with registry context,
     ///
-    pub fn prepare_registry_context<S>(
+    pub async fn prepare_registry_context<S>(
         &self,
         request: &Request,
         namespace: impl Into<String>,
         repo: impl Into<String>,
         reference: Option<impl Into<String>>,
         context: &ThunkContext,
+        login_config: Arc<RwLock<LoginConfig>>,
     ) -> ThunkContext
     where
         S: SpecialAttribute,
@@ -223,6 +241,13 @@ impl Registry {
                 "api",
                 format!("https://{namespace}/v2/{repo}/{resource}/{reference}"),
             );
+
+        // If login credentials exist for namespace, then login
+        if let Some((u, p)) = login_config.read().await.authorize(namespace) {
+            context
+                .with_symbol("REGISTRY_USER", u)
+                .with_symbol("REGISTRY_PASSWORD", p);
+        }
 
         let headers = request.headers();
         for (name, value) in headers
