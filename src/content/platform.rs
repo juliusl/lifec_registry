@@ -12,5 +12,5 @@ pub struct Platform {
     pub os: String,
     /// Operating system variant
     #[serde(skip_serializing_if = "Option::is_none")]
-    variant: Option<String>,
+    pub variant: Option<String>,
 }
