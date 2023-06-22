@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use lifec::prelude::{AttributeIndex, Component, DefaultVecStorage, ThunkContext};
 use serde::{Deserialize, Serialize};
-use tracing::trace;
+use tracing::{trace, debug};
 
 use super::Platform;
 
@@ -88,6 +88,12 @@ impl Descriptor {
     /// ```
     ///
     pub fn try_parse_streamable_descriptor(&self) -> Option<Self> {
+        if !self.annotations.as_ref().map(|a| a.contains_key("streaming.mediaType")).unwrap_or_default() {
+            debug!("Updated artifact manifest detected, skipping annotation parsing");
+
+            return Some(self.clone());
+        }
+
         if let Some(annotations) = self
             .annotations
             .as_ref()
