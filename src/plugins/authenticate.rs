@@ -119,20 +119,22 @@ impl Authenticate {
                 https://$registry/oauth2/token
                 */
 
-                let body = format!(
-                    "{}&grant_type=password&username={}&password={}",
-                    challenge_uri.query().unwrap(),
-                    user,
-                    password
-                );
-
-                let req = Request::builder()
-                    .uri(challenge_uri)
-                    .header("Content-Type", "application/x-www-form-urlencoded")
-                    .method(Method::POST)
-                    .body(body);
-
-                (ns, req)
+                if let Ok(encoded) = serde_urlencoded::to_string(&[
+                    ("grant_type", "password"),
+                    ("username", user.as_str()),
+                    ("password", password.as_str()),
+                ]) {
+                    let body = format!("{}&{}", challenge_uri.query().unwrap(), encoded);
+                    let req = Request::builder()
+                        .uri(challenge_uri)
+                        .header("Content-Type", "application/x-www-form-urlencoded")
+                        .method(Method::POST)
+                        .body(body);
+                    (ns, req)
+                } else {
+                    tracing::error!("Could not encode username/password authn body");
+                    return None;
+                }
             } else if let (Some(ns), Some(token)) = (
                 tc.search().find_symbol("REGISTRY_NAMESPACE"),
                 tc.search().find_symbol("REGISTRY_TOKEN"),
