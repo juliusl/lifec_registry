@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use toml_edit::{Document, Table};
+use tracing::info;
 
 use crate::Error;
 
@@ -79,6 +80,7 @@ impl LoginConfig {
     /// Authorizes a host,
     /// 
     pub fn authorize(&self, host: impl AsRef<str>) -> Option<(&str, &str)> {
+        info!("Checking for login {}", host.as_ref());
         self.doc["auth"].as_table().and_then(|t| t.get(host.as_ref()).and_then(|v| v.as_table()).and_then(|t| {
             if let (Some(u), Some(p)) = (t["username"].as_str(), t["password"].as_str()) {
                 Some((u, p))

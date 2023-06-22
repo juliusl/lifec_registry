@@ -79,8 +79,9 @@ impl Plugin for Login {
                 debug!("Starting registry login");
 
                 // If username/password are set w/ the context, skip getting credentials
-                if tc.state().find_symbol("REGISTRY_PASSWORD").is_some() && tc.state().find_symbol("REGISTRY_USER").is_some() {
+                if tc.search().find_symbol("REGISTRY_PASSWORD").is_some() && tc.search().find_symbol("REGISTRY_USER").is_some() {
                     debug!("Skipping login, password/username is set");
+                    tc.copy_previous();
                     return Ok(tc);
                 }
 
