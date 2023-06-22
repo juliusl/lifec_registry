@@ -145,6 +145,10 @@ impl Registry {
                         context.cache_body(body);
                     }
 
+                    if let Some(err) = context.err() {
+                        error!("Error in operation, {err}");
+                    }
+
                     let response = P::response(&mut context);
 
                     if response.status().is_redirection() {
@@ -218,7 +222,7 @@ impl Registry {
         let reference = reference.map(|r| r.into()).unwrap_or_default();
         let namespace = namespace.into();
 
-        debug!(
+        info!(
             "Preparing proxy context - host: {}, namespace: {} repo: {}, reference: {}",
             &host, &namespace, &repo, &reference
         );
