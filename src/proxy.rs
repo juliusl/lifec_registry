@@ -212,7 +212,8 @@ impl WebApp for RegistryProxy {
                     "/auth",
                     get(handle_auth)
                         .data(self.context.clone())
-                        .data(default_access_provider(token_cache)),
+                        .data(default_access_provider(token_cache))
+                        .data(login_config.clone()),
                 )
                 .at(
                     "/config",
