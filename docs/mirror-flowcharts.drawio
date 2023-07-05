@@ -1,4 +1,4 @@
-<mxfile host="app.diagrams.net" modified="2023-07-05T22:12:09.745Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.67" etag="NxaYxPrDnQf0hUTmg5FS" version="21.6.1" type="github">
+<mxfile host="app.diagrams.net" modified="2023-07-05T22:15:27.733Z" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36 Edg/114.0.1823.67" etag="6xmcewTZyzcu83m8MlSm" version="21.6.1" type="github">
   <diagram id="C5RBs43oDa-KdzZeNtuy" name="Page-1">
     <mxGraphModel dx="1667" dy="928" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
@@ -161,6 +161,11 @@
         </mxCell>
         <mxCell id="4c9EMRg4X2gtyG1UVgjn-54" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="WIyWlLk6GJQsqaUBKTNV-1" source="4c9EMRg4X2gtyG1UVgjn-18" target="4c9EMRg4X2gtyG1UVgjn-53">
           <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="4c9EMRg4X2gtyG1UVgjn-60" value="No" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="4c9EMRg4X2gtyG1UVgjn-54">
+          <mxGeometry x="-0.1782" y="1" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
         </mxCell>
         <mxCell id="4c9EMRg4X2gtyG1UVgjn-18" value="Is the image streamable?" style="strokeWidth=2;shape=mxgraph.flowchart.decision;autosize=0;overflow=width;fixedWidth=1;whiteSpace=wrap;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
           <mxGeometry x="1070" y="380" width="110" height="120" as="geometry" />
